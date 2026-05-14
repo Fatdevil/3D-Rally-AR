@@ -119,11 +119,13 @@ function update(dt) {
     let car = window.rallyVehicle ? window.rallyVehicle.getCar() : null;
     if (!car || !car.active || !lastCheckpoint.position) return;
     
-    let isOB = (car.surfaceKey === 'OB' || car.surfaceKey === 'WATER');
-    let moveDist = Math.abs(car.speed) * dt;
+    let tType = (car.terrainType || '').toUpperCase();
+    let isOB = (tType === 'OB' || tType === 'WATER');
+    let hSpeed = car.displaySpeed !== undefined ? car.displaySpeed : Math.abs(car.speed);
+    let moveDist = hSpeed * dt;
 
     // 1. Checkpoint System
-    if (car.onGround && !isOB && car.speed > 2.0) {
+    if (car.onGround && !isOB && hSpeed > 2.0) {
         distSinceCheckpoint += moveDist;
         if (distSinceCheckpoint >= CFG.CHECKPOINT_INTERVAL) {
             distSinceCheckpoint = 0;
@@ -139,6 +141,8 @@ function update(dt) {
         } else {
             offTrackDist -= moveDist * 2.0; // Recover faster on track
         }
+    } else {
+        offTrackDist = 0; // Luften -> nollställ off-track
     }
     offTrackDist = clamp(offTrackDist, 0, CFG.OFF_TRACK_MAX);
     
@@ -158,9 +162,14 @@ function update(dt) {
     }
 
     // 3. Stuck Detection
-    // Consider stuck if very slow and on ground, OR if flipped (though damage system has its own flip timeout)
+    // Consider stuck if very slow, on ground, not volting, and player is applying throttle/brake
     let isVolting = window.rallyDamage && window.rallyDamage.isVolting && window.rallyDamage.isVolting();
-    if (Math.abs(car.speed) < CFG.STUCK_SPEED && car.onGround && !isVolting) {
+    let isFlipped = window.rallyDamage && window.rallyDamage.isFlipped && window.rallyDamage.isFlipped();
+    let input = window.rallyVehicle && window.rallyVehicle.getInput ? window.rallyVehicle.getInput() : {throttle:0, brake:0};
+    
+    let isTryingToMove = (input.throttle > 0 || input.brake > 0);
+    
+    if ((hSpeed < CFG.STUCK_SPEED && car.onGround && isTryingToMove && !isVolting) || isFlipped) {
         stuckTimer += dt;
     } else {
         stuckTimer = 0;
@@ -182,7 +191,8 @@ function update(dt) {
     }
 
     // Manual respawn (R key)
-    if (window.rallyVehicle && window.rallyVehicle.getKeys && window.rallyVehicle.getKeys()['r']) {
+    let keys = window.rallyVehicle && window.rallyVehicle.getKeys ? window.rallyVehicle.getKeys() : {};
+    if (keys['KeyR']) {
         triggerRespawn();
     }
 }

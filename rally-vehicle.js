@@ -95,6 +95,7 @@ function updateVehicle(dt) {
     let surface = window.resolveSurface ? window.resolveSurface(terrain.type) : {grip:0.5,longGrip:0.6,brake:0.65,maxSpeed:0.82,accel:0.78,dragAdd:0.015,driftThreshold:10,driftSustain:1.4,driftRecovery:0.65,rumble:0,depthVariance:0,landing:0.65};
     car.surfaceName = surface.label || terrain.type;
     car.surfaceKey = (window.RALLY_SURFACE_MAP && window.RALLY_SURFACE_MAP[terrain.type]) || terrain.type;
+    car.terrainType = terrain.type;
 
     // Damage modifiers (queried once per frame)
     let dmgMod = window.rallyDamage ? window.rallyDamage.getModifiers() : {steerMult:1,accelMult:1,maxSpeedMult:1};
@@ -177,6 +178,7 @@ function updateVehicle(dt) {
     // Speed cap (with damage penalty)
     let maxSpd = CFG.MAX_SPEED * surface.maxSpeed * dmgMod.maxSpeedMult;
     let hSpd = Math.sqrt(car.velocity.x*car.velocity.x + car.velocity.z*car.velocity.z);
+    car.displaySpeed = hSpd;
     if(hSpd>maxSpd) { let s=maxSpd/hSpd; car.velocity.x*=s; car.velocity.z*=s; }
     // Reverse cap
     let fv2 = car.velocity.dot(fwd);
@@ -405,6 +407,7 @@ window.rallyVehicle = {
     getCar:()=>car,
     isDrifting:()=>car.isDrifting,
     getSlipAngle:()=>car.slipAngleDeg,
-    getKeys:()=>keys
+    getKeys:()=>keys,
+    getInput:()=>input
 };
 })();
