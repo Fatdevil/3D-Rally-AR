@@ -180,26 +180,32 @@ function updateVehicle(dt) {
     // Speed cap (with damage penalty)
     let maxSpd = CFG.MAX_SPEED * surface.maxSpeed * dmgMod.maxSpeedMult;
     let hSpd = Math.sqrt(car.velocity.x*car.velocity.x + car.velocity.z*car.velocity.z);
-    car.displaySpeed = hSpd;
     if(hSpd>maxSpd) { let s=maxSpd/hSpd; car.velocity.x*=s; car.velocity.z*=s; }
+    // Fix #1: displaySpeed from POST-cap velocity (HUD and respawn read correct value)
+    car.displaySpeed = Math.sqrt(car.velocity.x*car.velocity.x + car.velocity.z*car.velocity.z);
     // Reverse cap
     let fv2 = car.velocity.dot(fwd);
     if(fv2 < -CFG.REVERSE_MAX) {
         car.velocity.addScaledVector(fwd, -CFG.REVERSE_MAX - fv2);
     }
 
-    // ─── BARRIER COLLISION — damage + volt ───
+    // ─── BARRIER COLLISION — delta-V damage + volt ───
     // terrain.type is raw ('OB'); car.surfaceKey becomes 'BARRIER' after SURFACE_MAP lookup.
-    // We check terrain.type here so OB always triggers damage regardless of surface mapping.
-    if (terrain.type === 'OB') {
-        let barrierSpeed = car.displaySpeed;
+    // Fix #3: toUpperCase for robustness against lowercase terrain data.
+    // Fix #4: damage based on delta-V (speed change at impact), not absolute speed.
+    //   A car scraping a wall at constant speed has deltaV ~0 → minimal damage.
+    //   A frontal hit at 140 km/h has high deltaV → large damage.
+    if (terrain.type.toUpperCase() === 'OB') {
+        let speedBefore = car.displaySpeed; // post-cap, pre-bounce
         car.velocity.x *= 0.9; car.velocity.z *= 0.9;
-        if (window.rallyDamage && barrierSpeed > 5) {
-            window.rallyDamage.applyDamage(barrierSpeed);
-            if (window.rallyCamera) window.rallyCamera.triggerShake(barrierSpeed);
-            if (barrierSpeed > DMG_VOLT_THRESH) {
+        let speedAfter  = Math.sqrt(car.velocity.x*car.velocity.x + car.velocity.z*car.velocity.z);
+        let deltaV = speedBefore - speedAfter; // always >= 0; zero during scrapes
+        if (window.rallyDamage && deltaV > 2) {
+            window.rallyDamage.applyDamage(deltaV * 4); // scale: 10 m/s delta → 40 dmg-units
+            if (window.rallyCamera) window.rallyCamera.triggerShake(deltaV * 4);
+            if (speedBefore > DMG_VOLT_THRESH) {
                 let latComp = Math.abs(car.velocity.dot(right));
-                if (latComp > 5 || barrierSpeed > 35)
+                if (latComp > 5 || speedBefore > 35)
                     window.rallyDamage.triggerVolt(car, fwd, right);
             }
         }
