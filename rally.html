@@ -219,6 +219,14 @@
         if (segs && segs !== TERRAIN_SEGS) {
             console.warn('Resampling heightmap:', segs, '→', TERRAIN_SEGS);
             source = resampleHeightmap(arr, segs, TERRAIN_SEGS); // throws on bad input
+        } else {
+            // Fynd 2: validate length even when no resampling occurs.
+            // Infer expected vertex count from TERRAIN_SEGS or from sqrt of array length.
+            let expectedCount = (TERRAIN_SEGS + 1) * (TERRAIN_SEGS + 1);
+            if (source.length < expectedCount) {
+                // Tolerate arrays that are larger (legacy formats may pad) but not shorter.
+                throw new Error('applyHeightArray: array too short: ' + source.length + ' < ' + expectedCount + ' (TERRAIN_SEGS=' + TERRAIN_SEGS + ')');
+            }
         }
         let positions = planeGeo.attributes.position.array;
         let applied = Math.min(source.length, planeGeo.attributes.position.count);
@@ -232,12 +240,16 @@
     }
 
     // ── Unified heightmap dispatcher ──
-    // Decodes any supported format string/object and calls applyHeightArray.
+    // Decodes any supported heightmap format and calls applyHeightArray.
     // Returns true on success, false on any decode/apply failure.
     // snapSegs: segment count from snapshot metadata (may be undefined).
     function applyTerrainHeightmap(hm, snapSegs) {
         try {
-            if (typeof hm === 'object' && hm !== null && Array.isArray(hm.ground)) {
+            // Fynd 4: support already-parsed arrays, not just { ground: [...] }
+            if (Array.isArray(hm)) {
+                return applyHeightArray(hm, snapSegs);
+
+            } else if (typeof hm === 'object' && hm !== null && Array.isArray(hm.ground)) {
                 // Cloud format: { ground: [...], segs: N }
                 return applyHeightArray(hm.ground, hm.segs || snapSegs);
 
@@ -252,35 +264,33 @@
                 let bytes = new Uint8Array(binary.length);
                 for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
                 let inflated = pako.inflate(bytes);
-                // Strict validation — odd byteLength means corrupt data
-                if (inflated.byteLength % 2 !== 0) {
+                if (inflated.byteLength % 2 !== 0)
                     throw new Error('H16: inflated byteLength is odd (' + inflated.byteLength + ')');
-                }
                 let exact = inflated.buffer.slice(inflated.byteOffset, inflated.byteOffset + inflated.byteLength);
                 let int16 = new Int16Array(exact);
                 let segs = snapSegs || TERRAIN_SEGS;
                 let expectedCount = (segs + 1) * (segs + 1);
-                // Hard failure on length mismatch — partial terrain is worse than flat
-                if (int16.length !== expectedCount) {
+                if (int16.length !== expectedCount)
                     throw new Error('H16: length mismatch — expected ' + expectedCount + ', got ' + int16.length + ' (segs=' + segs + ')');
-                }
                 let floatSrc = new Float32Array(int16.length);
                 for (let i = 0; i < int16.length; i++) floatSrc[i] = int16[i] / 100;
                 return applyHeightArray(floatSrc, segs);
 
-            } else if (typeof hm === 'string' && (hm.startsWith('{') || hm.startsWith('['))) {
-                // JSON string (cloud format)
-                let parsed = JSON.parse(hm);
-                let groundArr = parsed.ground || parsed;
-                return applyHeightArray(groundArr, parsed.segs || snapSegs);
-
             } else if (typeof hm === 'string') {
-                // Legacy base64 float array
-                let binary = atob(hm);
-                let bytes = new Uint8Array(binary.length);
-                for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-                return applyHeightArray(new Float32Array(bytes.buffer), snapSegs);
-
+                // Fynd 5: trim leading whitespace before format detection
+                let s = hm.trimStart();
+                if (s.startsWith('{') || s.startsWith('[')) {
+                    // JSON string (cloud format)
+                    let parsed = JSON.parse(s);
+                    let groundArr = Array.isArray(parsed) ? parsed : (parsed.ground || []);
+                    return applyHeightArray(groundArr, parsed.segs || snapSegs);
+                } else {
+                    // Legacy base64 float array
+                    let binary = atob(s);
+                    let bytes = new Uint8Array(binary.length);
+                    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                    return applyHeightArray(new Float32Array(bytes.buffer), snapSegs);
+                }
             } else {
                 console.warn('applyTerrainHeightmap: unrecognised heightmap format', typeof hm);
                 return false;
@@ -292,18 +302,17 @@
     }
 
     // ── Load Terrain Data ──
-    // Returns:  true  — terrain heightmap successfully applied (sculpted terrain ready)
-    //           false — no usable terrain found; caller should show flat-terrain warning
+    // Returns:  true  — at least one data source found; rally may start (may be flat)
+    //           false — no playable source found; no-terrain UI shown
+    // heightApplied (not returned) distinguishes sculpted from flat-default.
     function loadTerrain() {
         let snap = ArcadeStorage.loadTerrainSnapshot();
 
-        // --- Source selection (priority order) ---
-        // 1. Terrain snapshot — H16 heightmap from saveLevel() — most reliable
+        // Source selection (priority order):
+        // 1. Terrain snapshot — H16 from saveLevel(); most reliable for sculpted terrain
         // 2. Custom level    — saveLevel() writes here; freshest builder save
-        // 3. Compressed level — arcade_custom_level_z; only written on URL-share import,
-        //                       may be older than current build session
-        // NB: spawn resolution uses same priority (custom before compressed) so both
-        // always agree on which session's data wins.
+        // 3. Compressed level — arcade_custom_level_z; only written on URL-share import
+        // Same priority as resolveSpawnPosition() so terrain and tees always match.
         let sources = [];
         if (snap) sources.push({ data: snap, label: 'snapshot', segs: snap.segs });
         let custom = ArcadeStorage.loadCustomLevel();
@@ -317,35 +326,33 @@
             return false;
         }
 
-        // --- Heightmap application: try each source in priority order ---
-        let heightApplied = false;
+        // Fynd 1 fix: track which source actually provided the heightmap.
+        // biomeSource must come from the SAME source that succeeded, not from snap blindly.
+        let appliedSource = null;
         for (let src of sources) {
-            if (!src.data.terrain_heightmap) continue; // source has no terrain data
+            if (!src.data.terrain_heightmap) continue;
             let ok = applyTerrainHeightmap(src.data.terrain_heightmap, src.segs);
             if (ok) {
                 console.log('✅ Terrain heightmap loaded from', src.label);
-                // If snapshot failed but we got terrain from a later source, clear corrupt snap
-                if (!heightApplied && src.label !== 'snapshot' && snap) {
-                    console.warn('Snapshot unusable — clearing stale snapshot');
+                if (src.label !== 'snapshot' && snap) {
+                    console.warn('Snapshot heightmap unusable — clearing stale snapshot');
                     ArcadeStorage.clearTerrainSnapshot();
                 }
-                heightApplied = true;
+                appliedSource = src.data;
                 break;
             } else {
                 console.warn('Heightmap source "' + src.label + '" failed — trying next source');
-                // Clear corrupt snapshot so it doesn't block future loads
                 if (src.label === 'snapshot') ArcadeStorage.clearTerrainSnapshot();
             }
         }
 
-        if (!heightApplied) {
-            // Data exists but had no usable heightmap (e.g. only targets+holes saved, no sculpt)
+        if (!appliedSource) {
             console.warn('⚠️ No sculpted terrain found — driving on flat default');
-            // Don't show no-terrain UI; flat terrain is still driveable
         }
 
-        // --- Biome texture: taken from the snapshot (most reliable source) ---
-        let biomeSource = snap || compressed || custom;
+        // Biome texture: use the source that provided the successful heightmap.
+        // If no heightmap was applied, fall back gracefully to snap (for surface colours at least).
+        let biomeSource = appliedSource || snap || custom || compressed;
         if (biomeSource && biomeSource.terrain_biomemap) {
             let img = new Image();
             img.onload = function() {
@@ -360,13 +367,12 @@
                 ctx.drawImage(img, 0, 0);
                 window._biomeCanvas = c;
                 window._biomeCtx = ctx;
-                console.log('✅ Biome texture loaded from', biomeSource === snap ? 'snapshot' : 'level data');
+                console.log('✅ Biome texture loaded from', biomeSource === snap ? 'snapshot' : (biomeSource === custom ? 'custom' : 'compressed'));
             };
             img.src = biomeSource.terrain_biomemap;
         }
 
-        // Return true if any source was found (flat terrain is still usable)
-        return sources.length > 0;
+        return sources.length > 0; // true = rally may start; false = nothing found
     }
 
 
