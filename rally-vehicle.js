@@ -363,24 +363,19 @@ window.rallyVehicle = {
         keys={};
         lastTime = 0;
         car._invulnerable = 0;
-        car._spawnPosition = new THREE.Vector3(0, 2, 0);
-        // Init camera system
-        if (window.rallyCamera) window.rallyCamera.init(car);
         if(typeof window.localGetTerrainAt==='function'){
             let t=window.localGetTerrainAt(0,0);
             car.position.y = t.z+CFG.CAR_HEIGHT;
         }
         scene.add(car.mesh);
-        camHeading=car.heading;
-        let cf=new THREE.Vector3(Math.sin(camHeading),0,Math.cos(camHeading));
-        chaseCamTarget.copy(car.position).sub(cf.clone().multiplyScalar(CFG.CAM_BEHIND)).add(new THREE.Vector3(0,CFG.CAM_HEIGHT,0));
-        chaseCamLookAt.copy(car.position).add(cf.clone().multiplyScalar(CFG.CAM_LOOK_AHEAD));
+        // Init camera AFTER terrain height is set
+        if (window.rallyCamera) window.rallyCamera.init(car);
         createHUD();
         // Reset damage system
         if (window.rallyDamage) window.rallyDamage.reset();
-        // Save spawn position for respawn fallback
+        // Save spawn position for respawn fallback (after terrain adjust)
         car._spawnPosition = car.position.clone();
-        console.log('🏎️ Rally Vehicle activated (drift physics v3 + damage)');
+        console.log('🏎️ Rally Vehicle activated (drift physics v4 + damage + camera)');
     },
     deactivate: function(scene) {
         car.active=false;
@@ -396,7 +391,7 @@ window.rallyVehicle = {
         // Compute physDt (slow-mo applied by camera system)
         let physDt = window.rallyCamera ? window.rallyCamera.computePhysDt(realDt) : realDt;
         updateVehicle(physDt);
-        if (window.rallyCamera) window.rallyCamera.update(camera, physDt);
+        if (window.rallyCamera) window.rallyCamera.update(camera, physDt, realDt);
         if (window.rallyDamage) window.rallyDamage.update(physDt);
         updateHUD();
     },

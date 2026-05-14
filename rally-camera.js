@@ -69,8 +69,10 @@ function computePhysDt(realDt) {
     return realDt;
 }
 
-// ─── Main Update (called each frame with physDt) ───
-function update(camera, physDt) {
+// ─── Main Update ───
+// physDt: time-scaled dt (slow during impact)
+// realDt: actual wall-clock dt (for visual effects like shake duration)
+function update(camera, physDt, realDt) {
     let car = window.rallyVehicle ? window.rallyVehicle.getCar() : null;
     if (!car || !car.active || !car.mesh) return;
     if (!camTarget || !camLookAt) init(car);
@@ -116,25 +118,29 @@ function update(camera, physDt) {
         .add(camFwd.clone().multiplyScalar(CAM.LOOK_AHEAD))
         .add(new THREE.Vector3(0, 0.5, 0));
 
-    camTarget.lerp(targetPos, CAM.POS_LERP);
-    camLookAt.lerp(targetLook, CAM.ROT_LERP * 1.5);
+    // Time-based lerp for camera smoothing (syncs with slow-mo)
+    let posLerp = 1 - Math.pow(1 - CAM.POS_LERP, physDt * 60);
+    let rotLerp = 1 - Math.pow(1 - CAM.ROT_LERP * 1.5, physDt * 60);
+    camTarget.lerp(targetPos, posLerp);
+    camLookAt.lerp(targetLook, rotLerp);
     camera.position.copy(camTarget);
     camera.lookAt(camLookAt);
 
-    // Camera shake (framerate-normalized)
+    // Camera shake — timer uses realDt (constant real-world duration)
     if (shakeTimer > 0) {
-        shakeTimer -= physDt;
+        shakeTimer -= realDt;  // real time, not physics time
         let t = clamp(shakeTimer / 0.4, 0, 1);
         let shake = shakeIntensity * t;
-        let norm = physDt * 60; // normalize to 60fps baseline
+        let norm = realDt * 60; // normalize amplitude to 60fps
         camera.position.x += (Math.random() - 0.5) * shake * norm;
         camera.position.y += (Math.random() - 0.5) * shake * 0.5 * norm;
     }
 
-    // FOV boost with speed
+    // FOV boost (time-based lerp)
     let speedRatio = clamp(Math.abs(car.speed) / 52, 0, 1);
     let targetFov = CAM.FOV_BASE + speedRatio * CAM.FOV_BOOST;
-    camera.fov = lerp(camera.fov, targetFov, 0.05);
+    let fovLerp = 1 - Math.pow(1 - 0.05, physDt * 60);
+    camera.fov = lerp(camera.fov, targetFov, fovLerp);
     camera.updateProjectionMatrix();
 }
 
