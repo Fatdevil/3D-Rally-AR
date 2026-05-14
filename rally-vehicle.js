@@ -19,11 +19,13 @@ const DMG_VOLT_THRESH = 25; // m/s barrier impact to trigger volt
 
 let car = {
     position: null, velocity: null, heading: 0, speed: 0,
-    onGround: true, surfaceName: 'DIRT', mesh: null, wheels: [],
+    onGround: true, surfaceName: 'DIRT', surfaceKey: 'DIRT', terrainType: 'ROUGH', mesh: null, wheels: [],
     active: false, isDrifting: false, slipAngleDeg: 0,
     gripFactor: 0.9, currentGrip: 0.55,
     visualRoll: 0, visualPitch: 0,
-    prevLateralVel: 0, prevForwardVel: 0
+    prevLateralVel: 0, prevForwardVel: 0,
+    displaySpeed: 0,
+    _invulnerable: 0, _spawnPosition: null
 };
 let input = { throttle:0, brake:0, steer:0, handbrake:false };
 let keys = {}, lastTime = 0;
@@ -186,14 +188,15 @@ function updateVehicle(dt) {
         car.velocity.addScaledVector(fwd, -CFG.REVERSE_MAX - fv2);
     }
 
-    // BARRIER = wall + damage
-    if(terrain.type==='OB') {
+    // ─── BARRIER COLLISION — damage + volt ───
+    // terrain.type is raw ('OB'); car.surfaceKey becomes 'BARRIER' after SURFACE_MAP lookup.
+    // We check terrain.type here so OB always triggers damage regardless of surface mapping.
+    if (terrain.type === 'OB') {
         let barrierSpeed = car.displaySpeed;
         car.velocity.x *= 0.9; car.velocity.z *= 0.9;
         if (window.rallyDamage && barrierSpeed > 5) {
             window.rallyDamage.applyDamage(barrierSpeed);
             if (window.rallyCamera) window.rallyCamera.triggerShake(barrierSpeed);
-            // Severe barrier hit → volt
             if (barrierSpeed > DMG_VOLT_THRESH) {
                 let latComp = Math.abs(car.velocity.dot(right));
                 if (latComp > 5 || barrierSpeed > 35)
@@ -254,16 +257,18 @@ function updateVehicle(dt) {
     car.position.x = clamp(car.position.x, -half, half);
     car.position.z = clamp(car.position.z, -half, half);
 
-    // === VISUAL SUSPENSION ===
+    // === VISUAL SUSPENSION (time-normalized lerps) ===
     let latAccel = (lateralVel - car.prevLateralVel) / Math.max(dt,0.001);
     car.prevLateralVel = lateralVel;
     let tgtRoll = clamp(-latAccel*CFG.ROLL_SENS, -8, 8);
-    car.visualRoll = lerp(car.visualRoll, tgtRoll, 0.12);
+    let rollRate = 1 - Math.pow(1 - 0.12, dt * 60);
+    car.visualRoll = lerp(car.visualRoll, tgtRoll, rollRate);
 
     let fwdAccel = (forwardVel - car.prevForwardVel) / Math.max(dt,0.001);
     car.prevForwardVel = forwardVel;
     let tgtPitch = clamp(fwdAccel*CFG.PITCH_SENS, -5, 5);
-    car.visualPitch = lerp(car.visualPitch, tgtPitch, 0.10);
+    let pitchRate = 1 - Math.pow(1 - 0.10, dt * 60);
+    car.visualPitch = lerp(car.visualPitch, tgtPitch, pitchRate);
 
     // Terrain slope
     let nx = terrain.normal[0]||0, nz = terrain.normal[1]||0;
@@ -298,7 +303,11 @@ function updateVehicle(dt) {
     });
 }
 
-// ─── HUD ───
+// =============================================================
+// ─── HUD (Speed, Surface, Grip, Drift, Damage) ───
+// All HUD elements are created once and updated every frame.
+// Damage bar reads from window.rallyDamage if present.
+// =============================================================
 function createHUD() {
     let ex=document.getElementById('rally-hud'); if(ex) ex.remove();
     let h=document.createElement('div'); h.id='rally-hud';
@@ -314,13 +323,19 @@ function createHUD() {
 <div id="rally-grip" style="font-size:12px;color:#fbbf24;font-weight:bold">50%</div></div></div>
 <div id="rally-drift-badge" style="font-size:14px;font-weight:900;color:#f97316;margin-top:6px;opacity:0;transition:opacity 0.2s">🔥 DRIFT</div>
 <div style="font-size:9px;color:#475569;margin-top:4px">Slip: <span id="rally-slip">0</span>°</div>
+<div style="height:1px;background:#334155;margin:10px 0"></div>
+<div style="font-size:8px;color:#64748b;text-transform:uppercase;font-weight:bold;margin-bottom:4px">Car Damage</div>
+<div style="background:#1e293b;border-radius:4px;height:6px;overflow:hidden">
+  <div id="rally-damage-bar" style="height:100%;width:0%;background:#4ade80;border-radius:4px;transition:width 0.2s,background 0.4s"></div>
+</div>
+<div id="rally-damage-text" style="font-size:10px;color:#4ade80;font-weight:bold;margin-top:3px">0%</div>
 </div></div>
 <div id="rally-controls-hint" style="position:fixed;top:80px;left:50%;transform:translateX(-50%);z-index:9999;pointer-events:none;
 background:rgba(15,23,42,0.9);border:1px solid #334155;border-radius:12px;padding:12px 24px;backdrop-filter:blur(8px);
 font-family:'Inter',sans-serif;transition:opacity 2s ease">
 <div style="color:#e2e8f0;font-size:13px;font-weight:bold;text-align:center">🏎️ RALLY MODE</div>
 <div style="color:#94a3b8;font-size:11px;margin-top:4px;text-align:center">
-<b>W/↑</b> Gas &nbsp; <b>S/↓</b> Broms &nbsp; <b>A/D</b> Sväng &nbsp; <b>SPACE</b> Handbroms</div>
+<b>W/↑</b> Gas &nbsp; <b>S/↓</b> Broms &nbsp; <b>A/D</b> Sväng &nbsp; <b>SPACE</b> Handbroms &nbsp; <b>R</b> Respawn</div>
 <div style="color:#64748b;font-size:10px;margin-top:2px;text-align:center">🎮 Gamepad: Triggers=Gas/Broms, Stick=Sväng, A=Handbroms</div></div>`;
     document.body.appendChild(h);
     setTimeout(()=>{ let c=document.getElementById('rally-controls-hint'); if(c)c.style.opacity='0'; setTimeout(()=>{if(c)c.remove();},2000); },5000);
@@ -331,9 +346,11 @@ function updateHUD() {
         su=document.getElementById('rally-surface'),
         gr=document.getElementById('rally-grip'),
         dr=document.getElementById('rally-drift-badge'),
-        sl=document.getElementById('rally-slip');
+        sl=document.getElementById('rally-slip'),
+        db=document.getElementById('rally-damage-bar'),
+        dt2=document.getElementById('rally-damage-text');
     if(se){
-        let kmh=Math.round(car.displaySpeed*3.6); // total horizontal speed (not just forward)
+        let kmh=Math.round(car.displaySpeed*3.6);
         se.textContent=kmh;
         se.style.color = kmh<80?'#4ade80':kmh<140?'#fbbf24':'#ef4444';
     }
@@ -349,6 +366,16 @@ function updateHUD() {
     }
     if(dr) dr.style.opacity = car.isDrifting?'1':'0';
     if(sl) sl.textContent = Math.abs(Math.round(car.slipAngleDeg));
+    // Damage bar (reads from rallyDamage module)
+    if(db && dt2) {
+        let dmg = window.rallyDamage ? window.rallyDamage.getDamage() : 0;
+        let pct = Math.round(dmg * 100);
+        db.style.width = pct + '%';
+        let col = pct < 30 ? '#4ade80' : pct < 60 ? '#fbbf24' : pct < 90 ? '#f97316' : '#ef4444';
+        db.style.background = col;
+        dt2.style.color = col;
+        dt2.textContent = pct + '%';
+    }
 }
 
 // ─── PUBLIC API ───
@@ -362,6 +389,8 @@ window.rallyVehicle = {
         car.isDrifting=false; car.gripFactor=0.9;
         car.visualRoll=0; car.visualPitch=0;
         car.prevLateralVel=0; car.prevForwardVel=0;
+        car.displaySpeed=0; car.terrainType='ROUGH';
+        car.surfaceKey='DIRT'; car.surfaceName='DIRT';
         keys={};
         lastTime = 0;
         car._invulnerable = 0;
