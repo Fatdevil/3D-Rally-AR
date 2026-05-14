@@ -180,8 +180,9 @@ function updateVehicle(dt) {
     // Speed cap (with damage penalty)
     let maxSpd = CFG.MAX_SPEED * surface.maxSpeed * dmgMod.maxSpeedMult;
     let hSpd = Math.sqrt(car.velocity.x*car.velocity.x + car.velocity.z*car.velocity.z);
+    let hSpdPreCap = hSpd; // capture BEFORE cap — barrier delta-V uses this
     if(hSpd>maxSpd) { let s=maxSpd/hSpd; car.velocity.x*=s; car.velocity.z*=s; }
-    // Fix #1: displaySpeed from POST-cap velocity (HUD and respawn read correct value)
+    // displaySpeed from POST-cap velocity (HUD and respawn read correct value)
     car.displaySpeed = Math.sqrt(car.velocity.x*car.velocity.x + car.velocity.z*car.velocity.z);
     // Reverse cap
     let fv2 = car.velocity.dot(fwd);
@@ -191,17 +192,18 @@ function updateVehicle(dt) {
 
     // ─── BARRIER COLLISION — delta-V damage + volt ───
     // terrain.type is raw ('OB'); car.surfaceKey becomes 'BARRIER' after SURFACE_MAP lookup.
-    // Fix #3: toUpperCase for robustness against lowercase terrain data.
-    // Fix #4: damage based on delta-V (speed change at impact), not absolute speed.
-    //   A car scraping a wall at constant speed has deltaV ~0 → minimal damage.
-    //   A frontal hit at 140 km/h has high deltaV → large damage.
+    // IMPORTANT: use hSpdPreCap (before speed cap) as speedBefore.
+    // BARRIER has maxSpeed:0.00 which zeroes velocity during cap — if we used
+    // car.displaySpeed (post-cap) speedBefore would always be 0 and damage never fires.
     if (terrain.type.toUpperCase() === 'OB') {
-        let speedBefore = car.displaySpeed; // post-cap, pre-bounce
+        let speedBefore = hSpdPreCap; // pre-cap speed — true approach velocity
         car.velocity.x *= 0.9; car.velocity.z *= 0.9;
-        let speedAfter  = Math.sqrt(car.velocity.x*car.velocity.x + car.velocity.z*car.velocity.z);
-        let deltaV = speedBefore - speedAfter; // always >= 0; zero during scrapes
+        let speedAfter = Math.sqrt(car.velocity.x*car.velocity.x + car.velocity.z*car.velocity.z);
+        // deltaV = approach speed - what's left after wall absorbs impact
+        // For BARRIER: speedBefore (pre-cap) vs speedAfter (post-bounce) gives real impact
+        let deltaV = speedBefore - speedAfter;
         if (window.rallyDamage && deltaV > 2) {
-            window.rallyDamage.applyDamage(deltaV * 4); // scale: 10 m/s delta → 40 dmg-units
+            window.rallyDamage.applyDamage(deltaV * 4);
             if (window.rallyCamera) window.rallyCamera.triggerShake(deltaV * 4);
             if (speedBefore > DMG_VOLT_THRESH) {
                 let latComp = Math.abs(car.velocity.dot(right));
