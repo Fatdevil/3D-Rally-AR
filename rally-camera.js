@@ -128,13 +128,15 @@ function update(camera, physDt, realDt) {
     camera.lookAt(camLookAt);
 
     // Camera shake — timer uses realDt (constant real-world duration)
+    // BUG-06 fix: amplitude är nu framerate-oberoende.
+    // Tidigare skalades shake med realDt*60 vilket gav dubbel amplitude vid 30fps
+    // och halv amplitude vid 120fps. Nu är amplituden konstant per trigger.
     if (shakeTimer > 0) {
         shakeTimer -= realDt;  // real time, not physics time
         let t = clamp(shakeTimer / 0.4, 0, 1);
         let shake = shakeIntensity * t;
-        let norm = realDt * 60; // normalize amplitude to 60fps
-        camera.position.x += (Math.random() - 0.5) * shake * norm;
-        camera.position.y += (Math.random() - 0.5) * shake * 0.5 * norm;
+        camera.position.x += (Math.random() - 0.5) * shake;
+        camera.position.y += (Math.random() - 0.5) * shake * 0.5;
     }
 
     // FOV boost (time-based lerp)

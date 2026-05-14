@@ -38,8 +38,10 @@ function calculateJump(speedKmh, angleDeg, landSlopeDeg) {
     let tanPhi = Math.tan(phi);
     let tFlight = 2 * (vy - vx * tanPhi) / g;
     
-    // Clamp: if we get negative or insane time, slope is too steep
-    if (tFlight <= 0) tFlight = 0.1;
+    // Clamp: if we get negative or insane time, slope is too steep to land ahead of ramp
+    // BUG-09 fix: sätt invalid-flagga istället för att tyst returnera 0.1s
+    let invalid = false;
+    if (tFlight <= 0) { tFlight = 0.01; invalid = true; }
     if (tFlight > 10) tFlight = 10;
 
     // Horizontal distance
@@ -71,7 +73,8 @@ function calculateJump(speedKmh, angleDeg, landSlopeDeg) {
         distance: distX,
         maxHeight: maxH,
         landAngle: landAngle,
-        points: points
+        points: points,
+        invalid: invalid // BUG-09: true = landningssluttning brantare än hoppet
     };
 }
 
@@ -331,6 +334,26 @@ function recalculate() {
 
     // Update stats
     let el = (id, val) => { let e = document.getElementById(id); if (e) e.textContent = val; };
+
+    // BUG-09 fix: om hoppet är ogiltigt (negativ flygtid) visa tydlig varning
+    if (lastCalc.invalid) {
+        el('jump-stat-airtime', '—');
+        el('jump-stat-dist',    '—');
+        el('jump-stat-height',  '—');
+        el('jump-stat-land',    '—');
+        let badge = document.getElementById('jump-rating-badge');
+        if (badge) { badge.textContent = '⚠️ OGILTIG'; badge.style.background = '#ef4444'; badge.style.color = '#fff'; }
+        let advice = document.getElementById('jump-advice');
+        if (advice) {
+            advice.textContent = '⚠️ Landningssluttningen är brantare än hoppets uppgångsvinkel — bilen landar bakom rampen. Minska landningssluttningen eller öka rampvinkeln.';
+            advice.style.color = '#ef4444';
+        }
+        if (window._jumpPlacementPos && window._jumpPlacementDir) {
+            clearPreview(); // Visa ingen 3D-förhandsgranskning för ogiltiga hopp
+        }
+        return;
+    }
+
     el('jump-stat-airtime', lastCalc.airTime.toFixed(1) + 's');
     el('jump-stat-dist', Math.round(lastCalc.distance) + 'm');
     el('jump-stat-height', lastCalc.maxHeight.toFixed(1) + 'm');

@@ -113,7 +113,7 @@ function updateVehicle(dt) {
     let forwardVel = car.velocity.dot(fwd);
     let lateralVel = car.velocity.dot(right);
     car.speed = forwardVel;
-    car.displaySpeed = Math.sqrt(car.velocity.x*car.velocity.x + car.velocity.z*car.velocity.z); // total horizontal speed for HUD
+    // displaySpeed beräknas korrekt efter speed cap nedan (BUG-16: denna rad var redundant)
 
     // Slip angle
     let slipAngle = 0;
@@ -150,8 +150,12 @@ function updateVehicle(dt) {
         // Throttle while reversing = brake
         car.velocity.addScaledVector(fwd, (CFG.BRAKE_FORCE/CFG.MASS)*0.5*dt);
     }
-    // Reverse
-    if(input.brake>0 && forwardVel<=0.5) {
+    // Reverse — BUG-05 fix: sjönk från <= 0.5 till <= 0.1 m/s.
+    // Originalkoden aktiverade bakvärtskraft redan vid 0.4 m/s framfårt, vilket
+    // fick bilen att "snäppa" bakåt vid inbromsning.
+    // Trunkering till noll sker nu i bromskoden på raden ovan (newFwd < 0 → 0),
+    // så reverse aktiveras bara när bilen faktiskt stannat.
+    if(input.brake>0 && forwardVel<=0.1) {
         let accel = (CFG.ENGINE_FORCE/CFG.MASS)*0.4*input.brake*surface.accel;
         car.velocity.addScaledVector(fwd, -accel*dt);
     }

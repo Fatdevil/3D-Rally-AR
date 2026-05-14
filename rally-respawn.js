@@ -20,6 +20,7 @@ let lastCheckpoint = { position: null, heading: 0 };
 let distSinceCheckpoint = 0;
 let offTrackDist = 0;
 let stuckTimer = 0;
+let _rKeyWasDown = false; // BUG-07 fix: edge-detection for R key
 
 // ─── UI Elements ───
 let overlayDiv = null;
@@ -142,7 +143,14 @@ function update(dt) {
             offTrackDist -= moveDist * 2.0; // Recover faster on track
         }
     } else {
-        offTrackDist = 0; // Luften -> nollställ off-track
+        // BUG-03 fix: Bevara off-track state i luften.
+        // Tidigare nollställdes offTrackDist direkt vilket tillät spelare att
+        // hoppa i OB-zoner och aldrig ackumulera off-track-progress.
+        // Nu minskar det bara om bilen faktiskt är på bana (isOB=false in air → no change).
+        if (!isOB) {
+            offTrackDist -= moveDist * 2.0; // Luften + på bana: recover normalt
+        }
+        // I luften + OB: ingen förändring (varken ökar eller återhämtar)
     }
     offTrackDist = clamp(offTrackDist, 0, CFG.OFF_TRACK_MAX);
     
@@ -190,11 +198,14 @@ function update(dt) {
         return;
     }
 
-    // Manual respawn (R key)
+    // Manual respawn (R key) — BUG-07 fix: edge-triggered, inte nivå-triggad
+    // Utan edge-detection anropades triggerRespawn() ~60 gånger/s när R hölls nere.
     let keys = window.rallyVehicle && window.rallyVehicle.getKeys ? window.rallyVehicle.getKeys() : {};
-    if (keys['KeyR']) {
+    let rDown = !!keys['KeyR'];
+    if (rDown && !_rKeyWasDown) {
         triggerRespawn();
     }
+    _rKeyWasDown = rDown;
 }
 
 function cleanup() {
