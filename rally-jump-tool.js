@@ -62,7 +62,10 @@ function calculateJump(speedKmh, angleDeg, landSlopeDeg) {
         let t = (i / steps) * tFlight;
         let x = vx * t;
         let y = vy * t - 0.5 * g * t * t;
-        points.push({ x: x, y: Math.max(0, y) });
+        // Fynd 4 fix: behåll korrekt relativ Y, även negativ (för nedförslandningar).
+        // Tidigare Math.max(0, y) klippte trajectory-linjen vid 0 vilket gav
+        // visuell diskrepans mot landningsringen på lutande terräng.
+        points.push({ x: x, y: y });
     }
 
     return {
@@ -79,10 +82,16 @@ function calculateJump(speedKmh, angleDeg, landSlopeDeg) {
 }
 
 // ── Rating: Color-code the jump ──
+// Fynd 5 fix: använd relativ infallsvinkel mot marklutningen.
+// Absolut landAngle mäter vinkel mot horisontalen, men det relevanta
+// för landningshårdhet är vinkel relativt terrängens lutning.
+// relativeLandAngle = landAngle - landSlopeDeg
+// Positiv = brantare än marken (åt rätt håll), negativ = flackare än marken.
 function rateJump(calc) {
-    let a = Math.abs(calc.landAngle);
-    if (a < 25) return { label: 'SMOOTH', color: '#4ade80', emoji: '🟢' };
-    if (a < 40) return { label: 'HARD',   color: '#fbbf24', emoji: '🟡' };
+    // Relativ touchdown-vinkel mot markplanet
+    let rel = Math.abs(calc.landAngle - (calc.landSlope || 0));
+    if (rel < 25) return { label: 'SMOOTH', color: '#4ade80', emoji: '🟢' };
+    if (rel < 40) return { label: 'HARD',   color: '#fbbf24', emoji: '🟡' };
     return                   { label: 'DANGER', color: '#ef4444', emoji: '🔴' };
 }
 
@@ -293,8 +302,13 @@ function createHUD() {
     document.getElementById('jump-speed').addEventListener('input', function() {
         jumpSpeed = parseInt(this.value);
         document.getElementById('jump-speed-val').textContent = jumpSpeed + ' km/h';
-        window._rawAutoSlope = null; // FYN-99-03: nollställ stale raw-slope vid manuell ändring
-        recalculate();
+        window._rawAutoSlope = null; // FYN-99-03
+        // Fynd 3 fix: om placering finns, räkna om auto-slope för ny distance
+        if (window._jumpPlacementPos && window._jumpPlacementDir) {
+            window.onJumpToolClick(window._jumpPlacementPos);
+        } else {
+            recalculate();
+        }
     });
     document.getElementById('jump-angle').addEventListener('input', function() {
         rampAngle = parseInt(this.value);
@@ -304,13 +318,18 @@ function createHUD() {
         badge.textContent = r.text;
         badge.style.color = r.color;
         badge.style.background = r.color + '22';
-        window._rawAutoSlope = null; // FYN-99-03: nollställ stale raw-slope vid manuell ändring
-        recalculate();
+        window._rawAutoSlope = null; // FYN-99-03
+        // Fynd 3 fix: om placering finns, räkna om auto-slope för ny distance
+        if (window._jumpPlacementPos && window._jumpPlacementDir) {
+            window.onJumpToolClick(window._jumpPlacementPos);
+        } else {
+            recalculate();
+        }
     });
     document.getElementById('jump-land-slope').addEventListener('input', function() {
         landingSlope = parseInt(this.value);
         document.getElementById('jump-land-slope-val').textContent = landingSlope + '°';
-        window._rawAutoSlope = null; // FYN-99-03: manuell slope-justering — raw-värning är inte längre relevant
+        window._rawAutoSlope = null; // FYN-99-03: manuell justering — raw-varning ej relevant
         recalculate();
     });
 }
@@ -393,7 +412,10 @@ function recalculate() {
         // FYN-NY-01: varna om faktisk terränglutning överstiger sliderns intervall.
         // Slidern täcker [-30, 10]° — brantare terrängfall kläms till gränsvärdet
         // vilket kan göra hoppet se säkrare ut än det är i verkligheten.
-        let raw = window._rawAutoSlope;
+        // Fynd 2 fix: visa raw-slope-varning bara om placering är aktiv
+        let raw = (window._jumpPlacementPos && window._jumpPlacementDir)
+            ? window._rawAutoSlope
+            : null;
         if (raw !== null && raw !== undefined) {
             if (raw < -30) {
                 advice.textContent += ' ⚠️ Faktisk landningslutning (' + Math.round(raw) + '°) understiger verktygets min (-30°) — verklig landning kan vara mjukare men verifiera manuellt.';
@@ -432,16 +454,12 @@ window.onJumpToolClick = function(hitPoint) {
         window._jumpPlacementDir = new THREE.Vector3(0, 0, -1);
     }
 
-    // Auto-detect landing slope — FYN-NY-01 + FYN-NY-02 + FYN-99-02 fix
-    // Tre-pass-metod med konvergenskontroll:
-    //   Pass 1: sampla terräng vid föregående distance, sätt ny slope
-    //   Pass 2: ny distance från uppdaterat slope, resampla
-    //   Pass 3: om slope ändrades i pass 2 — ett slutgiltigt sample
-    //           så rawAutoSlope matchar faktisk slutlig trajectory (FYN-99-02)
+    // Auto-detect landing slope — FYN-NY-01 + FYN-NY-02 + FYN-99-02 + Fynd-6 fix
+    // Tre-pass-metod. Number.isFinite() skyddar alla terrain .z-läsningar (Fynd 6).
     let rawAutoSlope = null;
     if (window.localGetTerrainAt && lastCalc && !lastCalc.invalid) {
         let rampSurf = window.localGetTerrainAt(hitPoint.x, -hitPoint.z);
-        if (rampSurf) {
+        if (rampSurf && Number.isFinite(rampSurf.z)) {
             let slider = document.getElementById('jump-land-slope');
             let valEl  = document.getElementById('jump-land-slope-val');
 
@@ -449,7 +467,7 @@ window.onJumpToolClick = function(hitPoint) {
             let landX1 = hitPoint.x + window._jumpPlacementDir.x * lastCalc.distance;
             let landZ1 = hitPoint.z + window._jumpPlacementDir.z * lastCalc.distance;
             let surf1  = window.localGetTerrainAt(landX1, -landZ1);
-            if (surf1) {
+            if (surf1 && Number.isFinite(surf1.z)) {
                 rawAutoSlope = Math.atan2(surf1.z - rampSurf.z, lastCalc.distance) * RAD;
                 landingSlope = Math.round(Math.max(-30, Math.min(10, rawAutoSlope)));
                 if (slider) slider.value = landingSlope;
@@ -461,7 +479,7 @@ window.onJumpToolClick = function(hitPoint) {
                     let landX2 = hitPoint.x + window._jumpPlacementDir.x * lastCalc.distance;
                     let landZ2 = hitPoint.z + window._jumpPlacementDir.z * lastCalc.distance;
                     let surf2  = window.localGetTerrainAt(landX2, -landZ2);
-                    if (surf2) {
+                    if (surf2 && Number.isFinite(surf2.z)) {
                         let slope2   = Math.atan2(surf2.z - rampSurf.z, lastCalc.distance) * RAD;
                         let clamped2 = Math.round(Math.max(-30, Math.min(10, slope2)));
                         if (clamped2 !== landingSlope) {
@@ -474,7 +492,7 @@ window.onJumpToolClick = function(hitPoint) {
                                 let landX3 = hitPoint.x + window._jumpPlacementDir.x * finalCalc.distance;
                                 let landZ3 = hitPoint.z + window._jumpPlacementDir.z * finalCalc.distance;
                                 let surf3  = window.localGetTerrainAt(landX3, -landZ3);
-                                rawAutoSlope = surf3
+                                rawAutoSlope = (surf3 && Number.isFinite(surf3.z))
                                     ? Math.atan2(surf3.z - rampSurf.z, finalCalc.distance) * RAD
                                     : slope2;
                                 lastCalc = finalCalc;
@@ -507,6 +525,7 @@ window.deactivateJumpTool = function() {
     hideHUD();
     window._jumpPlacementPos = null;
     window._jumpPlacementDir = null;
+    window._rawAutoSlope = null; // Fynd 2 fix: rensa stale raw-slope vid deaktivering
 };
 
 window.isJumpToolActive = function() { return jumpActive; };

@@ -62,8 +62,19 @@ function initUI() {
 function init(car) {
     if (!car) return;
     initUI();
+    // Spara startposition. groundY sparas separat (mark utan drop-margin)
+    // för att triggerRespawn() ska kunna beräkna korrekt spawnY.
+    // _spawnPosition i rally.html är satt till t.z + 0.35 + 1.5, dvs.
+    // terrain + CAR_HEIGHT + drop-margin. Vi extraherar groundY här om möjligt.
+    let spawnPos = car._spawnPosition ? car._spawnPosition.clone() : car.position.clone();
+    let groundY = spawnPos.y; // fallback: använd position.y direkt utan extra drop
+    if (typeof window.localGetTerrainAt === 'function') {
+        let s = window.localGetTerrainAt(spawnPos.x, -spawnPos.z);
+        if (s && Number.isFinite(s.z)) groundY = s.z + 0.35; // terrain + CAR_HEIGHT
+    }
     lastCheckpoint = {
-        position: car._spawnPosition ? car._spawnPosition.clone() : car.position.clone(),
+        position: spawnPos,
+        groundY: groundY,   // markhöjd + CAR_HEIGHT — används av triggerRespawn
         heading: car.heading
     };
     distSinceCheckpoint = 0;
@@ -79,19 +90,22 @@ function triggerRespawn() {
     let car = window.rallyVehicle ? window.rallyVehicle.getCar() : null;
     if (!car || !lastCheckpoint.position) return;
 
-    // KVAR-01 / FYN-99-01 fix: resampla terränghöjd vid respawn och lägg till CAR_HEIGHT.
-    // Fordonets normala markposition är terrain.z + CAR_HEIGHT (0.35m) — utan denna offset
-    // hamnar bilen 0.35m lägre än sin normala körhöjd vid marken.
-    // Referens: rally.html:422 (t.z + 0.35 + 1.5) och rally-vehicle.js CFG.CAR_HEIGHT = 0.35.
-    // FYN-99-04 fix: Number.isFinite skyddar mot NaN/Infinity från terrain-samplern.
-    const CAR_HEIGHT = 0.35;
-    let spawnY = lastCheckpoint.position.y;
+    // Respawn-höjd: sampla aktuell terränghöjd vid checkpointens X/Z.
+    // spawnY = terrain.z + CAR_HEIGHT (0.35m) = normalt körläge.
+    // Fallback om terrängsampling saknas/ger ogiltig höjd:
+    //   använd lastCheckpoint.groundY direkt (inkl CAR_HEIGHT, exkl drop-margin).
+    //   INTE lastCheckpoint.position.y, som kan innehålla drop-margin från spawn.
+    //   Det undviker dubbel +1.5m (fynd 1 i kontroll av b8eed03).
+    const CAR_HEIGHT = 0.35; // Speglar CFG.CAR_HEIGHT i rally-vehicle.js
+    let spawnY = lastCheckpoint.groundY !== undefined
+        ? lastCheckpoint.groundY          // sparad groundY = terrain + CAR_HEIGHT
+        : lastCheckpoint.position.y;      // äldre checkpoint utan groundY — bästa gissning
     if (typeof window.localGetTerrainAt === 'function') {
         let cpX = lastCheckpoint.position.x;
         let cpZ = lastCheckpoint.position.z;
         let terrainSample = window.localGetTerrainAt(cpX, -cpZ);
         if (terrainSample && Number.isFinite(terrainSample.z)) {
-            spawnY = terrainSample.z + CAR_HEIGHT; // korrekt bilhöjd ovanför mark
+            spawnY = terrainSample.z + CAR_HEIGHT; // uppdaterad aktuell terränghöjd
         }
     }
     car.position.copy(lastCheckpoint.position);
@@ -147,6 +161,15 @@ function update(dt) {
             distSinceCheckpoint = 0;
             lastCheckpoint.position.copy(car.position);
             lastCheckpoint.heading = car.heading;
+            // Spara groundY utan drop-margin vid varje checkpoint (fynd 1 fix)
+            {
+                let t = typeof window.localGetTerrainAt === 'function'
+                    ? window.localGetTerrainAt(car.position.x, -car.position.z)
+                    : null;
+                lastCheckpoint.groundY = (t && Number.isFinite(t.z))
+                    ? t.z + 0.35  // terrain + CAR_HEIGHT (speglar CFG.CAR_HEIGHT = 0.35)
+                    : car.position.y;
+            }
         }
     }
 
