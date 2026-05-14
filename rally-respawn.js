@@ -79,21 +79,23 @@ function triggerRespawn() {
     let car = window.rallyVehicle ? window.rallyVehicle.getCar() : null;
     if (!car || !lastCheckpoint.position) return;
 
-    // KVAR-01 fix: resampla terränghöjd vid respawn-tillfället.
-    // Tidigare kopierades checkpoint.position.y direkt, vilket kan vara felaktigt
-    // om terrängen ändrats sedan checkpointen sparades.
-    // Nu hämtas aktuell markhöjd vid X/Z, med fallback till sparad Y.
+    // KVAR-01 / FYN-99-01 fix: resampla terränghöjd vid respawn och lägg till CAR_HEIGHT.
+    // Fordonets normala markposition är terrain.z + CAR_HEIGHT (0.35m) — utan denna offset
+    // hamnar bilen 0.35m lägre än sin normala körhöjd vid marken.
+    // Referens: rally.html:422 (t.z + 0.35 + 1.5) och rally-vehicle.js CFG.CAR_HEIGHT = 0.35.
+    // FYN-99-04 fix: Number.isFinite skyddar mot NaN/Infinity från terrain-samplern.
+    const CAR_HEIGHT = 0.35;
     let spawnY = lastCheckpoint.position.y;
     if (typeof window.localGetTerrainAt === 'function') {
         let cpX = lastCheckpoint.position.x;
         let cpZ = lastCheckpoint.position.z;
         let terrainSample = window.localGetTerrainAt(cpX, -cpZ);
-        if (terrainSample && typeof terrainSample.z === 'number') {
-            spawnY = terrainSample.z;
+        if (terrainSample && Number.isFinite(terrainSample.z)) {
+            spawnY = terrainSample.z + CAR_HEIGHT; // korrekt bilhöjd ovanför mark
         }
     }
     car.position.copy(lastCheckpoint.position);
-    car.position.y = spawnY + 1.5; // 1.5m drop-in clearance
+    car.position.y = spawnY + 1.5; // + 1.5m drop-in clearance
     car.heading = lastCheckpoint.heading;
     
     // Stop car

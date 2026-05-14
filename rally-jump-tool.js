@@ -293,6 +293,7 @@ function createHUD() {
     document.getElementById('jump-speed').addEventListener('input', function() {
         jumpSpeed = parseInt(this.value);
         document.getElementById('jump-speed-val').textContent = jumpSpeed + ' km/h';
+        window._rawAutoSlope = null; // FYN-99-03: nollställ stale raw-slope vid manuell ändring
         recalculate();
     });
     document.getElementById('jump-angle').addEventListener('input', function() {
@@ -303,11 +304,13 @@ function createHUD() {
         badge.textContent = r.text;
         badge.style.color = r.color;
         badge.style.background = r.color + '22';
+        window._rawAutoSlope = null; // FYN-99-03: nollställ stale raw-slope vid manuell ändring
         recalculate();
     });
     document.getElementById('jump-land-slope').addEventListener('input', function() {
         landingSlope = parseInt(this.value);
         document.getElementById('jump-land-slope-val').textContent = landingSlope + '°';
+        window._rawAutoSlope = null; // FYN-99-03: manuell slope-justering — raw-värning är inte längre relevant
         recalculate();
     });
 }
@@ -429,50 +432,63 @@ window.onJumpToolClick = function(hitPoint) {
         window._jumpPlacementDir = new THREE.Vector3(0, 0, -1);
     }
 
-    // Auto-detect landing slope from terrain — FYN-NY-01 + FYN-NY-02 fix
-    // Två-pass-metod för konsekvent slope-detektion:
-    //   Pass 1: sampla terräng vid current distance (från föregående kalkyl)
-    //   Pass 2: efter att landingSlope uppdaterats, kör recalculate() för ny distance,
-    //           sampla igen och korrigera slope.
-    // rawAutoSlope bevaras separat för varnings-HUD om faktisk terrainlutning
-    // överstiger sliderns intervall [-30, 10] (FYN-NY-01).
+    // Auto-detect landing slope — FYN-NY-01 + FYN-NY-02 + FYN-99-02 fix
+    // Tre-pass-metod med konvergenskontroll:
+    //   Pass 1: sampla terräng vid föregående distance, sätt ny slope
+    //   Pass 2: ny distance från uppdaterat slope, resampla
+    //   Pass 3: om slope ändrades i pass 2 — ett slutgiltigt sample
+    //           så rawAutoSlope matchar faktisk slutlig trajectory (FYN-99-02)
     let rawAutoSlope = null;
     if (window.localGetTerrainAt && lastCalc && !lastCalc.invalid) {
-        // Pass 1 — sampla vid föregående distance
-        let landX1 = hitPoint.x + window._jumpPlacementDir.x * lastCalc.distance;
-        let landZ1 = hitPoint.z + window._jumpPlacementDir.z * lastCalc.distance;
-        let surf1   = window.localGetTerrainAt(landX1, -landZ1);
         let rampSurf = window.localGetTerrainAt(hitPoint.x, -hitPoint.z);
-        if (surf1 && rampSurf) {
-            rawAutoSlope = Math.atan2(surf1.z - rampSurf.z, lastCalc.distance) * RAD;
-            // Klampa till sliderns intervall för UI (FYN-05), behåll raw för varning (FYN-NY-01)
-            landingSlope = Math.round(Math.max(-30, Math.min(10, rawAutoSlope)));
+        if (rampSurf) {
             let slider = document.getElementById('jump-land-slope');
-            if (slider) slider.value = landingSlope;
-            let valEl = document.getElementById('jump-land-slope-val');
-            if (valEl) valEl.textContent = landingSlope + '\u00b0';
+            let valEl  = document.getElementById('jump-land-slope-val');
 
-            // Pass 2 — recalculate ger ny distance med uppdaterat slope,
-            // sedan resamplar vi för konsekvent slope-värde (FYN-NY-02)
-            lastCalc = calculateJump(jumpSpeed, rampAngle, landingSlope);
-            if (!lastCalc.invalid) {
-                let landX2 = hitPoint.x + window._jumpPlacementDir.x * lastCalc.distance;
-                let landZ2 = hitPoint.z + window._jumpPlacementDir.z * lastCalc.distance;
-                let surf2 = window.localGetTerrainAt(landX2, -landZ2);
-                if (surf2) {
-                    let slope2 = Math.atan2(surf2.z - rampSurf.z, lastCalc.distance) * RAD;
-                    rawAutoSlope = slope2; // uppdatera raw med andra passets värde
-                    let clamped2 = Math.round(Math.max(-30, Math.min(10, slope2)));
-                    if (clamped2 !== landingSlope) {
-                        landingSlope = clamped2;
-                        if (slider) slider.value = landingSlope;
-                        if (valEl) valEl.textContent = landingSlope + '\u00b0';
+            // Pass 1 — sampla vid föregående distance
+            let landX1 = hitPoint.x + window._jumpPlacementDir.x * lastCalc.distance;
+            let landZ1 = hitPoint.z + window._jumpPlacementDir.z * lastCalc.distance;
+            let surf1  = window.localGetTerrainAt(landX1, -landZ1);
+            if (surf1) {
+                rawAutoSlope = Math.atan2(surf1.z - rampSurf.z, lastCalc.distance) * RAD;
+                landingSlope = Math.round(Math.max(-30, Math.min(10, rawAutoSlope)));
+                if (slider) slider.value = landingSlope;
+                if (valEl) valEl.textContent = landingSlope + '°';
+
+                // Pass 2 — ny distance med uppdaterat slope, resampla (FYN-NY-02)
+                lastCalc = calculateJump(jumpSpeed, rampAngle, landingSlope);
+                if (!lastCalc.invalid) {
+                    let landX2 = hitPoint.x + window._jumpPlacementDir.x * lastCalc.distance;
+                    let landZ2 = hitPoint.z + window._jumpPlacementDir.z * lastCalc.distance;
+                    let surf2  = window.localGetTerrainAt(landX2, -landZ2);
+                    if (surf2) {
+                        let slope2   = Math.atan2(surf2.z - rampSurf.z, lastCalc.distance) * RAD;
+                        let clamped2 = Math.round(Math.max(-30, Math.min(10, slope2)));
+                        if (clamped2 !== landingSlope) {
+                            // Slope konvergerade inte — uppdatera och gör pass 3 (FYN-99-02)
+                            landingSlope = clamped2;
+                            if (slider) slider.value = landingSlope;
+                            if (valEl) valEl.textContent = landingSlope + '°';
+                            let finalCalc = calculateJump(jumpSpeed, rampAngle, landingSlope);
+                            if (!finalCalc.invalid) {
+                                let landX3 = hitPoint.x + window._jumpPlacementDir.x * finalCalc.distance;
+                                let landZ3 = hitPoint.z + window._jumpPlacementDir.z * finalCalc.distance;
+                                let surf3  = window.localGetTerrainAt(landX3, -landZ3);
+                                rawAutoSlope = surf3
+                                    ? Math.atan2(surf3.z - rampSurf.z, finalCalc.distance) * RAD
+                                    : slope2;
+                                lastCalc = finalCalc;
+                            } else {
+                                rawAutoSlope = slope2; // fallback
+                            }
+                        } else {
+                            rawAutoSlope = slope2; // pass 2 konvergerade direkt
+                        }
                     }
                 }
             }
         }
     }
-    // window._rawAutoSlope används av recalculate() för varning om utanför intervall
     window._rawAutoSlope = rawAutoSlope;
 
     recalculate();
