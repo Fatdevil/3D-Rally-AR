@@ -13,10 +13,7 @@ const CFG = {
     DRIFT_STEER_BONUS: 1.3, HANDBRAKE_GRIP: 0.05,
     GRAVITY: 9.81, GRAVITY_AIR_MULT: 1.4, AIR_CONTROL: 0.3,
     CAR_HEIGHT: 0.35, WHEEL_SPIN: 0.15,
-    ROLL_SENS: 0.8, PITCH_SENS: 0.4,
-    CAM_BEHIND: 8, CAM_HEIGHT: 3.5, CAM_LOOK_AHEAD: 5,
-    CAM_POS_LERP: 0.08, CAM_ROT_LERP: 0.12,
-    CAM_DRIFT_SENS: 0.3, FOV_BASE: 65, FOV_BOOST: 15
+    ROLL_SENS: 0.8, PITCH_SENS: 0.4
 };
 const DMG_VOLT_THRESH = 25; // m/s barrier impact to trigger volt
 
@@ -29,8 +26,7 @@ let car = {
     prevLateralVel: 0, prevForwardVel: 0
 };
 let input = { throttle:0, brake:0, steer:0, handbrake:false };
-let keys = {}, lastTime = 0, camHeading = 0;
-let chaseCamTarget = null, chaseCamLookAt = null;
+let keys = {}, lastTime = 0;
 
 // ─── CAR MESH ───
 function createCarMesh() {
@@ -98,7 +94,10 @@ function updateVehicle(dt) {
         terrain = window.localGetTerrainAt(car.position.x, -car.position.z);
     let surface = window.resolveSurface ? window.resolveSurface(terrain.type) : {grip:0.5,longGrip:0.6,brake:0.65,maxSpeed:0.82,accel:0.78,dragAdd:0.015,driftThreshold:10,driftSustain:1.4,driftRecovery:0.65,rumble:0,depthVariance:0,landing:0.65};
     car.surfaceName = surface.label || terrain.type;
-    car.surfaceKey = (window.RALLY_SURFACE_MAP && window.RALLY_SURFACE_MAP[terrain.type]) || terrain.type; // key for lookup (underscore format)
+    car.surfaceKey = (window.RALLY_SURFACE_MAP && window.RALLY_SURFACE_MAP[terrain.type]) || terrain.type;
+
+    // Damage modifiers (queried once per frame)
+    let dmgMod = window.rallyDamage ? window.rallyDamage.getModifiers() : {steerMult:1,accelMult:1,maxSpeedMult:1};
 
     // Smooth surface transition
     car.currentGrip = lerp(car.currentGrip, surface.grip, 4.0*dt);
@@ -142,8 +141,6 @@ function updateVehicle(dt) {
         let speedRatio = clamp(forwardVel/CFG.MAX_SPEED, 0, 1);
         let throttleScale = 1.0 - speedRatio*speedRatio;
         let accel = (CFG.ENGINE_FORCE/CFG.MASS) * throttleScale * input.throttle * surface.accel;
-        // Damage engine penalty
-        let dmgMod = window.rallyDamage ? window.rallyDamage.getModifiers() : {steerMult:1,accelMult:1,maxSpeedMult:1};
         accel *= dmgMod.accelMult;
         car.velocity.addScaledVector(fwd, accel*dt);
     } else if(input.throttle>0 && forwardVel<0) {
@@ -178,8 +175,7 @@ function updateVehicle(dt) {
     if(spd<0.1 && input.throttle===0) car.velocity.set(0,car.velocity.y,0);
 
     // Speed cap (with damage penalty)
-    let dmgMod2 = window.rallyDamage ? window.rallyDamage.getModifiers() : {steerMult:1,accelMult:1,maxSpeedMult:1};
-    let maxSpd = CFG.MAX_SPEED * surface.maxSpeed * dmgMod2.maxSpeedMult;
+    let maxSpd = CFG.MAX_SPEED * surface.maxSpeed * dmgMod.maxSpeedMult;
     let hSpd = Math.sqrt(car.velocity.x*car.velocity.x + car.velocity.z*car.velocity.z);
     if(hSpd>maxSpd) { let s=maxSpd/hSpd; car.velocity.x*=s; car.velocity.z*=s; }
     // Reverse cap
@@ -194,6 +190,7 @@ function updateVehicle(dt) {
         car.velocity.x *= 0.9; car.velocity.z *= 0.9;
         if (window.rallyDamage && barrierSpeed > 5) {
             window.rallyDamage.applyDamage(barrierSpeed);
+            if (window.rallyCamera) window.rallyCamera.triggerShake(barrierSpeed);
             // Severe barrier hit → volt
             if (barrierSpeed > DMG_VOLT_THRESH) {
                 let latComp = Math.abs(car.velocity.dot(right));
@@ -208,9 +205,7 @@ function updateVehicle(dt) {
     if(car.onGround && Math.abs(postDragFwd)>0.3 && Math.abs(input.steer)>0.01) {
         let speedT = clamp(Math.abs(postDragFwd)/CFG.MAX_SPEED, 0, 1);
         let steerDeg = lerp(CFG.MAX_STEER, CFG.MIN_STEER, speedT);
-        // Damage steering penalty
-        let dmgMod3 = window.rallyDamage ? window.rallyDamage.getModifiers() : {steerMult:1,accelMult:1,maxSpeedMult:1};
-        steerDeg *= dmgMod3.steerMult;
+        steerDeg *= dmgMod.steerMult;
         if(car.isDrifting) steerDeg *= CFG.DRIFT_STEER_BONUS;
         let steerRad = steerDeg * Math.PI/180 * Math.abs(input.steer);
         let turnRadius = CFG.WHEELBASE / Math.tan(steerRad + 0.001);
@@ -243,6 +238,7 @@ function updateVehicle(dt) {
             // Damage from hard landing
             if (window.rallyDamage && landingImpact > 8) {
                 window.rallyDamage.applyDamage(landingImpact);
+                if (window.rallyCamera) window.rallyCamera.triggerShake(landingImpact);
             }
         }
     } else {
@@ -279,7 +275,8 @@ function updateVehicle(dt) {
         car.mesh.rotation.y = -car.heading;
     } else if (window.rallyDamage && window.rallyDamage.isFlipped()) {
         car.mesh.position.copy(car.position);
-        // Flip recovery handles rotation
+        car.mesh.rotation.y = -car.heading; // Keep heading updated during flip
+        // Flip recovery handles x/z rotation
     } else {
         // Normal mesh update
         car.mesh.position.copy(car.position);
@@ -297,52 +294,6 @@ function updateVehicle(dt) {
         }
         if(i<2) w.rotation.y = -input.steer*0.35;
     });
-}
-
-// ─── CHASE CAMERA + DRIFT OFFSET + FOV ───
-function updateChaseCamera(camera) {
-    if(!car.active||!car.mesh) return;
-    let diff = car.heading - camHeading;
-    while(diff>Math.PI) diff-=Math.PI*2;
-    while(diff<-Math.PI) diff+=Math.PI*2;
-    let sf = Math.min(1, Math.abs(car.speed)/10);
-    camHeading += diff * (CFG.CAM_ROT_LERP + sf*0.1);
-
-    let camFwd = new THREE.Vector3(Math.sin(camHeading),0,Math.cos(camHeading));
-    let camRight = new THREE.Vector3(Math.cos(camHeading),0,-Math.sin(camHeading));
-    let behindDist = CFG.CAM_BEHIND + Math.abs(car.speed)*0.04;
-    let heightBoost = (Math.abs(car.speed)/CFG.MAX_SPEED)*1.5;
-
-    let targetPos = car.position.clone()
-        .sub(camFwd.clone().multiplyScalar(behindDist))
-        .add(new THREE.Vector3(0, CFG.CAM_HEIGHT+heightBoost, 0));
-
-    // Drift camera offset
-    if(car.isDrifting) {
-        let driftOffset = car.prevLateralVel * CFG.CAM_DRIFT_SENS;
-        targetPos.addScaledVector(camRight, driftOffset);
-    }
-
-    // Terrain clip prevention
-    if(typeof window.localGetTerrainAt==='function') {
-        let ct = window.localGetTerrainAt(targetPos.x, -targetPos.z);
-        if(targetPos.y < ct.z+2.0) targetPos.y = ct.z+2.0;
-    }
-
-    let targetLook = car.position.clone()
-        .add(camFwd.clone().multiplyScalar(CFG.CAM_LOOK_AHEAD))
-        .add(new THREE.Vector3(0,0.5,0));
-
-    chaseCamTarget.lerp(targetPos, CFG.CAM_POS_LERP);
-    chaseCamLookAt.lerp(targetLook, CFG.CAM_ROT_LERP*1.5);
-    camera.position.copy(chaseCamTarget);
-    camera.lookAt(chaseCamLookAt);
-
-    // FOV boost
-    let speedRatio = clamp(Math.abs(car.speed)/CFG.MAX_SPEED, 0, 1);
-    let targetFov = CFG.FOV_BASE + speedRatio*CFG.FOV_BOOST;
-    camera.fov = lerp(camera.fov, targetFov, 0.05);
-    camera.updateProjectionMatrix();
 }
 
 // ─── HUD ───
@@ -410,11 +361,11 @@ window.rallyVehicle = {
         car.visualRoll=0; car.visualPitch=0;
         car.prevLateralVel=0; car.prevForwardVel=0;
         keys={};
-        lastTime = 0; // prevent stale dt on reactivation
+        lastTime = 0;
         car._invulnerable = 0;
         car._spawnPosition = new THREE.Vector3(0, 2, 0);
-        chaseCamTarget = new THREE.Vector3();
-        chaseCamLookAt = new THREE.Vector3();
+        // Init camera system
+        if (window.rallyCamera) window.rallyCamera.init(car);
         if(typeof window.localGetTerrainAt==='function'){
             let t=window.localGetTerrainAt(0,0);
             car.position.y = t.z+CFG.CAR_HEIGHT;
@@ -437,13 +388,16 @@ window.rallyVehicle = {
         let h=document.getElementById('rally-hud'); if(h)h.remove();
         keys={}; console.log('🏎️ Rally Vehicle deactivated');
     },
-    update: function(camera, controls) {
+    update: function(camera) {
         let now=performance.now();
-        let dt=lastTime?(now-lastTime)/1000:0.016;
+        let realDt=lastTime?(now-lastTime)/1000:0.016;
         lastTime=now;
-        updateVehicle(dt);
-        updateChaseCamera(camera);
-        if (window.rallyDamage) window.rallyDamage.update(dt);
+        realDt = Math.min(realDt, 0.05);
+        // Compute physDt (slow-mo applied by camera system)
+        let physDt = window.rallyCamera ? window.rallyCamera.computePhysDt(realDt) : realDt;
+        updateVehicle(physDt);
+        if (window.rallyCamera) window.rallyCamera.update(camera, physDt);
+        if (window.rallyDamage) window.rallyDamage.update(physDt);
         updateHUD();
     },
     isActive:()=>car.active,
