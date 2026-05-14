@@ -150,17 +150,15 @@ function updateVehicle(dt) {
         // Throttle while reversing = brake
         car.velocity.addScaledVector(fwd, (CFG.BRAKE_FORCE/CFG.MASS)*0.5*dt);
     }
-    // Reverse — BUG-05 fix: sjönk från <= 0.5 till <= 0.1 m/s.
-    // Originalkoden aktiverade bakvärtskraft redan vid 0.4 m/s framfårt, vilket
-    // fick bilen att "snäppa" bakåt vid inbromsning.
-    // Trunkering till noll sker nu i bromskoden på raden ovan (newFwd < 0 → 0),
-    // så reverse aktiveras bara när bilen faktiskt stannat.
+    // Reverse — aktiveras när bilen är nästan stillastående (forwardVel ≤0.1 m/s)
     if(input.brake>0 && forwardVel<=0.1) {
         let accel = (CFG.ENGINE_FORCE/CFG.MASS)*0.4*input.brake*surface.accel;
         car.velocity.addScaledVector(fwd, -accel*dt);
     }
-    // Braking
-    if(input.brake>0 && forwardVel>0.5) {
+    // Braking — FYN-01 fix: tröskel sänkt från > 0.5 till > 0.1 m/s.
+    // Matchar nu reverse-tröskeln så att dödzonen 0.1–0.5 m/s är stängd.
+    // Tidigare hanterades inte broms alls i det intervallet.
+    if(input.brake>0 && forwardVel>0.1) {
         let brakeAccel = (CFG.BRAKE_FORCE/CFG.MASS)*input.brake*surface.brake;
         let newFwd = forwardVel - brakeAccel*dt;
         if(newFwd<0) newFwd=0;

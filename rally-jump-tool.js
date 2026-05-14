@@ -418,7 +418,10 @@ window.onJumpToolClick = function(hitPoint) {
     }
 
     // Auto-detect landing slope from terrain
-    if (window.localGetTerrainAt && lastCalc) {
+    // FYN-04 fix: hoppa över auto-slope om aktuell kalkyl är ogiltig.
+    // En ogiltig kalkyl använder tFlight=0.01 vilket ger lastCalc.distance ≈0,
+    // vilket leder till extrem/meningslös autoSlope via Math.atan2(dh, ~0).
+    if (window.localGetTerrainAt && lastCalc && !lastCalc.invalid) {
         let landX = hitPoint.x + window._jumpPlacementDir.x * lastCalc.distance;
         let landZ = hitPoint.z + window._jumpPlacementDir.z * lastCalc.distance;
         let surf = window.localGetTerrainAt(landX, -landZ);
@@ -426,7 +429,9 @@ window.onJumpToolClick = function(hitPoint) {
         if (surf && rampSurf) {
             let dh = surf.z - rampSurf.z;
             let autoSlope = Math.atan2(dh, lastCalc.distance) * RAD;
-            landingSlope = Math.round(autoSlope);
+            // FYN-05 fix: klampa till sliderns intervall [-30, 10] för att undvika
+            // att intern variabel och slider-UI hamnar ur synk på brant terräng.
+            landingSlope = Math.round(Math.max(-30, Math.min(10, autoSlope)));
             let slider = document.getElementById('jump-land-slope');
             if (slider) slider.value = landingSlope;
             let valEl = document.getElementById('jump-land-slope-val');

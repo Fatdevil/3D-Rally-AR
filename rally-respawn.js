@@ -69,6 +69,7 @@ function init(car) {
     distSinceCheckpoint = 0;
     offTrackDist = 0;
     stuckTimer = 0;
+    _rKeyWasDown = false; // FYN-07 fix: återställ edge-detection vid init
     if (overlayDiv) overlayDiv.style.opacity = '0';
     if (hintDiv) hintDiv.style.opacity = '0';
 }
@@ -143,14 +144,13 @@ function update(dt) {
             offTrackDist -= moveDist * 2.0; // Recover faster on track
         }
     } else {
-        // BUG-03 fix: Bevara off-track state i luften.
-        // Tidigare nollställdes offTrackDist direkt vilket tillät spelare att
-        // hoppa i OB-zoner och aldrig ackumulera off-track-progress.
-        // Nu minskar det bara om bilen faktiskt är på bana (isOB=false in air → no change).
-        if (!isOB) {
-            offTrackDist -= moveDist * 2.0; // Luften + på bana: recover normalt
-        }
-        // I luften + OB: ingen förändring (varken ökar eller återhämtar)
+        // FYN-02 fix: i luften fryses off-track helt — varken ökar eller minskar.
+        // Tidigare varianten minskade offTrackDist i luften över icke-OB-yta, vilket
+        // innebar att bilen kunde återhämta OB-progress utan markkontakt.
+        // car.terrainType uppdateras från localGetTerrainAt varje frame oavsett
+        // om bilen är i luften eller inte, så isOB i luften kan inte läggas till
+        // som kriterium för recovery.
+        // Regel: off-track ändras BARA vid faktisk markkontakt.
     }
     offTrackDist = clamp(offTrackDist, 0, CFG.OFF_TRACK_MAX);
     
