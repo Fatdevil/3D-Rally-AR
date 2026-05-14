@@ -1,0 +1,172 @@
+{
+  "version": "2.0",
+  "courses": [
+    {
+      "id": "norrmjole-gk",
+      "name": "Norrmjöle Golfklubb",
+      "shortName": "Norrmjöle GK",
+      "city": "Umeå",
+      "region": "Västerbotten",
+      "country": "SE",
+      "clubhouse": { "lat": 63.6603, "lon": 20.1309 },
+      "par": 72,
+      "holes": 18,
+      "designer": "—",
+      "yearOpened": 1966,
+      "altitude_m": 8,
+      "terrain": "forest",
+      "grassType": "nordic_blend",
+      "description": "Norrmjöle golfbana är en 18 håls skogsbana av varierande karaktär. De flesta greener är ondulerade och beroende på flaggplacering är puttningen tidvis mycket utmanande. På de sista nio hålen förekommer vattenhinder på flertalet av hålen.",
+      "tees": {
+        "vit":    { "cr": 71.0, "slope": 125, "label": "Vit (58)",    "teeId": 58 },
+        "gul":    { "cr": 69.5, "slope": 122, "label": "Gul (56)",    "teeId": 56 },
+        "bla":    { "cr": 66.0, "slope": 118, "label": "Blå (51)",    "teeId": 51 },
+        "rod":    { "cr": 70.0, "slope": 120, "label": "Röd (47)",    "teeId": 47 },
+        "orange": { "cr": 60.0, "slope": 108, "label": "Orange (36)", "teeId": 36 }
+      },
+      "holeData": [
+        {
+          "hole": 1, "par": 4, "hcp": 4, "si": 4,
+          "distances": { "vit": 382, "gul": 360, "bla": 301, "rod": 298, "orange": 239 },
+          "tee": { "lat": 63.66072, "lon": 20.12987 },
+          "green": {
+            "center": { "lat": 63.66379, "lon": 20.12894 },
+            "front":  { "lat": 63.66365, "lon": 20.12900 },
+            "back":   { "lat": 63.66393, "lon": 20.12888 }
+          },
+          "fairway": {
+            "landingZone": { "lat": 63.6622, "lon": 20.1293, "distFromTee": 220 },
+            "width_m": 32, "dogleg": "none", "heading_deg": 342
+          },
+          "hazards": [
+            { "type": "bunker", "name": "Fairwaybunker vänster", "position": { "lat": 63.6630, "lon": 20.1290 }, "distFromTee": 260 },
+            { "type": "bunker", "name": "Fairwaybunker höger", "position": { "lat": 63.6631, "lon": 20.1298 }, "distFromTee": 265 },
+            { "type": "bunker", "name": "Greenbunker vänster", "position": { "lat": 63.6639, "lon": 20.1280 }, "distFromTee": 360 }
+          ],
+          "elevation": { "tee_m": 10, "green_m": 15.68, "drop_m": 5.68, "maxElevation_m": 16 },
+          "description": "Rakt par 4 med skogskorridor. Driver mot landningszon, approach in mot green skyddad av bunkrar.",
+          "strategy": "Driv rakt. Fairwaybunkar 250-270m. Approach undvik vänster bunker."
+        },
+        {
+          "hole": 2, "par": 3, "hcp": 12, "si": 12,
+          "distances": { "vit": 175, "gul": 166, "bla": 157, "rod": 122, "orange": 115 },
+          "tee": { "lat": 63.6643, "lon": 20.1280 },
+          "green": { "center": { "lat": 63.6652, "lon": 20.1290 } },
+          "description": "Kort par 3. Välj rätt klubba och sikta mitt på green."
+        },
+        {
+          "hole": 3, "par": 4, "hcp": 8, "si": 8,
+          "distances": { "vit": 350, "gul": 333, "bla": 313, "rod": 308, "orange": 209 },
+          "tee": { "lat": 63.6655, "lon": 20.1288 },
+          "green": { "center": { "lat": 63.6680, "lon": 20.1310 } },
+          "description": "Medelsvårt par 4 genom skogen."
+        },
+        {
+          "hole": 4, "par": 4, "hcp": 6, "si": 6,
+          "distances": { "vit": 325, "gul": 317, "bla": 289, "rod": 263, "orange": 226 },
+          "tee": { "lat": 63.6683, "lon": 20.1308 },
+          "green": { "center": { "lat": 63.6705, "lon": 20.1330 } },
+          "description": "Par 4 med taktisk tee-shot krävd."
+        },
+        {
+          "hole": 5, "par": 4, "hcp": 10, "si": 10,
+          "distances": { "vit": 335, "gul": 319, "bla": 303, "rod": 274, "orange": 189 },
+          "tee": { "lat": 63.6708, "lon": 20.1328 },
+          "green": { "center": { "lat": 63.6728, "lon": 20.1348 } },
+          "description": "Medellångt par 4."
+        },
+        {
+          "hole": 6, "par": 5, "hcp": 16, "si": 16,
+          "distances": { "vit": 444, "gul": 439, "bla": 436, "rod": 350, "orange": 308 },
+          "tee": { "lat": 63.6730, "lon": 20.1345 },
+          "green": { "center": { "lat": 63.6758, "lon": 20.1310 } },
+          "description": "Långt par 5 — birdiechans för längre slagare."
+        },
+        {
+          "hole": 7, "par": 3, "hcp": 18, "si": 18,
+          "distances": { "vit": 130, "gul": 125, "bla": 117, "rod": 103, "orange": 99 },
+          "tee": { "lat": 63.6760, "lon": 20.1308 },
+          "green": { "center": { "lat": 63.6766, "lon": 20.1322 } },
+          "description": "Kortaste hålet — precision avgör."
+        },
+        {
+          "hole": 8, "par": 4, "hcp": 2, "si": 2,
+          "distances": { "vit": 329, "gul": 326, "bla": 305, "rod": 266, "orange": 193 },
+          "tee": { "lat": 63.6768, "lon": 20.1320 },
+          "green": { "center": { "lat": 63.6790, "lon": 20.1340 } },
+          "description": "Svåraste par 4 — banans tuffaste hål."
+        },
+        {
+          "hole": 9, "par": 5, "hcp": 14, "si": 14,
+          "distances": { "vit": 462, "gul": 456, "bla": 445, "rod": 377, "orange": 315 },
+          "tee": { "lat": 63.6792, "lon": 20.1338 },
+          "green": { "center": { "lat": 63.6820, "lon": 20.1300 } },
+          "description": "Långt par 5 som avslutar utslingan."
+        },
+        {
+          "hole": 10, "par": 4, "hcp": 3, "si": 3,
+          "distances": { "vit": 350, "gul": 343, "bla": 305, "rod": 257, "orange": 210 },
+          "tee": { "lat": 63.6610, "lon": 20.1320 },
+          "green": { "center": { "lat": 63.6635, "lon": 20.1355 } },
+          "description": "Tough start på bak nio — precision och längd."
+        },
+        {
+          "hole": 11, "par": 3, "hcp": 15, "si": 15,
+          "distances": { "vit": 147, "gul": 141, "bla": 96, "rod": 91, "orange": 58 },
+          "tee": { "lat": 63.6638, "lon": 20.1353 },
+          "green": { "center": { "lat": 63.6646, "lon": 20.1362 } },
+          "description": "Kort par 3 med ondulerad green."
+        },
+        {
+          "hole": 12, "par": 5, "hcp": 13, "si": 13,
+          "distances": { "vit": 431, "gul": 426, "bla": 420, "rod": 355, "orange": 295 },
+          "tee": { "lat": 63.6648, "lon": 20.1360 },
+          "green": { "center": { "lat": 63.6675, "lon": 20.1390 } },
+          "description": "Långt par 5 med vattenhinder."
+        },
+        {
+          "hole": 13, "par": 3, "hcp": 17, "si": 17,
+          "distances": { "vit": 103, "gul": 97, "bla": 84, "rod": 80, "orange": 53 },
+          "tee": { "lat": 63.6678, "lon": 20.1388 },
+          "green": { "center": { "lat": 63.6683, "lon": 20.1396 } },
+          "description": "Banans allra kortaste — pitcha in till flag."
+        },
+        {
+          "hole": 14, "par": 4, "hcp": 1, "si": 1,
+          "distances": { "vit": 365, "gul": 330, "bla": 286, "rod": 282, "orange": 208 },
+          "tee": { "lat": 63.6685, "lon": 20.1394 },
+          "green": { "center": { "lat": 63.6710, "lon": 20.1380 } },
+          "description": "SI #1 — banans svåraste hål. Kräver perfektion."
+        },
+        {
+          "hole": 15, "par": 4, "hcp": 5, "si": 5,
+          "distances": { "vit": 351, "gul": 343, "bla": 294, "rod": 291, "orange": 197 },
+          "tee": { "lat": 63.6712, "lon": 20.1378 },
+          "green": { "center": { "lat": 63.6735, "lon": 20.1365 } },
+          "description": "Långt par 4 genom skogskorridor."
+        },
+        {
+          "hole": 16, "par": 4, "hcp": 9, "si": 9,
+          "distances": { "vit": 300, "gul": 294, "bla": 261, "rod": 256, "orange": 171 },
+          "tee": { "lat": 63.6737, "lon": 20.1363 },
+          "green": { "center": { "lat": 63.6755, "lon": 20.1345 } },
+          "description": "Kortare par 4 — birdiechans."
+        },
+        {
+          "hole": 17, "par": 4, "hcp": 7, "si": 7,
+          "distances": { "vit": 348, "gul": 340, "bla": 277, "rod": 271, "orange": 200 },
+          "tee": { "lat": 63.6757, "lon": 20.1343 },
+          "green": { "center": { "lat": 63.6778, "lon": 20.1330 } },
+          "description": "Taktiskt par 4 med ondulerad green."
+        },
+        {
+          "hole": 18, "par": 5, "hcp": 11, "si": 11,
+          "distances": { "vit": 473, "gul": 466, "bla": 416, "rod": 365, "orange": 348 },
+          "tee": { "lat": 63.6780, "lon": 20.1328 },
+          "green": { "center": { "lat": 63.6610, "lon": 20.1310 } },
+          "description": "Avslutande par 5 — go for eagle eller lägg upp?"
+        }
+      ]
+    }
+  ]
+}

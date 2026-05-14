@@ -1,0 +1,430 @@
+  body { margin: 0; overflow: hidden; background: #87CEEB; font-family: 'Inter', sans-serif; }
+  canvas { display: block; }
+  
+  /* Sleek Scrollbar for ribbons */
+  ::-webkit-scrollbar { height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+  
+  #ui-layer {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+  }
+  
+
+  
+  #score-popup {
+      position: absolute;
+      top: 40%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 80px;
+      font-weight: 900;
+      color: #fcd34d;
+      text-shadow: 0px 5px 20px rgba(251, 191, 36, 0.8), 0 0 5px #000;
+      opacity: 0;
+      transition: 0.2s;
+      pointer-events: none;
+      z-index: 999;
+  }
+  
+  /* HAMBURGER MENU */
+  #hamburger-btn {
+      position: absolute; top: 20px; right: 20px; background: rgba(15,23,42,0.8); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 10px; cursor: pointer; z-index: 1000; backdrop-filter: blur(10px); transition: background 0.2s; pointer-events: auto;
+  }
+  #hamburger-btn:hover { background: rgba(255,255,255,0.1); }
+  #hamburger-btn svg { width: 24px; height: 24px; stroke: #fff; display: block; }
+
+  #hamburger-menu {
+      position: absolute; top: 0; right: -350px; width: 320px; height: 100%; background: rgba(11, 15, 25, 0.95); backdrop-filter: blur(15px); border-left: 1px solid rgba(255,255,255,0.1); z-index: 9999; transition: right 0.3s cubic-bezier(0.175, 0.885, 0.32, 1); padding: 20px; box-shadow: -10px 0 30px rgba(0,0,0,0.5); display: flex; flex-direction: column; gap: 15px; overflow-y: auto; pointer-events: auto;
+  }
+  #hamburger-menu.open { right: 0; }
+  .hb-title { color: #fff; font-size: 20px; font-weight: 900; letter-spacing: 1px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+  .hb-btn { background: #1e293b; color: #fff; border: 1px solid #334155; padding: 12px; border-radius: 8px; font-weight: bold; cursor: pointer; text-align: left; transition: all 0.2s; }
+  .hb-btn:hover { background: #38bdf8; color: #0f172a; }
+  .hb-section-title { color: #94a3b8; font-size: 12px; font-weight: bold; text-transform: uppercase; margin-top: 15px; border-bottom: 1px solid #334155; padding-bottom: 5px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none; transition: color 0.2s; }
+.hb-section-title:hover { color: #e2e8f0; }
+.hb-section-content { display: none; overflow: hidden; margin-top: 5px; }
+  .hb-toggle { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; color: #e2e8f0; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .hb-toggle input { accent-color: #38bdf8; width: 18px; height: 18px; cursor: pointer; }
+
+  /* DYNAMIC HUD (Top Left) */
+  #dynamic-hud {
+      position: absolute; top: 110px; left: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 100; pointer-events: none;
+  }
+  .dh-tile { background: rgba(15,23,42,0.8); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 15px; display: flex; justify-content: space-between; align-items: center; min-width: 190px; gap: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+  .dh-label { color: #94a3b8; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+  .dh-val { color: #fff; font-size: 16px; font-weight: 900; }
+  .dh-val.highlight { color: #38bdf8; }
+  
+  .controls {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      align-items: center;
+      pointer-events: none;
+      z-index: 50;
+  }
+  
+  .controls > *, .controls input, .controls button {
+      pointer-events: auto;
+  }
+  
+  .controls input {
+      padding: 10px;
+      font-size: 16px;
+      border-radius: 8px;
+      border: 1px solid #475569;
+      width: 80px;
+      background: #1e293b;
+      color: white;
+  }
+  
+  .controls button {
+      background: linear-gradient(135deg, #ef4444, #b91c1c);
+      color: white;
+      border: none;
+      padding: 12px 30px;
+      font-size: 18px;
+      font-weight: 800;
+      border-radius: 8px;
+      cursor: pointer;
+      text-transform: uppercase;
+      box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
+      transition: transform 0.1s;
+  }
+  .controls button:active { transform: scale(0.95); }
+  /* .btn-home removed — consolidated into #top-bar */
+  .palette-btn { width:100%; height:auto; padding:8px 4px; border-radius:8px; cursor:pointer; border:3px solid transparent; transition:transform 0.1s; font-size:10px; font-weight:800; color:#fff; text-align:center; text-shadow:0 1px 3px rgba(0,0,0,0.6); text-transform:uppercase; letter-spacing:0.5px; }
+  .palette-btn.active { border-color:white; transform:scale(1.05); }
+  
+  /* NEW PRO UI LAYOUT */
+  #left-toolbar {
+      position: absolute;
+      top: 50%; left: 10px;
+      transform: translateY(-50%);
+      background: rgba(15,23,42,0.9);
+      padding: 10px;
+      border-radius: 12px;
+      border: 1px solid #475569;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 5px;
+      pointer-events: auto;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      z-index: 100;
+  }
+  
+  #left-toolbar button {
+      background: transparent; color: #94a3b8; border: none; padding: 10px;
+      border-radius: 8px; font-weight: bold; cursor: pointer; transition: all 0.2s;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      font-size: 10px; min-width: 65px; height: 50px; gap: 4px;
+  }
+  #left-toolbar button:hover { background: rgba(255,255,255,0.1); color: #fff; }
+  #left-toolbar button.active { background: #38bdf8; color: #0f172a; }
+  #left-toolbar button.active-green { background: #4ade80; color: #0f172a; }
+  #left-toolbar button.active-yellow { background: #fbbf24; color: #0f172a; }
+  #left-toolbar button.active-red { background: #ef4444; color: #fff; }
+  #left-toolbar:not(.pro-mode) .pro-tool { display: none !important; }
+  #left-toolbar:not(.pro-mode) .pro-divider { display: none !important; }
+  #btn-pro-toggle {
+      grid-column: 1 / -1; margin-top: 4px;
+      background: rgba(56, 189, 248, 0.1) !important;
+      border: 1px dashed #475569 !important;
+      color: #94a3b8 !important;
+      font-size: 9px !important; height: 32px !important;
+      letter-spacing: 1px;
+  }
+  #btn-pro-toggle:hover { background: rgba(56, 189, 248, 0.2) !important; color: #38bdf8 !important; }
+  #left-toolbar.pro-mode #btn-pro-toggle { border-color: #38bdf8 !important; color: #38bdf8 !important; }
+  
+  #right-toolbar {
+      position: absolute;
+      top: 50%; right: 10px;
+      transform: translateY(-50%);
+      display: flex;
+      flex-direction: column;
+      gap: 0px;
+      pointer-events: none;
+      z-index: 100;
+      max-height: 85vh;
+      overflow: hidden;
+  }
+  
+  #right-tabs {
+      flex-shrink: 0;
+  }
+  
+  #right-toolbar > div[id^="tab-content-"] {
+      overflow-y: auto;
+      overflow-x: hidden;
+      scrollbar-width: thin;
+      scrollbar-color: #475569 transparent;
+      gap: 10px;
+  }
+  
+  .prop-panel {
+      background: rgba(15,23,42,0.9); padding: 15px; border-radius: 12px;
+      border: 1px solid #475569; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      pointer-events: auto; display: none; flex-direction: column; gap: 10px;
+  }
+  
+  #top-bar {
+      position: absolute; top: 10px; left: 10px; right: 10px;
+      display: flex; justify-content: space-between; align-items: center;
+      pointer-events: none; z-index: 101;
+  }
+  #top-bar .top-left, #top-bar .top-center, #top-bar .top-right {
+      display: flex; gap: 8px; align-items: center;
+  }
+  #top-bar .top-center {
+      position: absolute; left: 50%; transform: translateX(-50%);
+  }
+  
+  .sys-btn {
+      background: rgba(15,23,42,0.9); color: #fff; border: 1px solid #475569;
+      padding: 10px 15px; border-radius: 8px; font-weight: bold; cursor: pointer;
+      pointer-events: auto; display: flex; align-items: center; gap: 8px; font-size: 14px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3); transition: all 0.2s;
+  }
+  .sys-btn:hover { background: #334155; transform: scale(1.05); }
+  
+  #dropdown-menu {
+      position: absolute; top: 60px; left: 15px; background: rgba(15,23,42,0.95);
+      border: 1px solid #475569; border-radius: 12px; padding: 10px;
+      display: none; flex-direction: column; gap: 5px; pointer-events: auto;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5); z-index: 102; min-width: 180px;
+  }
+  #dropdown-menu button {
+      background: transparent; border: none; color: #e2e8f0; text-align: left;
+      padding: 10px 15px; border-radius: 6px; font-weight: bold; cursor: pointer;
+  }
+  #dropdown-menu button:hover { background: rgba(255,255,255,0.1); }
+  
+  #tool-hints {
+      position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+      background: rgba(15,23,42,0.8); padding: 8px 15px; border-radius: 8px;
+      color: #94a3b8; font-size: 12px; font-weight: bold; pointer-events: none; border: 1px solid #475569;
+  }
+  #elevation-hud {
+      position: absolute; bottom: 20px; left: 160px;
+      background: rgba(15,23,42,0.92); padding: 8px 18px; border-radius: 10px;
+      pointer-events: none; border: 1px solid #475569; z-index: 100;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+  }
+  
+  #global-loader {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: #0f172a;
+      z-index: 999999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+  }
+  #global-loader.hidden {
+      opacity: 0;
+      pointer-events: none;
+      transform: scale(1.05);
+  }
+  .loader-spinner {
+      width: 50px; height: 50px;
+      border: 4px solid rgba(255,255,255,0.1);
+      border-top-color: #38bdf8;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 20px;
+  }
+  @keyframes spin { 100% { transform: rotate(360deg); } }
+
+  /* ============================================================
+   * MOBILE SWING UI — responsive breakpoint + swing components
+   * ============================================================ */
+
+  /* Hide desktop number-input tools on touch/mobile devices */
+  body.swing-mode #manual-tools { display: none !important; }
+
+  /* --- Swing Overlay --- */
+  #swing-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 5000;
+      pointer-events: auto;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+  }
+  #swing-overlay.active { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+
+  /* --- Club selector bar --- */
+  #club-selector {
+      display: none;
+      position: fixed;
+      bottom: 100px;
+      left: 0; right: 0;
+      z-index: 4999;
+      justify-content: center;
+      gap: 0;
+      overflow-x: auto;
+      padding: 0 10px;
+      scrollbar-width: none;
+      pointer-events: auto;
+  }
+  #club-selector::-webkit-scrollbar { display: none; }
+  body.swing-mode #club-selector { display: flex; }
+
+  .club-btn {
+      flex: 0 0 auto;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      min-width: 58px; padding: 8px 6px;
+      background: rgba(15,23,42,0.85);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-right: none;
+      color: #94a3b8;
+      font-family: 'Inter', sans-serif;
+      font-size: 10px; font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+      -webkit-tap-highlight-color: transparent;
+  }
+  .club-btn:first-child { border-radius: 12px 0 0 12px; }
+  .club-btn:last-child  { border-radius: 0 12px 12px 0; border-right: 1px solid rgba(255,255,255,0.12); }
+  .club-btn .club-icon  { font-size: 18px; margin-bottom: 2px; }
+  .club-btn .club-dist  { font-size: 9px; color: #64748b; margin-top: 1px; }
+  .club-btn.selected    { background: rgba(56,189,248,0.25); border-color: #38bdf8; color: #fff; }
+  .club-btn.selected .club-dist { color: #7dd3fc; }
+
+  /* --- Swing launch button --- */
+  #swing-launch-btn {
+      display: none;
+      position: fixed;
+      bottom: 28px;
+      left: 50%; transform: translateX(-50%);
+      z-index: 4999;
+      background: linear-gradient(135deg, #38bdf8, #0284c7);
+      color: #fff;
+      border: none;
+      border-radius: 50px;
+      padding: 16px 48px;
+      font-family: 'Inter', sans-serif;
+      font-size: 17px; font-weight: 900;
+      letter-spacing: 1px;
+      cursor: pointer;
+      box-shadow: 0 6px 24px rgba(56,189,248,0.4);
+      pointer-events: auto;
+      -webkit-tap-highlight-color: transparent;
+      transition: transform 0.1s;
+  }
+  #swing-launch-btn:active { transform: translateX(-50%) scale(0.96); }
+  body.swing-mode #swing-launch-btn { display: block; }
+
+  /* --- Swing Circle Container --- */
+  #swing-circle-container {
+      position: relative;
+      width: 260px; height: 260px;
+      margin-bottom: 20px;
+  }
+  #swing-svg {
+      width: 100%; height: 100%;
+      filter: drop-shadow(0 0 18px rgba(56,189,248,0.35));
+  }
+
+  /* Precision zones on the ring (background arc colours) */
+  .zone-miss    { stroke: rgba(239,68,68,0.35); }
+  .zone-ok      { stroke: rgba(251,191,36,0.45); }
+  .zone-perfect { stroke: rgba(74,222,128,0.60); }
+
+  /* Power ring — animated via stroke-dasharray driven by JS */
+  #power-ring-track { stroke: rgba(255,255,255,0.08); fill: none; }
+  #power-ring-fill  {
+      fill: none;
+      stroke: #38bdf8;
+      stroke-linecap: round;
+      transition: stroke-dashoffset 0.03s linear, stroke 0.2s;
+  }
+
+  /* Direction arm */
+  #dir-arm {
+      stroke: #fff;
+      stroke-width: 3;
+      stroke-linecap: round;
+      transform-origin: 130px 130px;
+      transition: opacity 0.2s;
+      opacity: 0;
+  }
+  #dir-arm.active { opacity: 1; }
+
+  /* Centre dot */
+  #centre-dot { fill: #38bdf8; }
+
+  /* --- Result flash --- */
+  #swing-result-flash {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -60%) scale(0.8);
+      font-family: 'Inter', sans-serif;
+      font-size: 28px; font-weight: 900;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s, transform 0.15s;
+      z-index: 5001;
+      text-shadow: 0 2px 12px rgba(0,0,0,0.6);
+  }
+  #swing-result-flash.show {
+      opacity: 1;
+      transform: translate(-50%, -60%) scale(1.1);
+  }
+
+  /* --- Swing info bar (club name + distance) --- */
+  #swing-info {
+      display: none;
+      position: fixed;
+      top: 80px;
+      left: 50%; transform: translateX(-50%);
+      background: rgba(15,23,42,0.88);
+      border: 1px solid rgba(56,189,248,0.3);
+      border-radius: 20px;
+      padding: 8px 22px;
+      color: #fff;
+      font-family: 'Inter', sans-serif;
+      font-size: 14px; font-weight: 700;
+      z-index: 4998;
+      pointer-events: none;
+      backdrop-filter: blur(8px);
+      white-space: nowrap;
+  }
+  body.swing-mode #swing-info { display: block; }
+  #swing-info .si-club  { color: #38bdf8; }
+  #swing-info .si-dist  { color: #fbbf24; margin-left: 12px; }
+
+  /* Auto-hide desktop penalty/flyover buttons in swing mode on small screens */
+  @media (max-width: 768px) {
+      body.swing-mode #btn-flyover,
+      body.swing-mode #btn-cam-mode { display: none !important; }
+  }
+
+  /* Actions dropdown (Mulligan/Rehit/Drop) */
+  #actions-popup { display: none; }
+  #actions-popup.open { display: block; animation: actionsSlideUp 0.15s ease-out; }
+  #actions-popup button:hover { filter: brightness(1.15); transform: scale(1.02); }
+  #actions-popup button { transition: filter 0.1s, transform 0.1s; }
+  @keyframes actionsSlideUp {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+  }
+  #btn-actions { transition: background 0.15s; }
+  #btn-actions:hover { background: #475569 !important; }

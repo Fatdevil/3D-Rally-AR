@@ -1,0 +1,1235 @@
+[
+  {
+    "name": "Aguilón Golf",
+    "lat": 37.366073,
+    "lng": -1.708264,
+    "osm_id": 631135335,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Alcadeisa Links",
+    "lat": 36.242199,
+    "lng": -5.309913,
+    "osm_id": 291682603,
+    "holes": "?",
+    "website": "https://www.alcaidesagolf.com/seccion/en/alcaidesa-links/105/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Alcaidesa Links Golf Resort",
+    "lat": 36.243531,
+    "lng": -5.320717,
+    "osm_id": 3873410,
+    "holes": "?",
+    "website": "https://www.alcaidesagolf.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Alferini Golf",
+    "lat": 36.49123,
+    "lng": -5.048377,
+    "osm_id": 3300452,
+    "holes": "?",
+    "website": "https://www.villapadierna.es/en/alferini/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Alhaurin Golf",
+    "lat": 36.607974,
+    "lng": -4.705298,
+    "osm_id": 3308783,
+    "holes": "?",
+    "website": "https://alhauringolf.com/golf/campo-golf-malaga",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Almenara Golf Resort",
+    "lat": 36.275607,
+    "lng": -5.345948,
+    "osm_id": 3198971,
+    "holes": "?",
+    "website": "http://www.almenaragolfresort.com",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Antequera Golf",
+    "lat": 37.018411,
+    "lng": -4.599691,
+    "osm_id": 3300116,
+    "holes": "?",
+    "website": "https://www.golfantequera.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Arcos Gardens Golf Club",
+    "lat": 36.725459,
+    "lng": -5.753352,
+    "osm_id": 631134701,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Atalaya Golf & Country Club",
+    "lat": 36.487902,
+    "lng": -5.022481,
+    "osm_id": 3300476,
+    "holes": "?",
+    "website": "https://www.atalaya-golf.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Azata Golf",
+    "lat": 36.424469,
+    "lng": -5.201887,
+    "osm_id": 1155438103,
+    "holes": "?",
+    "website": "https://azatagolf.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Azata Golf",
+    "lat": 36.417328,
+    "lng": -5.198624,
+    "osm_id": 1155438104,
+    "holes": "?",
+    "website": "https://azatagolf.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Añoreta Golf",
+    "lat": 36.723347,
+    "lng": -4.241737,
+    "osm_id": 3310202,
+    "holes": "?",
+    "website": "https://www.anoretagolf.es/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Barceló Montecastillo Golf",
+    "lat": 36.701901,
+    "lng": -6.035485,
+    "osm_id": 319147500,
+    "holes": "?",
+    "website": "http://www.barcelo.com/BarceloHotels/es_ES/hoteles/Espana/Cadiz/hotel-barcelo-montecastillo-golf/descripcion-general.aspx",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Benalup",
+    "lat": 36.337772,
+    "lng": -5.824463,
+    "osm_id": 976038708,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Bil Bil Pitch & Putt",
+    "lat": 36.595234,
+    "lng": -4.553039,
+    "osm_id": 3301393,
+    "holes": "?",
+    "website": "http://en.bilbilhouse.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Cabopino golf",
+    "lat": 36.494738,
+    "lng": -4.742373,
+    "osm_id": 172434912,
+    "holes": "?",
+    "website": "http://www.cabopinogolf.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Calanova Golf Club",
+    "lat": 36.512444,
+    "lng": -4.70529,
+    "osm_id": 16378288,
+    "holes": "?",
+    "website": "http://calanovagolf.es/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Campo América",
+    "lat": 36.540831,
+    "lng": -4.72767,
+    "osm_id": 170984725,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Campo Asia",
+    "lat": 36.539656,
+    "lng": -4.716913,
+    "osm_id": 343672934,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Campo Europa",
+    "lat": 36.546014,
+    "lng": -4.723037,
+    "osm_id": 170989070,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Campo Los Lagos",
+    "lat": 36.550138,
+    "lng": -4.665061,
+    "osm_id": 172222354,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Campo Los Olivos",
+    "lat": 36.553376,
+    "lng": -4.672378,
+    "osm_id": 244709315,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Campo de Golf Campano",
+    "lat": 36.352697,
+    "lng": -6.109567,
+    "osm_id": 52868185,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Campo de Golf Isla Canela Links by Isla Canela",
+    "lat": 37.259639,
+    "lng": -7.419283,
+    "osm_id": 180595723,
+    "holes": "?",
+    "website": "https://www.islacanela.es/golf/isla-canela-links",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Campo de Golf Miguel Ángel Jiménez",
+    "lat": 36.636177,
+    "lng": -4.496267,
+    "osm_id": 281634367,
+    "holes": "?",
+    "website": "https://miguelangeljimenezgolfacademy.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Campo de Golf Río Real",
+    "lat": 36.50979,
+    "lng": -4.844055,
+    "osm_id": 3299743,
+    "holes": "?",
+    "website": "https://www.rioreal.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Campo de Golf de Pineda",
+    "lat": 37.350087,
+    "lng": -5.96496,
+    "osm_id": 488915399,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Castro Marim Golf & Country Club",
+    "lat": 37.238203,
+    "lng": -7.466995,
+    "osm_id": 107214899,
+    "holes": "?",
+    "website": "https://www.castromarimresort.com/golf",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Cerrado del Aguila Golf",
+    "lat": 36.525679,
+    "lng": -4.663045,
+    "osm_id": 172433462,
+    "holes": "?",
+    "website": "https://www.cerradodelaguila.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Club Zaudín Golf",
+    "lat": 37.362167,
+    "lng": -6.058868,
+    "osm_id": 3298654,
+    "holes": "?",
+    "website": "https://www.clubzaudingolf.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Club de Golf \"Hato Verde\"",
+    "lat": 37.563538,
+    "lng": -6.095185,
+    "osm_id": 435455533,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Club de Golf \"Hato Verde\"",
+    "lat": 37.567993,
+    "lng": -6.101923,
+    "osm_id": 435501108,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Club de Golf Aloha",
+    "lat": 36.511565,
+    "lng": -4.960941,
+    "osm_id": 1402560,
+    "holes": "?",
+    "website": "https://www.clubdegolfaloha.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Club de Golf Bellavista",
+    "lat": 37.284557,
+    "lng": -7.013621,
+    "osm_id": 229521358,
+    "holes": "?",
+    "website": "https://golfbellavista.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Club de Golf El Candado",
+    "lat": 36.719616,
+    "lng": -4.34142,
+    "osm_id": 8238880,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Club de Golf El Coto de la Serena",
+    "lat": 36.456098,
+    "lng": -5.068051,
+    "osm_id": 188317272,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Club de Golf La Cañada",
+    "lat": 36.294833,
+    "lng": -5.311957,
+    "osm_id": 105294806,
+    "holes": "?",
+    "website": "https://www.lacanadagolf.es/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Club de Golf Málaga Parador",
+    "lat": 36.654204,
+    "lng": -4.471724,
+    "osm_id": 60046149,
+    "holes": "?",
+    "website": "http://www.parador.es/malagagolf_en",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Club de Golf Novo Sancti Petri",
+    "lat": 36.349323,
+    "lng": -6.159227,
+    "osm_id": 52095387,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Club de Golf Novo Sancti Petri",
+    "lat": 36.351585,
+    "lng": -6.161431,
+    "osm_id": 52495324,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Club de Golf Novo Sancti Petri",
+    "lat": 36.342284,
+    "lng": -6.143609,
+    "osm_id": 84845101,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Club de Golf Novo Sancti Petri",
+    "lat": 36.341043,
+    "lng": -6.146251,
+    "osm_id": 84845103,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Club de Golf Novo Sancti Petri",
+    "lat": 36.344279,
+    "lng": -6.164401,
+    "osm_id": 276501587,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Club de Golf Novo Sancti Petri",
+    "lat": 36.347459,
+    "lng": -6.150449,
+    "osm_id": 276501588,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Club de Golf Novo Sancti Petri",
+    "lat": 36.342896,
+    "lng": -6.158631,
+    "osm_id": 276501589,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Club de Golf Novo Sancti Petri",
+    "lat": 36.342138,
+    "lng": -6.155289,
+    "osm_id": 276501590,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Club de Golf Novo Sancti Petri",
+    "lat": 36.35705,
+    "lng": -6.163889,
+    "osm_id": 276501591,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Club de Golf Playa Serena",
+    "lat": 36.724091,
+    "lng": -2.634736,
+    "osm_id": 2501899,
+    "holes": "?",
+    "website": "https://golfplayaserena.net/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Club de Golf Valderrama",
+    "lat": 36.285515,
+    "lng": -5.329886,
+    "osm_id": 237391513,
+    "holes": "?",
+    "website": "https://www.valderrama.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Club de Golf de Guadalhorce",
+    "lat": 36.699372,
+    "lng": -4.52879,
+    "osm_id": 175483665,
+    "holes": "?",
+    "website": "https://www.guadalhorce.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Cortijo Grande",
+    "lat": 37.123355,
+    "lng": -1.930017,
+    "osm_id": 258452874,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Costa Ballena Ocean Golf Club",
+    "lat": 36.682814,
+    "lng": -6.409704,
+    "osm_id": 3302571,
+    "holes": "?",
+    "website": "http://www.ballenagolf.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Course A",
+    "lat": 36.506999,
+    "lng": -4.996734,
+    "osm_id": 3301112,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Course B",
+    "lat": 36.515696,
+    "lng": -4.999065,
+    "osm_id": 3301113,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Desert Springs Golf Club",
+    "lat": 37.257932,
+    "lng": -1.82916,
+    "osm_id": 253154773,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Doña Julia Golf Club",
+    "lat": 36.388129,
+    "lng": -5.234496,
+    "osm_id": 2523808,
+    "holes": "?",
+    "website": "https://www.donajuliagolf.es/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Driving Range / German Golf Academy",
+    "lat": 36.524013,
+    "lng": -4.993128,
+    "osm_id": 244155660,
+    "holes": "?",
+    "website": "http://www.golfschule.tv/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "El Campanario Golf Course",
+    "lat": 36.475087,
+    "lng": -5.022909,
+    "osm_id": 244109824,
+    "holes": "?",
+    "website": "http://www.elcampanarionet.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "El Chaparral Golf Club",
+    "lat": 36.513517,
+    "lng": -4.664099,
+    "osm_id": 172432255,
+    "holes": "?",
+    "website": "https://www.golfelchaparral.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "El Higueral Golf",
+    "lat": 36.50168,
+    "lng": -5.020448,
+    "osm_id": 186098955,
+    "holes": "?",
+    "website": "http://www.elhigueralgolf.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "El Paraíso Golf Club",
+    "lat": 36.47541,
+    "lng": -5.033742,
+    "osm_id": 147409088,
+    "holes": "?",
+    "website": "https://www.elparaisogolfclub.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "El Soto Golf",
+    "lat": 36.524519,
+    "lng": -4.739781,
+    "osm_id": 170785539,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Escuela Pública de Golf El Toyo",
+    "lat": 36.842555,
+    "lng": -2.315323,
+    "osm_id": 1690176,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Escuela Pública de Golf La Cartuja",
+    "lat": 37.423565,
+    "lng": -6.000887,
+    "osm_id": 102882432,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Estepona Golf",
+    "lat": 36.413017,
+    "lng": -5.21223,
+    "osm_id": 244048306,
+    "holes": "?",
+    "website": "https://esteponagolf.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Flamingos Golf",
+    "lat": 36.474522,
+    "lng": -5.056058,
+    "osm_id": 139728265,
+    "holes": "?",
+    "website": "https://www.villapadierna.es/en/flamingos/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Golf Academy Albayt Resort",
+    "lat": 36.397441,
+    "lng": -5.205078,
+    "osm_id": 222531220,
+    "holes": "?",
+    "website": "http://www.albaytresort.com/en/albayt-resortgolf-academy.html",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Golf Benalmadena Pitch& Putt",
+    "lat": 36.601901,
+    "lng": -4.55771,
+    "osm_id": 167071648,
+    "holes": "?",
+    "website": "http://baboorestaurant.com/benalmadena-golf",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Golf Course Almerimar",
+    "lat": 36.703869,
+    "lng": -2.792761,
+    "osm_id": 3323996,
+    "holes": "?",
+    "website": "http://www.almerimar-resort.com/en/hotel-golf-almeria",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Golf Córdoba",
+    "lat": 37.96986,
+    "lng": -4.810997,
+    "osm_id": 153946662,
+    "holes": "?",
+    "website": "https://golfcordoba.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Golf El Puerto",
+    "lat": 36.623541,
+    "lng": -6.24566,
+    "osm_id": 3298747,
+    "holes": "?",
+    "website": "http://www.golfelpuerto.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Golf El Rompido - Campo Norte",
+    "lat": 37.231577,
+    "lng": -7.140902,
+    "osm_id": 222133571,
+    "holes": "?",
+    "website": "https://www.golfelrompido.es/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Golf El Rompido - Campo Sur",
+    "lat": 37.223496,
+    "lng": -7.137176,
+    "osm_id": 223150371,
+    "holes": "?",
+    "website": "https://www.golfelrompido.es/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Golf La Dama de Noche",
+    "lat": 36.501409,
+    "lng": -4.948457,
+    "osm_id": 3299762,
+    "holes": "?",
+    "website": "http://www.golfdamadenoche.es/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Golf La Estancia",
+    "lat": 36.368322,
+    "lng": -6.128277,
+    "osm_id": 729640031,
+    "holes": "?",
+    "website": "https://www.golflaestancia.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Golf Nuevo Portil",
+    "lat": 37.217087,
+    "lng": -7.063661,
+    "osm_id": 226069291,
+    "holes": "?",
+    "website": "http://www.nuevoportilgolf.es/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Golf Torrequebrada",
+    "lat": 36.586003,
+    "lng": -4.549761,
+    "osm_id": 1170115,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Granada Club de Golf",
+    "lat": 37.119245,
+    "lng": -3.663285,
+    "osm_id": 7091039,
+    "holes": "?",
+    "website": "https://granadaclubdegolf.com",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Greenlife Golf Driving Range",
+    "lat": 36.509975,
+    "lng": -4.780842,
+    "osm_id": 702311528,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Greenlife Golf Marbella",
+    "lat": 36.505397,
+    "lng": -4.779435,
+    "osm_id": 172444896,
+    "holes": "?",
+    "website": "https://www.greenlife-golf.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Isla Canela Golf Course",
+    "lat": 37.19547,
+    "lng": -7.391158,
+    "osm_id": 154575700,
+    "holes": "?",
+    "website": "http://www.islacanelagolf.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Isla del Fraile Pitch & Putt",
+    "lat": 37.418513,
+    "lng": -1.553188,
+    "osm_id": 3319450,
+    "holes": "?",
+    "website": "http://www.isladelfraileresort.com",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Islantilla Golf Resort",
+    "lat": 37.213584,
+    "lng": -7.234948,
+    "osm_id": 3296953,
+    "holes": "?",
+    "website": "https://www.islantillagolfresort.com",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "La Cala Resort",
+    "lat": 36.540089,
+    "lng": -4.723037,
+    "osm_id": 3308721,
+    "holes": "?",
+    "website": "https://www.lacala.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "La Duquesa Golf & Country Club",
+    "lat": 36.357802,
+    "lng": -5.23844,
+    "osm_id": 3299445,
+    "holes": "?",
+    "website": "https://www.golfladuquesa.com/en/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "La Envía Golf",
+    "lat": 36.833756,
+    "lng": -2.616573,
+    "osm_id": 37468184,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "La Hacienda Links Golf Resort",
+    "lat": 36.246744,
+    "lng": -5.315788,
+    "osm_id": 291682602,
+    "holes": "?",
+    "website": "https://lahaciendagolf.com/en/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "La Monacilla",
+    "lat": 37.289317,
+    "lng": -7.003853,
+    "osm_id": 1381917038,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "La Monacilla Golf Club",
+    "lat": 37.289378,
+    "lng": -7.004098,
+    "osm_id": 3296981,
+    "holes": "?",
+    "website": "https://lamonacillagolf.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "La Noria Golf & Resort",
+    "lat": 36.507396,
+    "lng": -4.687622,
+    "osm_id": 5450006,
+    "holes": "?",
+    "website": "https://www.lanoriagolf.net/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "La Quinta Golf & Country Club",
+    "lat": 36.513688,
+    "lng": -4.99707,
+    "osm_id": 3301126,
+    "holes": "?",
+    "website": "http://www.laquintagolf.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "La Reserva Golf Club",
+    "lat": 36.294658,
+    "lng": -5.328325,
+    "osm_id": 237391514,
+    "holes": "?",
+    "website": "https://www.sotogrande.com/websotogrande/golf/la_reserva_club_de_golf/presentation_en.php",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "La Resina Golf & Country Club",
+    "lat": 36.466769,
+    "lng": -5.075592,
+    "osm_id": 3299682,
+    "holes": "?",
+    "website": "https://www.laresina.net/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "La Siesta Golf Calahonda",
+    "lat": 36.498916,
+    "lng": -4.724175,
+    "osm_id": 16364140,
+    "holes": "?",
+    "website": "https://www.lasiestagolf.es/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "La Zagaleta Country Club - La Zagaleta Course",
+    "lat": 36.532393,
+    "lng": -5.029713,
+    "osm_id": 244158078,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Las Minas Golf",
+    "lat": 37.295123,
+    "lng": -6.23759,
+    "osm_id": 2716680,
+    "holes": "?",
+    "website": "http://www.lasminasgolf.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Lauro Golf",
+    "lat": 36.651767,
+    "lng": -4.628504,
+    "osm_id": 213412144,
+    "holes": "?",
+    "website": "https://www.laurogolf.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Lorca Resort Golf & Spa",
+    "lat": 37.551453,
+    "lng": -1.62669,
+    "osm_id": 3319459,
+    "holes": "?",
+    "website": "https://www.lorcaresort.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Los Moriscos Club de Golf",
+    "lat": 36.719869,
+    "lng": -3.558687,
+    "osm_id": 1725567,
+    "holes": "?",
+    "website": "https://www.moriscosgolf.com",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Los Naranjos Golf Club",
+    "lat": 36.510067,
+    "lng": -4.979271,
+    "osm_id": 3299800,
+    "holes": "?",
+    "website": "https://www.losnaranjos.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Magna Marbella Golf",
+    "lat": 36.505875,
+    "lng": -4.978516,
+    "osm_id": 97681590,
+    "holes": "?",
+    "website": "http://www.magnamarbellagolf.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Marbella Club Golf Resort",
+    "lat": 36.498992,
+    "lng": -5.056603,
+    "osm_id": 139728266,
+    "holes": "?",
+    "website": "https://www.marbellaclubgolf.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Marbella Golf Country Club",
+    "lat": 36.513331,
+    "lng": -4.811962,
+    "osm_id": 3299714,
+    "holes": "?",
+    "website": "https://www.marbellagolf.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Marina Golf Mojácar",
+    "lat": 37.15984,
+    "lng": -1.833459,
+    "osm_id": 3324010,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Miraflores golf",
+    "lat": 36.501869,
+    "lng": -4.705762,
+    "osm_id": 2297099,
+    "holes": "?",
+    "website": "http://www.miraflores-golf.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Montenmedio Golf & Country Club",
+    "lat": 36.23951,
+    "lng": -5.906915,
+    "osm_id": 220296432,
+    "holes": "?",
+    "website": "http://www.montenmedio.es/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Par 3 Course",
+    "lat": 36.533279,
+    "lng": -4.720711,
+    "osm_id": 170980184,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Quinta do Vale Golf Resort",
+    "lat": 37.249206,
+    "lng": -7.445657,
+    "osm_id": 12612276,
+    "holes": "?",
+    "website": "http://www.quintadovale.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Real Club de Golf Guadalmina",
+    "lat": 36.475546,
+    "lng": -5.002602,
+    "osm_id": 3300481,
+    "holes": "?",
+    "website": "https://www.guadalminagolf.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Real Club de Golf Las Brisas",
+    "lat": 36.505419,
+    "lng": -4.968936,
+    "osm_id": 97671239,
+    "holes": "?",
+    "website": "https://realclubdegolflasbrisas.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Real Club de Golf de Sevilla",
+    "lat": 37.352173,
+    "lng": -5.919426,
+    "osm_id": 73922417,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Real Club de Golf de Sotogrande",
+    "lat": 36.280112,
+    "lng": -5.291939,
+    "osm_id": 258648125,
+    "holes": "?",
+    "website": "https://www.golfsotogrande.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Rota Club de Golf",
+    "lat": 36.632147,
+    "lng": -6.353597,
+    "osm_id": 16201357,
+    "holes": "?",
+    "website": "https://www.rotaclubgolf.es",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "San Roque Club",
+    "lat": 36.267538,
+    "lng": -5.333815,
+    "osm_id": 237391517,
+    "holes": "?",
+    "website": "https://www.sanroqueclub.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Sanlúcar Club de Golf",
+    "lat": 36.790919,
+    "lng": -6.319943,
+    "osm_id": 3297010,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Santa Clara Golf Club Marbella",
+    "lat": 36.510866,
+    "lng": -4.824474,
+    "osm_id": 3299716,
+    "holes": "?",
+    "website": "https://santaclaragolfmarbella.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Santa Clara Golf Granada",
+    "lat": 37.075539,
+    "lng": -3.633723,
+    "osm_id": 3310266,
+    "holes": "?",
+    "website": "http://santaclaragolfgranada.es",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Santa María Golf & Country Club",
+    "lat": 36.509923,
+    "lng": -4.769689,
+    "osm_id": 172443763,
+    "holes": "?",
+    "website": "https://www.santamariagolfclub.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Santana Golf & Country Club",
+    "lat": 36.543506,
+    "lng": -4.700008,
+    "osm_id": 171834521,
+    "holes": "?",
+    "website": "https://www.santanagolf.com/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Sherry Golf Jerez",
+    "lat": 36.659049,
+    "lng": -6.156275,
+    "osm_id": 297353455,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "The Pine Trees",
+    "lat": 36.272669,
+    "lng": -5.343275,
+    "osm_id": 243993148,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Tramores Golf",
+    "lat": 36.478369,
+    "lng": -5.045649,
+    "osm_id": 244108926,
+    "holes": "?",
+    "website": "https://www.villapadierna.es/en/tramores/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Unnamed",
+    "lat": 36.391349,
+    "lng": -5.22752,
+    "osm_id": 187380298,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Unnamed",
+    "lat": 37.594118,
+    "lng": -1.677196,
+    "osm_id": 232239343,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Unnamed",
+    "lat": 36.398301,
+    "lng": -5.22459,
+    "osm_id": 712322688,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Unnamed",
+    "lat": 36.798364,
+    "lng": -4.110205,
+    "osm_id": 745790873,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Unnamed",
+    "lat": 37.385281,
+    "lng": -6.066243,
+    "osm_id": 925476660,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Unnamed",
+    "lat": 37.203666,
+    "lng": -1.816287,
+    "osm_id": 944669488,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Unnamed",
+    "lat": 36.519,
+    "lng": -4.904446,
+    "osm_id": 1010630784,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Unnamed",
+    "lat": 36.393469,
+    "lng": -5.234915,
+    "osm_id": 1326459174,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Unnamed",
+    "lat": 37.200763,
+    "lng": -1.889545,
+    "osm_id": 1353242287,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Unnamed",
+    "lat": 37.074003,
+    "lng": -3.626487,
+    "osm_id": 1470283893,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Unnamed",
+    "lat": 36.758798,
+    "lng": -4.073162,
+    "osm_id": 1230110,
+    "holes": "?",
+    "website": "",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Valle Romano Golf & Resort",
+    "lat": 36.427696,
+    "lng": -5.195407,
+    "osm_id": 3299672,
+    "holes": "?",
+    "website": "https://www.valleromano.net/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Valle del Este Golf Resort",
+    "lat": 37.201849,
+    "lng": -1.893052,
+    "osm_id": 3319413,
+    "holes": "?",
+    "website": "http://en.hotelvalledelestealmeria.com/campo-golf.htm",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Villa Nueva Golf Resort",
+    "lat": 36.50428,
+    "lng": -6.133671,
+    "osm_id": 183417445,
+    "holes": "?",
+    "website": "https://www.villanuevagolf.com/en/",
+    "region": "Andalucia/South"
+  },
+  {
+    "name": "Vista Hermosa Club de Golf",
+    "lat": 36.588705,
+    "lng": -6.258318,
+    "osm_id": 162444207,
+    "holes": "?",
+    "website": "http://www.vistahermosaclubdegolf.com/",
+    "region": "Andalucia/South"
+  }
+]
