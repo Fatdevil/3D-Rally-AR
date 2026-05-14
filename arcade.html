@@ -4600,27 +4600,51 @@
         ArcadeStorage.saveCustomLevel({ targets: dumpTargets, holes: dumpHoles });
 
         // ── Terrain snapshot for rally.html ──────────────────────────────
-        // Encode heightmap as H16 (Int16 x100, pako-compressed, base64).
-        // rally.html already parses this exact 'H16|...' format in loadTerrain().
+        // Saves H16 heightmap + biome PNG so rally.html can drive sculpted terrain.
+        // Fixes applied here:
+        //  - Chunked btoa (no apply() stack overflow on 600-seg heightmaps)
+        //  - Int16 height clamp: ±327m hard limit prevents silent wraparound
+        //  - Saves TERRAIN_SEGS as metadata so rally.html can resample if needed
+        //  - PNG (lossless) for biomemap: avoids JPEG artefacts near surface borders
+        //  - Clears stale snapshot on failure so old terrain isn't prioritised
         try {
             if (typeof pako !== 'undefined' && planeGeo) {
                 let pos = planeGeo.attributes.position.array;
                 let count = Math.floor(pos.length / 3);
                 let int16 = new Int16Array(count);
-                for (let i = 0; i < count; i++) int16[i] = Math.round(pos[i * 3 + 2] * 100);
+                const INT16_MAX = 32767, INT16_MIN = -32768;
+                for (let i = 0; i < count; i++) {
+                    // clamp to ±327.67m to prevent Int16 silent wraparound
+                    let raw = Math.round(pos[i * 3 + 2] * 100);
+                    int16[i] = Math.max(INT16_MIN, Math.min(INT16_MAX, raw));
+                }
                 let compressed = pako.deflate(new Uint8Array(int16.buffer));
-                let b64 = btoa(String.fromCharCode.apply(null, compressed));
-                let heightmapH16 = 'H16|' + b64;
-                let biomemap = (typeof pCtx !== 'undefined' && pCtx) ? pCtx.canvas.toDataURL('image/jpeg', 0.7) : null;
-                ArcadeStorage.saveTerrainSnapshot(heightmapH16, biomemap);
+                // chunked btoa — avoids RangeError: Maximum call stack size exceeded
+                let binary = '';
+                const CHUNK = 8192;
+                for (let i = 0; i < compressed.length; i += CHUNK) {
+                    binary += String.fromCharCode.apply(null, compressed.subarray(i, i + CHUNK));
+                }
+                let heightmapH16 = 'H16|' + btoa(binary);
+                // PNG (lossless) — JPEG artefacts near OB/WATER edges cause wrong surface type
+                let biomemap = (typeof pCtx !== 'undefined' && pCtx) ? pCtx.canvas.toDataURL('image/png') : null;
+                let ok = ArcadeStorage.saveTerrainSnapshot(heightmapH16, biomemap, TERRAIN_SEGS);
+                if (!ok) {
+                    // Save failed (storage full?) — clear stale snapshot so rally
+                    // doesn't load old terrain instead of falling back to flat
+                    ArcadeStorage.clearTerrainSnapshot();
+                    console.warn('⚠️ Terrain snapshot cleared (save failed — storage full?)');
+                }
             }
         } catch (e) {
-            console.warn('\u26a0\ufe0f Terrain snapshot skipped:', e.message);
+            ArcadeStorage.clearTerrainSnapshot();
+            console.warn('⚠️ Terrain snapshot error, cleared stale data:', e.message);
         }
         // ─────────────────────────────────────────────────────────────────
 
         if (appMode === 'BUILD') window.hasUnsavedChanges = true;
     }
+
     
     
     // ============================================================

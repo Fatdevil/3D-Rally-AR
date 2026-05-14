@@ -69,14 +69,18 @@ window.ArcadeStorage = {
     // ----- TERRAIN SNAPSHOT (rally.html reads this) -----
     // Saves a compact heightmap (H16 format) + biome data URL so rally.html
     // can reconstruct the sculpted terrain without needing the server.
-    saveTerrainSnapshot(heightmapH16, biomemapDataUrl) {
+    saveTerrainSnapshot(heightmapH16, biomemapDataUrl, segs) {
         try {
-            const snap = { terrain_heightmap: heightmapH16, terrain_biomemap: biomemapDataUrl, ts: Date.now() };
+            const snap = {
+                terrain_heightmap: heightmapH16,
+                terrain_biomemap: biomemapDataUrl,
+                segs: segs || 600,   // segment count — used by rally.html to detect resample need
+                ts: Date.now()
+            };
             localStorage.setItem(this.KEYS.TERRAIN_SNAP, JSON.stringify(snap));
-            console.log('💾 Terrain snapshot saved (' + (JSON.stringify(snap).length / 1024).toFixed(1) + 'KB)');
+            console.log('💾 Terrain snapshot saved (' + (JSON.stringify(snap).length / 1024).toFixed(1) + 'KB) segs=' + snap.segs);
             return true;
         } catch (e) {
-            // localStorage may be full (biomemap is large)
             console.warn('⚠️ Terrain snapshot save failed (storage full?):', e.message);
             return false;
         }
