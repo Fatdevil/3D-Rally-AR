@@ -62,12 +62,13 @@ function initUI() {
 function init(car) {
     if (!car) return;
     initUI();
-    // Spara startposition. groundY sparas separat (mark utan drop-margin)
-    // för att triggerRespawn() ska kunna beräkna korrekt spawnY.
-    // _spawnPosition i rally.html är satt till t.z + 0.35 + 1.5, dvs.
-    // terrain + CAR_HEIGHT + drop-margin. Vi extraherar groundY här om möjligt.
+    // groundY = terrain + CAR_HEIGHT, utan drop-margin.
+    // Prioritet: (1) localGetTerrainAt nu, (2) car._spawnGroundY (sparat i rally.html utan drop-margin),
+    // (3) spawnPos.y (sista utväg — kan innehålla drop-margin).
     let spawnPos = car._spawnPosition ? car._spawnPosition.clone() : car.position.clone();
-    let groundY = spawnPos.y; // fallback: använd position.y direkt utan extra drop
+    let groundY = car._spawnGroundY !== undefined
+        ? car._spawnGroundY           // korrekt terrain+CAR_HEIGHT utan drop-margin (Fynd D fix)
+        : spawnPos.y;                 // sista utväg — kan ha drop-margin inbyggd
     if (typeof window.localGetTerrainAt === 'function') {
         let s = window.localGetTerrainAt(spawnPos.x, -spawnPos.z);
         if (s && Number.isFinite(s.z)) groundY = s.z + 0.35; // terrain + CAR_HEIGHT

@@ -461,6 +461,7 @@
                 }
                 car.position.copy(spawnPos);
                 car._spawnPosition = spawnPos.clone();
+                car._spawnGroundY  = spawnPos.y - 1.5; // terrain + CAR_HEIGHT, utan drop-margin (Fynd D fix)
                 if (car.mesh) car.mesh.position.copy(spawnPos);
                 // Re-init respawn with corrected spawn position
                 if (window.rallyRespawn) window.rallyRespawn.init(car);
