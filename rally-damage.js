@@ -22,10 +22,9 @@ const DMG = {
     SMOKE_LIFETIME: 0.8,      // seconds per sprite
     SMOKE_RISE: 0.5,          // m/s upward drift
     VOLT_SPEED_THRESHOLD: 25, // m/s impact to trigger volt
-    VOLT_LATERAL_MIN: 5,      // m/s lateral for side-volt
     VOLT_DURATION: 1.0,       // seconds for volt animation
-    FLIP_DETECT_DOT: 0.3,    // car.up · worldUp threshold
     FLIP_RECOVERY_DELAY: 1.2, // seconds before auto-flip
+    FLIP_MAX_TIME: 5.0,       // hard timeout — force respawn after 5s flipped
     FLIP_GRACE: 1.5           // seconds post-flip drift immunity
 };
 
@@ -41,7 +40,7 @@ let postFlipGrace = 0;
 let smokeTimer = 0;
 let smokeSprites = [];
 let smokeMaterial = null;
-let deformOffsets = [];    // per-child random offsets applied on damage
+let flipTotalTimer = 0;    // total time spent flipped (for hard timeout)
 
 // ─── DAMAGE APPLICATION ───
 function applyDamage(impactSpeed) {
@@ -104,15 +103,18 @@ function triggerVolt(car, fwd, right) {
     if (isVolting || isFlipped) return;
     let lateralComponent = car.velocity.dot(right);
     let forwardComponent = car.velocity.dot(fwd);
+    let totalImpact = Math.sqrt(lateralComponent**2 + forwardComponent**2);
+    if (totalImpact < 0.1) totalImpact = 1; // prevent div-by-zero
 
-    // Roll axis from impact vector — frontal = pitch, side = roll, diagonal = both
+    // Normalized roll axis — side impact = roll, frontal = pitch
     voltRollAxis = {
-        x: -lateralComponent * 0.04,
-        z:  forwardComponent * 0.02
+        x: -(lateralComponent / totalImpact),
+        z:  (forwardComponent / totalImpact) * 0.5
     };
-    // Minimum roll so it's always visible
-    let mag = Math.abs(voltRollAxis.x) + Math.abs(voltRollAxis.z);
-    if (mag < 0.05) voltRollAxis.x = 0.08 * Math.sign(lateralComponent || 1);
+    // Ensure minimum visible rotation
+    if (Math.abs(voltRollAxis.x) + Math.abs(voltRollAxis.z) < 0.3) {
+        voltRollAxis.x = Math.sign(lateralComponent || 1);
+    }
 
     voltTimer = DMG.VOLT_DURATION;
     voltStartRotation = {
@@ -127,8 +129,8 @@ function updateVolt(car, dt) {
     voltTimer -= dt;
     let t = 1 - clamp(voltTimer / DMG.VOLT_DURATION, 0, 1); // 0→1
 
-    // Smooth roll: ease-in-out sine curve * axis magnitude * full rotation
-    let rollAmount = Math.sin(t * Math.PI) * Math.PI * 2;
+    // Linear full rotation — car rolls through 360° along impact axis
+    let rollAmount = t * Math.PI * 2;
     car.mesh.rotation.x = voltStartRotation.x + voltRollAxis.z * rollAmount;
     car.mesh.rotation.z = voltStartRotation.z + voltRollAxis.x * rollAmount;
 
@@ -138,31 +140,57 @@ function updateVolt(car, dt) {
 
     if (voltTimer <= 0) {
         isVolting = false;
-        // Check if landed upside down
-        checkFlipState(car);
+        // After a full volt, mark as flipped so auto-recovery handles it
+        isFlipped = true;
+        flipTimer = 0;
+        flipTotalTimer = 0;
     }
 }
 
 // ─── FLIP DETECTION & AUTO-RECOVERY ───
-function checkFlipState(car) {
+// Note: flip state is set by volt completion and by continuous terrain checks.
+// We do NOT read mesh rotation for detection (it contains terrain slope compensation).
+// Instead we track flip state explicitly via triggerVolt → isFlipped.
+
+function checkFlipStateContinuous(car) {
+    // Non-volt flip: car on ground with extreme slope + low speed = likely stuck inverted
+    // Only trigger if not already volting and car is nearly stopped
+    if (isVolting || isFlipped) return;
+    if (!car.onGround || car.velocity.length() > 3) return;
+    // Check actual mesh up-vector (only reliable when car is stopped on ground)
     if (!car.mesh) return;
     let carUp = new THREE.Vector3(0, 1, 0);
     carUp.applyEuler(car.mesh.rotation);
-    let upDot = carUp.dot(new THREE.Vector3(0, 1, 0));
-    if (upDot < DMG.FLIP_DETECT_DOT) {
+    let upDot = carUp.y;
+    if (upDot < 0.3) {
         isFlipped = true;
         flipTimer = 0;
+        flipTotalTimer = 0;
     }
 }
 
 function updateFlip(car, dt) {
     if (!isFlipped) return;
-    if (car.velocity.length() > 2.0) return; // wait until nearly stopped
+
+    // Hard timeout — force respawn after 5s flipped regardless
+    flipTotalTimer += dt;
+    if (flipTotalTimer > DMG.FLIP_MAX_TIME) {
+        if (window.rallyRespawn && window.rallyRespawn.triggerRespawn) {
+            window.rallyRespawn.triggerRespawn();
+        }
+        isFlipped = false;
+        flipTimer = 0;
+        flipTotalTimer = 0;
+        return;
+    }
+
+    // Wait until nearly stopped before starting recovery
+    if (car.velocity.length() > 2.0) return;
 
     flipTimer += dt;
     if (flipTimer > DMG.FLIP_RECOVERY_DELAY) {
-        // Smooth force back to upright — framerate-independent
-        let rate = 1 - Math.pow(0.05, dt * 60);
+        // Smooth force back to upright — framerate-independent (~1.5s recovery)
+        let rate = 1 - Math.pow(0.92, dt * 60);
         car.mesh.rotation.x = lerp(car.mesh.rotation.x, 0, rate);
         car.mesh.rotation.z = lerp(car.mesh.rotation.z, 0, rate);
 
@@ -171,6 +199,7 @@ function updateFlip(car, dt) {
             car.mesh.rotation.z = 0;
             isFlipped = false;
             flipTimer = 0;
+            flipTotalTimer = 0;
             postFlipGrace = DMG.FLIP_GRACE;
         }
     }
@@ -213,20 +242,17 @@ function updateSmoke(car, dt) {
     if (smokeTimer >= DMG.SMOKE_INTERVAL) {
         smokeTimer = 0;
         let sprite = new THREE.Sprite(smokeMaterial.clone());
-        // Position at car's hood area
-        let hoodOffset = new THREE.Vector3(
+        // Position at car's hood area — use mesh rotation for correct placement on slopes
+        let hoodLocal = new THREE.Vector3(
             (Math.random() - 0.5) * 0.6,
             0.8,
             1.5 + (Math.random() - 0.5) * 0.3
         );
-        // Rotate offset by car heading
-        let cos = Math.cos(-car.heading), sin = Math.sin(-car.heading);
-        let rx = hoodOffset.x * cos - hoodOffset.z * sin;
-        let rz = hoodOffset.x * sin + hoodOffset.z * cos;
+        if (car.mesh) hoodLocal.applyEuler(car.mesh.rotation);
         sprite.position.set(
-            car.position.x + rx,
-            car.position.y + hoodOffset.y,
-            car.position.z + rz
+            car.position.x + hoodLocal.x,
+            car.position.y + hoodLocal.y,
+            car.position.z + hoodLocal.z
         );
         sprite.scale.setScalar(0.1);
         sprite._age = 0;
@@ -263,7 +289,7 @@ function reset() {
     smokeTimer = 0;
     smokeSprites.forEach(s => { if (s.parent) s.parent.remove(s); if (s.material) s.material.dispose(); });
     smokeSprites = [];
-    deformOffsets = [];
+    flipTotalTimer = 0;
     // Reset mesh deformations
     let car = getCar();
     if (car && car.mesh) {
@@ -288,6 +314,8 @@ function update(dt) {
     if (!car || !car.active) return;
 
     updateVolt(car, dt);
+    // Continuous flip detection (non-volt flips: terrain, collisions)
+    if (!isVolting) checkFlipStateContinuous(car);
     updateFlip(car, dt);
     updatePostFlipGrace(dt);
     updateSmoke(car, dt);
