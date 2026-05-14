@@ -17,6 +17,9 @@ const DMG = {
     ENGINE_PENALTY_60: 0.20,  // -20% engine at 60%+
     MAX_SPEED_FLOOR: 0.25,    // 25% of max = never stationary
     DEFORM_RANGE: 0.08,       // max mesh deform offset (meters)
+    DEFORM_SCALE_REF: 0.05,   // KVAR-02 fix: referensskade-värde där full DEFORM_RANGE nås.
+                              // Tidigare hårdkodad 0.05 i applyDamage.
+                              // Öka värdet → mildare deformation per träff; minska → kraftigare.
     SMOKE_THRESHOLD: 0.60,    // 60% damage → smoke starts
     SMOKE_INTERVAL: 0.3,      // seconds between smoke sprites
     SMOKE_LIFETIME: 0.8,      // seconds per sprite
@@ -58,7 +61,7 @@ function applyDamage(impactSpeed) {
             let idx = Math.floor(Math.random() * car.mesh.children.length);
             let child = car.mesh.children[idx];
             if (!child._deformApplied) child._deformApplied = { x:0, y:0, z:0 };
-            let d = DMG.DEFORM_RANGE * (dmg / 0.05); // scale with hit severity
+            let d = DMG.DEFORM_RANGE * (dmg / DMG.DEFORM_SCALE_REF); // scale with hit severity
             child._deformApplied.x += (Math.random() - 0.5) * d;
             child._deformApplied.y += (Math.random() - 0.5) * d * 0.5;
             child._deformApplied.z += (Math.random() - 0.5) * d;

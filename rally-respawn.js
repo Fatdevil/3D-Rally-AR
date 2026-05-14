@@ -79,9 +79,21 @@ function triggerRespawn() {
     let car = window.rallyVehicle ? window.rallyVehicle.getCar() : null;
     if (!car || !lastCheckpoint.position) return;
 
-    // Reset position to last checkpoint + 1.5m drop
+    // KVAR-01 fix: resampla terränghöjd vid respawn-tillfället.
+    // Tidigare kopierades checkpoint.position.y direkt, vilket kan vara felaktigt
+    // om terrängen ändrats sedan checkpointen sparades.
+    // Nu hämtas aktuell markhöjd vid X/Z, med fallback till sparad Y.
+    let spawnY = lastCheckpoint.position.y;
+    if (typeof window.localGetTerrainAt === 'function') {
+        let cpX = lastCheckpoint.position.x;
+        let cpZ = lastCheckpoint.position.z;
+        let terrainSample = window.localGetTerrainAt(cpX, -cpZ);
+        if (terrainSample && typeof terrainSample.z === 'number') {
+            spawnY = terrainSample.z;
+        }
+    }
     car.position.copy(lastCheckpoint.position);
-    car.position.y += 1.5;
+    car.position.y = spawnY + 1.5; // 1.5m drop-in clearance
     car.heading = lastCheckpoint.heading;
     
     // Stop car
