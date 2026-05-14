@@ -344,8 +344,12 @@ window.rallyDamage = {
     isVolting: function() { return isVolting; },
     isFlipped: function() { return isFlipped; },
     hasPostFlipGrace: function() { return postFlipGrace > 0; },
-    getPostFlipGrace: function() { return postFlipGrace; }
+    getPostFlipGrace: function() { return postFlipGrace; },
+    // Expose DMG config so callers can read thresholds without duplicating constants.
+    // rally-vehicle.js reads cfg.VOLT_SPEED_THRESHOLD to avoid threshold drift.
+    cfg: DMG
 };
+
 
 console.log('💥 Rally Damage system loaded');
 })();

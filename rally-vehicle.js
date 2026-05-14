@@ -196,27 +196,31 @@ function updateVehicle(dt) {
     // BARRIER.maxSpeed=0.00 zeroes velocity during speed cap above.
     // All three values (speed, direction, latComp) must use pre-cap data.
     //
-    // speedAfter = speedBefore * 0.9 (analytical: wall absorbs 10% of speed per frame)
-    // Note: this is 10% speed-loss, not 10% kinetic-energy loss (that would be sqrt(0.9)).
+    // speedAfter = speedBefore * 0.9 (analytical: 10% speed-loss per impact frame)
     //
-    // Threshold >= 2 (not >) so exactly 20 m/s approach also triggers.
-    //   Damage table: 20 m/s → deltaV=2.0 → damage=8
-    //                 50 m/s → deltaV=5.0 → damage=20
-    //                  5 m/s → deltaV=0.5 → no damage (below threshold)
+    // applyDamage(impactSpeed) takes m/s with threshold 8 and multiplier 0.003:
+    //   dmg = (impactSpeed - 8) * 0.003
+    //   20 m/s → (20-8)*0.003 = 0.036 = 3.6% damage  ✓
+    //   50 m/s → (50-8)*0.003 = 0.126 = 12.6% damage  ✓
+    //   10 m/s → (10-8)*0.003 = 0.006 = 0.6% damage   ✓
+    //    8 m/s → below threshold, no damage
+    //
+    // DMG_VOLT_THRESH: read from rallyDamage config if exposed, else use local constant.
+    // This avoids drift between rally-vehicle.js and the VOLT_SPEED_THRESHOLD in rally-damage.js.
     if (terrain.type.toUpperCase() === 'OB') {
-        let speedBefore = hSpdPreCap;          // pre-cap approach speed (scalar)
-        let speedAfter  = speedBefore * 0.9;   // analytical: 10% speed absorbed by wall
+        let speedBefore = hSpdPreCap;          // pre-cap approach speed (m/s)
         car.velocity.x *= 0.9; car.velocity.z *= 0.9; // physics damping (no-op when BARRIER cap=0)
-        let deltaV = speedBefore - speedAfter; // = speedBefore * 0.1
-        if (window.rallyDamage && deltaV >= 2) { // >= so 20 m/s (deltaV=2.0) deals damage
-            window.rallyDamage.applyDamage(deltaV * 4);
-            if (window.rallyCamera) window.rallyCamera.triggerShake(deltaV * 4);
-            if (speedBefore > DMG_VOLT_THRESH) {
-                // Use pre-cap velocity vector for latComp — post-cap velocity is 0 on BARRIER
+        // Pass speedBefore directly — applyDamage() takes m/s, not scaled damage points
+        if (window.rallyDamage && speedBefore >= 8) { // 8 m/s = DMG.SPEED_THRESHOLD
+            window.rallyDamage.applyDamage(speedBefore);
+            if (window.rallyCamera) window.rallyCamera.triggerShake(speedBefore * 0.4);
+            // Volt threshold: prefer damage system's own config to avoid duplication
+            let voltThresh = (window.rallyDamage.cfg && window.rallyDamage.cfg.VOLT_SPEED_THRESHOLD)
+                ? window.rallyDamage.cfg.VOLT_SPEED_THRESHOLD
+                : DMG_VOLT_THRESH;
+            if (speedBefore > voltThresh) {
                 let latComp = Math.abs(vxPreCap * right.x + vzPreCap * right.z);
                 if (latComp > 5 || speedBefore > 35) {
-                    // Give triggerVolt the pre-cap velocity so it can compute correct roll axis.
-                    // Temporarily restore velocity, call triggerVolt, then apply post-bounce state.
                     let savedVx = car.velocity.x, savedVz = car.velocity.z;
                     car.velocity.x = vxPreCap; car.velocity.z = vzPreCap;
                     window.rallyDamage.triggerVolt(car, fwd, right);

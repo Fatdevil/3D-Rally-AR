@@ -297,16 +297,19 @@
     function loadTerrain() {
         let snap = ArcadeStorage.loadTerrainSnapshot();
 
-        // --- Source selection ---
-        // Try snapshot first (has H16 heightmap from saveLevel()).
-        // If snapshot decode fails, try other sources below.
-        // Custom level and compressed level have holes/targets but usually no terrain_heightmap.
+        // --- Source selection (priority order) ---
+        // 1. Terrain snapshot — H16 heightmap from saveLevel() — most reliable
+        // 2. Custom level    — saveLevel() writes here; freshest builder save
+        // 3. Compressed level — arcade_custom_level_z; only written on URL-share import,
+        //                       may be older than current build session
+        // NB: spawn resolution uses same priority (custom before compressed) so both
+        // always agree on which session's data wins.
         let sources = [];
         if (snap) sources.push({ data: snap, label: 'snapshot', segs: snap.segs });
-        let compressed = ArcadeStorage.loadCompressedLevel();
-        if (compressed) sources.push({ data: compressed, label: 'compressed', segs: compressed.segs });
         let custom = ArcadeStorage.loadCustomLevel();
         if (custom) sources.push({ data: custom, label: 'custom', segs: null });
+        let compressed = ArcadeStorage.loadCompressedLevel();
+        if (compressed) sources.push({ data: compressed, label: 'compressed', segs: compressed.segs });
 
         if (sources.length === 0) {
             document.getElementById('loading').style.display = 'none';
