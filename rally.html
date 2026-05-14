@@ -343,7 +343,10 @@
     // The terrain snapshot only has heightmap+biome — never any holes data.
     // Do NOT load snapshot here: it would silently return null because snap has no holes.
     function resolveSpawnPosition() {
-        let level = ArcadeStorage.loadCompressedLevel() || ArcadeStorage.loadCustomLevel();
+        // saveLevel() always writes holes to arcade_custom_level (via saveCustomLevel).
+        // arcade_custom_level_z is only written on URL-share import — may be stale.
+        // Read custom level first so newest holes/tees always win.
+        let level = ArcadeStorage.loadCustomLevel() || ArcadeStorage.loadCompressedLevel();
         if (!level) return null;
         let holes = level.holes || level.h;
         if (!holes || !holes.length) return null;

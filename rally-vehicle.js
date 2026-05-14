@@ -180,7 +180,9 @@ function updateVehicle(dt) {
     // Speed cap (with damage penalty)
     let maxSpd = CFG.MAX_SPEED * surface.maxSpeed * dmgMod.maxSpeedMult;
     let hSpd = Math.sqrt(car.velocity.x*car.velocity.x + car.velocity.z*car.velocity.z);
-    let hSpdPreCap = hSpd; // capture BEFORE cap — barrier delta-V uses this
+    let hSpdPreCap = hSpd;          // scalar speed before cap — barrier damage uses this
+    let vxPreCap = car.velocity.x;  // velocity vector before cap — for latComp + volt direction
+    let vzPreCap = car.velocity.z;
     if(hSpd>maxSpd) { let s=maxSpd/hSpd; car.velocity.x*=s; car.velocity.z*=s; }
     // displaySpeed from POST-cap velocity (HUD and respawn read correct value)
     car.displaySpeed = Math.sqrt(car.velocity.x*car.velocity.x + car.velocity.z*car.velocity.z);
@@ -191,25 +193,35 @@ function updateVehicle(dt) {
     }
 
     // ─── BARRIER COLLISION — delta-V damage + volt ───
-    // terrain.type is raw ('OB'); surfaceKey becomes 'BARRIER' via SURFACE_MAP.
-    // BARRIER.maxSpeed = 0.00 zeroes velocity during speed cap (line above).
-    // Therefore speedAfter CANNOT be measured from car.velocity (already 0).
-    // Solution: compute speedAfter analytically as 90% of pre-cap speed.
-    //   Head-on at 50 m/s:  deltaV = 50 - 45 = 5  → damage 20  ✓
-    //   Scraping at 5 m/s:  deltaV = 5  - 4.5 = 0.5 → below threshold, no damage ✓
-    //   Every subsequent frame: hSpdPreCap ≈ 0 (velocity zeroed), deltaV ≈ 0 → no repeat damage ✓
+    // BARRIER.maxSpeed=0.00 zeroes velocity during speed cap above.
+    // All three values (speed, direction, latComp) must use pre-cap data.
+    //
+    // speedAfter = speedBefore * 0.9 (analytical: wall absorbs 10% of speed per frame)
+    // Note: this is 10% speed-loss, not 10% kinetic-energy loss (that would be sqrt(0.9)).
+    //
+    // Threshold >= 2 (not >) so exactly 20 m/s approach also triggers.
+    //   Damage table: 20 m/s → deltaV=2.0 → damage=8
+    //                 50 m/s → deltaV=5.0 → damage=20
+    //                  5 m/s → deltaV=0.5 → no damage (below threshold)
     if (terrain.type.toUpperCase() === 'OB') {
-        let speedBefore = hSpdPreCap;          // pre-cap approach speed
-        let speedAfter  = speedBefore * 0.9;   // analytical: wall absorbs 10%
-        car.velocity.x *= 0.9; car.velocity.z *= 0.9; // keep physics damping (no-op when cap=0)
+        let speedBefore = hSpdPreCap;          // pre-cap approach speed (scalar)
+        let speedAfter  = speedBefore * 0.9;   // analytical: 10% speed absorbed by wall
+        car.velocity.x *= 0.9; car.velocity.z *= 0.9; // physics damping (no-op when BARRIER cap=0)
         let deltaV = speedBefore - speedAfter; // = speedBefore * 0.1
-        if (window.rallyDamage && deltaV > 2) { // threshold: >20 m/s approach
+        if (window.rallyDamage && deltaV >= 2) { // >= so 20 m/s (deltaV=2.0) deals damage
             window.rallyDamage.applyDamage(deltaV * 4);
             if (window.rallyCamera) window.rallyCamera.triggerShake(deltaV * 4);
             if (speedBefore > DMG_VOLT_THRESH) {
-                let latComp = Math.abs(car.velocity.dot(right));
-                if (latComp > 5 || speedBefore > 35)
+                // Use pre-cap velocity vector for latComp — post-cap velocity is 0 on BARRIER
+                let latComp = Math.abs(vxPreCap * right.x + vzPreCap * right.z);
+                if (latComp > 5 || speedBefore > 35) {
+                    // Give triggerVolt the pre-cap velocity so it can compute correct roll axis.
+                    // Temporarily restore velocity, call triggerVolt, then apply post-bounce state.
+                    let savedVx = car.velocity.x, savedVz = car.velocity.z;
+                    car.velocity.x = vxPreCap; car.velocity.z = vzPreCap;
                     window.rallyDamage.triggerVolt(car, fwd, right);
+                    car.velocity.x = savedVx; car.velocity.z = savedVz;
+                }
             }
         }
     }
