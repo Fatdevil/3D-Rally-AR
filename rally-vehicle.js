@@ -191,18 +191,19 @@ function updateVehicle(dt) {
     }
 
     // ─── BARRIER COLLISION — delta-V damage + volt ───
-    // terrain.type is raw ('OB'); car.surfaceKey becomes 'BARRIER' after SURFACE_MAP lookup.
-    // IMPORTANT: use hSpdPreCap (before speed cap) as speedBefore.
-    // BARRIER has maxSpeed:0.00 which zeroes velocity during cap — if we used
-    // car.displaySpeed (post-cap) speedBefore would always be 0 and damage never fires.
+    // terrain.type is raw ('OB'); surfaceKey becomes 'BARRIER' via SURFACE_MAP.
+    // BARRIER.maxSpeed = 0.00 zeroes velocity during speed cap (line above).
+    // Therefore speedAfter CANNOT be measured from car.velocity (already 0).
+    // Solution: compute speedAfter analytically as 90% of pre-cap speed.
+    //   Head-on at 50 m/s:  deltaV = 50 - 45 = 5  → damage 20  ✓
+    //   Scraping at 5 m/s:  deltaV = 5  - 4.5 = 0.5 → below threshold, no damage ✓
+    //   Every subsequent frame: hSpdPreCap ≈ 0 (velocity zeroed), deltaV ≈ 0 → no repeat damage ✓
     if (terrain.type.toUpperCase() === 'OB') {
-        let speedBefore = hSpdPreCap; // pre-cap speed — true approach velocity
-        car.velocity.x *= 0.9; car.velocity.z *= 0.9;
-        let speedAfter = Math.sqrt(car.velocity.x*car.velocity.x + car.velocity.z*car.velocity.z);
-        // deltaV = approach speed - what's left after wall absorbs impact
-        // For BARRIER: speedBefore (pre-cap) vs speedAfter (post-bounce) gives real impact
-        let deltaV = speedBefore - speedAfter;
-        if (window.rallyDamage && deltaV > 2) {
+        let speedBefore = hSpdPreCap;          // pre-cap approach speed
+        let speedAfter  = speedBefore * 0.9;   // analytical: wall absorbs 10%
+        car.velocity.x *= 0.9; car.velocity.z *= 0.9; // keep physics damping (no-op when cap=0)
+        let deltaV = speedBefore - speedAfter; // = speedBefore * 0.1
+        if (window.rallyDamage && deltaV > 2) { // threshold: >20 m/s approach
             window.rallyDamage.applyDamage(deltaV * 4);
             if (window.rallyCamera) window.rallyCamera.triggerShake(deltaV * 4);
             if (speedBefore > DMG_VOLT_THRESH) {

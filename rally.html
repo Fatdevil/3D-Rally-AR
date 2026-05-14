@@ -307,24 +307,24 @@
 
 
     // ── Resolve spawn position from saved level data ──
-    // Read holes[0].tees from level data (yellow → red → white → black fallback).
-    // If no tee is found, fall back to terrain center (0,0).
+    // Holes/tees live in arcade_custom_level (saved by saveLevel()).
+    // The terrain snapshot only has heightmap+biome — never any holes data.
+    // Do NOT load snapshot here: it would silently return null because snap has no holes.
     function resolveSpawnPosition() {
-        let level = ArcadeStorage.loadTerrainSnapshot()
-                 || ArcadeStorage.loadCompressedLevel()
-                 || ArcadeStorage.loadCustomLevel();
+        let level = ArcadeStorage.loadCompressedLevel() || ArcadeStorage.loadCustomLevel();
         if (!level) return null;
         let holes = level.holes || level.h;
         if (!holes || !holes.length) return null;
         let tees = holes[0].tees || holes[0].t;
         if (!tees) return null;
-        // Pick the most populated tee colour, prefer yellow (amateur/default)
+        // Prefer yellow (amateur default), fall back through red/white/black
         let t = tees.yellow || tees.red || tees.white || tees.black;
         if (!t) return null;
-        // tees store {x, y, z} in world space (same as arcade.html planeGeo coords)
+        // Tees store {x, y, z} in world space matching arcade.html planeGeo coords
         console.log('🏎️ Spawn from tee:', t);
         return new THREE.Vector3(t.x || 0, (t.y || 2) + 0.5, t.z || 0);
     }
+
 
     // ── Initialize ──
     let terrainLoaded = loadTerrain();
