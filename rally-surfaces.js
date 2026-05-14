@@ -108,7 +108,8 @@ const SURFACE_MAP = {
 
 // Resolve terrain type to SurfaceMaterial
 window.resolveSurface = function(terrainType) {
-    let key = SURFACE_MAP[terrainType] || terrainType;
+    let t = (terrainType || 'DIRT').toUpperCase();
+    let key = SURFACE_MAP[t] || t;
     return SURFACES[key] || SURFACES.DIRT;
 };
 

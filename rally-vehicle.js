@@ -97,6 +97,7 @@ function updateVehicle(dt) {
         terrain = window.localGetTerrainAt(car.position.x, -car.position.z);
     let surface = window.resolveSurface ? window.resolveSurface(terrain.type) : {grip:0.5,longGrip:0.6,brake:0.65,maxSpeed:0.82,accel:0.78,dragAdd:0.015,driftThreshold:10,driftSustain:1.4,driftRecovery:0.65,rumble:0,depthVariance:0,landing:0.65};
     car.surfaceName = surface.label || terrain.type;
+    car.surfaceKey = (window.RALLY_SURFACE_MAP && window.RALLY_SURFACE_MAP[terrain.type]) || terrain.type; // key for lookup (underscore format)
 
     // Smooth surface transition
     car.currentGrip = lerp(car.currentGrip, surface.grip, 4.0*dt);
@@ -109,6 +110,7 @@ function updateVehicle(dt) {
     let forwardVel = car.velocity.dot(fwd);
     let lateralVel = car.velocity.dot(right);
     car.speed = forwardVel;
+    car.displaySpeed = Math.sqrt(car.velocity.x*car.velocity.x + car.velocity.z*car.velocity.z); // total horizontal speed for HUD
 
     // Slip angle
     let slipAngle = 0;
@@ -180,14 +182,14 @@ function updateVehicle(dt) {
     if(terrain.type==='OB') { car.velocity.x*=0.9; car.velocity.z*=0.9; }
 
     // === STEERING (circle-arc model) ===
-    let fv = car.velocity.dot(fwd);
-    if(car.onGround && Math.abs(fv)>0.3 && Math.abs(input.steer)>0.01) {
-        let speedT = clamp(Math.abs(fv)/CFG.MAX_SPEED, 0, 1);
+    let postDragFwd = car.velocity.dot(fwd); // recalc after drag/lateral correction
+    if(car.onGround && Math.abs(postDragFwd)>0.3 && Math.abs(input.steer)>0.01) {
+        let speedT = clamp(Math.abs(postDragFwd)/CFG.MAX_SPEED, 0, 1);
         let steerDeg = lerp(CFG.MAX_STEER, CFG.MIN_STEER, speedT);
         if(car.isDrifting) steerDeg *= CFG.DRIFT_STEER_BONUS;
         let steerRad = steerDeg * Math.PI/180 * Math.abs(input.steer);
         let turnRadius = CFG.WHEELBASE / Math.tan(steerRad + 0.001);
-        let angularVel = fv / turnRadius;
+        let angularVel = postDragFwd / turnRadius;
         let yaw = angularVel * Math.sign(input.steer) * dt;
         car.heading += yaw;
     }
@@ -338,13 +340,13 @@ function updateHUD() {
         dr=document.getElementById('rally-drift-badge'),
         sl=document.getElementById('rally-slip');
     if(se){
-        let kmh=Math.abs(Math.round(car.speed*3.6));
+        let kmh=Math.round(car.displaySpeed*3.6); // total horizontal speed (not just forward)
         se.textContent=kmh;
         se.style.color = kmh<80?'#4ade80':kmh<140?'#fbbf24':'#ef4444';
     }
     if(su){
         su.textContent=car.surfaceName;
-        let surface = window.resolveSurface ? window.resolveSurface(car.surfaceName) : null;
+        let surface = window.resolveSurface ? window.resolveSurface(car.surfaceKey) : null;
         su.style.color = surface ? surface.color : '#94a3b8';
     }
     if(gr){
@@ -368,6 +370,7 @@ window.rallyVehicle = {
         car.visualRoll=0; car.visualPitch=0;
         car.prevLateralVel=0; car.prevForwardVel=0;
         keys={};
+        lastTime = 0; // prevent stale dt on reactivation
         chaseCamTarget = new THREE.Vector3();
         chaseCamLookAt = new THREE.Vector3();
         if(typeof window.localGetTerrainAt==='function'){

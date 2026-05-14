@@ -36,7 +36,7 @@ function calculateJump(speedKmh, angleDeg, landSlopeDeg) {
     // Time of flight (solve y = vy*t - 0.5*g*t² = x*tan(phi))
     // With slope: t = 2*(vy - vx*tan(phi)) / g
     let tanPhi = Math.tan(phi);
-    let tFlight = 2 * (vy - vx * tanPhi) / (g * (1 + 0));
+    let tFlight = 2 * (vy - vx * tanPhi) / g;
     
     // Clamp: if we get negative or insane time, slope is too steep
     if (tFlight <= 0) tFlight = 0.1;
@@ -96,7 +96,6 @@ function renderTrajectory(calc, startPos, direction) {
 
     let scene = window.scene;
     let dir = direction.clone().normalize();
-    let right = new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0, 1, 0)).normalize();
 
     // Build 3D points along trajectory
     let pts3D = calc.points.map(p => {
@@ -415,20 +414,7 @@ window.onJumpToolClick = function(hitPoint) {
     recalculate();
 };
 
-// Also update preview when mouse moves (hover preview)
-window.onJumpToolHover = function(hitPoint) {
-    if (!jumpActive || !hitPoint) return;
-    // Auto-read slope at cursor position for live readout
-    if (window.localGetTerrainAt) {
-        let surf = window.localGetTerrainAt(hitPoint.x, -hitPoint.z);
-        if (surf) {
-            let slopeGrad = Math.sqrt(surf.normal[0]*surf.normal[0] + surf.normal[1]*surf.normal[1]);
-            let slopeDeg = Math.atan(slopeGrad) * RAD;
-            // Update ramp angle to match terrain slope at cursor (optional assist)
-            // Don't auto-set — but show in advice
-        }
-    }
-};
+// onJumpToolHover: reserved for future terrain-slope assist preview
 
 // ── Activate / Deactivate ──
 window.activateJumpTool = function() {
