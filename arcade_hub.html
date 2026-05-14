@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Golf OS - Arcade Hub</title>
+<script>
+    if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+        window.location.replace("arcade_mobile_hub.html");
+    }
+</script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap');
+
+body {
+  margin: 0; padding: 0; font-family: 'Inter', sans-serif; background: #0b0f19; color: #f8fafc;
+  min-height: 100vh;
+  overflow-x: hidden;
+  display: flex; flex-direction: column;
+}
+
+.max-w { max-width: 1400px; width: 100%; margin: 0 auto; padding: 40px 40px; box-sizing: border-box; flex: 1; display: flex; flex-direction: column; }
+
+/* HEADER */
+.header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
+.back-btn { display: inline-block; color: #94a3b8; text-decoration: none; font-weight: 800; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; transition: color 0.2s; margin-bottom: 10px; }
+.back-btn:hover { color: #fff; }
+.header-title { font-size: 42px; font-weight: 900; letter-spacing: -1px; text-transform: uppercase; color: rgba(255,255,255,0.9); margin:0;}
+
+.profile-chip { display: flex; align-items: center; gap: 12px; background: rgba(255,255,255,0.05); padding: 8px 16px; border-radius: 30px; border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px); }
+.profile-avatar { width: 36px; height: 36px; border-radius: 50%; background: #eab308; display: flex; align-items: center; justify-content: center; font-weight: bold; color: #0f172a; }
+
+/* TRACKMAN GRID */
+.trackman-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  flex: 1; /* Fills remaining height */
+  min-height: 500px;
+}
+
+@media(max-width: 1100px) { .trackman-grid { grid-template-columns: repeat(2, 1fr); } }
+@media(max-width: 600px) { .trackman-grid { grid-template-columns: 1fr; } }
+
+.tm-card {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  background-color: #1e293b;
+  background-size: cover;
+  background-position: center;
+  transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.tm-card:hover {
+  transform: translateY(-10px) scale(1.02);
+  box-shadow: 0 20px 40px rgba(0,0,0,0.5), 0 0 20px rgba(255,255,255,0.1);
+  z-index: 10;
+}
+
+.tm-overlay {
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: linear-gradient(to top, rgba(15,23,42,1) 0%, rgba(15,23,42,0.6) 30%, rgba(15,23,42,0) 100%);
+  pointer-events: none;
+}
+
+.tm-content {
+  position: relative;
+  z-index: 2;
+  padding: 30px;
+  text-align: center;
+}
+
+.tm-badge {
+  display: inline-block;
+  background: rgba(255,255,255,0.2);
+  backdrop-filter: blur(5px);
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 15px;
+}
+
+.tm-card h2 {
+  font-size: 38px;
+  font-weight: 900;
+  text-transform: uppercase;
+  margin: 0 0 10px 0;
+  color: #fff;
+  letter-spacing: -1px;
+  text-shadow: 0 4px 10px rgba(0,0,0,0.5);
+}
+
+.tm-card p {
+  color: #cbd5e1;
+  font-size: 15px;
+  line-height: 1.4;
+  margin: 0;
+  font-weight: 500;
+}
+
+/* MODALS */
+.tm-modal {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(11, 15, 25, 0.95);
+  backdrop-filter: blur(10px);
+  z-index: 9999;
+  overflow-y: auto;
+  padding: 40px 20px;
+}
+
+.tm-modal-content {
+  max-width: 800px;
+  margin: 0 auto;
+  background: #1e293b;
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 24px;
+  padding: 40px;
+  position: relative;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+  animation: modalIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes modalIn {
+  from { opacity: 0; transform: translateY(30px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.tm-close {
+  position: absolute;
+  top: 20px; right: 30px;
+  background: none; border: none;
+  color: #64748b; font-size: 40px; font-weight: 300;
+  cursor: pointer; transition: color 0.2s;
+}
+.tm-close:hover { color: #fff; }
+
+/* LIST ITEMS */
+.course-item { display: flex; align-items: center; justify-content: space-between; padding: 20px; background: rgba(0,0,0,0.3); border-radius: 16px; margin-bottom: 12px; transition: all 0.2s; border: 1px solid transparent; }
+.course-item:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); transform: translateY(-2px); }
+.course-info h4 { margin: 0 0 6px 0; font-size: 18px; color: #fff; font-weight: 800; }
+.course-info p { margin: 0; font-size: 13px; color: #94a3b8; }
+
+.btn-play { background: #eab308; color: #0f172a; border: none; padding: 12px 24px; border-radius: 12px; font-weight: 900; cursor: pointer; text-transform: uppercase; transition: transform 0.1s, filter 0.2s; }
+.btn-play:hover { filter: brightness(1.1); }
+.btn-play:active { transform: scale(0.95); }
+
+/* LM Status globalt */
+#lm-status { position:fixed; bottom: 20px; right: 20px; background: rgba(15,23,42,0.9); padding: 8px 14px; border-radius: 20px; font-weight: 600; font-size: 13px; color: #94a3b8; z-index: 1000; display:flex; align-items:center; gap: 8px; border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px); box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
+
+/* Logo i botten */
+.footer-logo { text-align: center; margin-top: 30px; font-weight: 900; font-size: 20px; letter-spacing: 4px; color: rgba(255,255,255,0.1); }
+
+/* COURSE GRID (Trackman Style) */
+.tm-modal-content.wide { max-width: 1200px; }
+.course-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; margin-top: 20px; }
+.course-card { position: relative; background: #1e293b; border-radius: 16px; overflow: hidden; height: 220px; cursor: pointer; border: 1px solid rgba(255,255,255,0.1); transition: transform 0.2s, box-shadow 0.2s; }
+.course-card:hover { transform: translateY(-5px); box-shadow: 0 15px 30px rgba(0,0,0,0.5); border-color: rgba(255,255,255,0.3); }
+.course-card-bg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-size: cover; background-position: center; transition: transform 0.5s; }
+.course-card:hover .course-card-bg { transform: scale(1.05); }
+.course-card-overlay { position: absolute; bottom: 0; left: 0; width: 100%; background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.6) 50%, transparent 100%); padding: 30px 15px 15px 15px; box-sizing: border-box; }
+.course-card-title { color: #fff; font-size: 20px; font-weight: 900; text-transform: uppercase; margin: 0 0 4px 0; line-height: 1.1; text-shadow: 0 2px 4px rgba(0,0,0,0.8); }
+.course-card-meta { color: #e2e8f0; font-size: 12px; margin: 2px 0; font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
+.course-card-diff { color: #fbbf24; font-size: 13px; margin-top: 5px; text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
+.course-card-badge { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.5); backdrop-filter: blur(5px); padding: 4px 8px; border-radius: 6px; font-size: 10px; font-weight: bold; color: #fff; border: 1px solid rgba(255,255,255,0.2); z-index: 2; }
+</style>
+<script src="arcade-auth.js"></script>
+<script src="arcade-feature-flags.js"></script>
+</head>
+<body>
+
+<div class="max-w">
+  <header class="header">
+    <div>
+        <a href="hub.html" class="back-btn">← GOLF OS</a>
+        <h1 class="header-title">Select Activity</h1>
+    </div>
+    <div class="profile-chip" onclick="promptDisplayName()" style="cursor:pointer;" title="Klicka för att ändra namn">
+      <div class="profile-avatar" id="hub-avatar">?</div>
+      <div>
+        <div style="font-weight: 800; font-size: 14px; color:#fff;" id="hub-display-name">Loading...</div>
+        <div style="font-size: 11px; color:#94a3b8;" id="hub-user-tier">Free Player</div>
+      </div>
+    </div>
+  </header>
+
+  <div class="trackman-grid">
+    
+    <!-- PRACTICE -->
+    <div class="tm-card" style="background-image: url('golf_practice.png');" onclick="openModal('modal-ranges')">
+      <div class="tm-overlay"></div>
+      <div class="tm-content">
+         <div class="tm-badge" style="color:#fff;">Practice</div>
+         <h2>Range</h2>
+         <p>Välj en sparad range och slå bollar.</p>
+      </div>
+    </div>
+    
+    <!-- COURSES -->
+    <div class="tm-card" style="background-image: url('golf_courses.png');" onclick="openModal('modal-courses')">
+      <div class="tm-overlay"></div>
+      <div class="tm-content">
+         <div class="tm-badge" style="background:#eab308; color:#0f172a;">Community</div>
+         <h2 style="color:#fde047;">Courses</h2>
+         <p>Play your drafts and challenge the world.</p>
+      </div>
+    </div>
+
+    <!-- BUILD -->
+    <div class="tm-card" style="background-image: url('golf_build.png');" onclick="openModal('modal-build')">
+      <div class="tm-overlay"></div>
+      <div class="tm-content">
+         <div class="tm-badge" style="background:#38bdf8; color:#0f172a;">Editor</div>
+         <h2 style="color:#e0f2fe;">Build</h2>
+         <p>Sculpt, build and publish your own crazy courses.</p>
+      </div>
+    </div>
+
+    <!-- GAMES -->
+    <div class="tm-card" style="background-image: url('golf_games.png');">
+      <div class="tm-overlay"></div>
+      <div class="tm-content">
+         <div class="tm-badge" style="color:#fff;">Coming Soon</div>
+         <h2>Games</h2>
+         <p>Neon-putting, moongolf, and party challenges.</p>
+      </div>
+    </div>
+
+  </div>
+  
+  <div class="footer-logo">GOLF OS ARCADE</div>
+</div>
+
+<!-- MODAL: BUILD -->
+<div id="modal-build" class="tm-modal" onclick="if(event.target===this) closeModal('modal-build')">
+   <div class="tm-modal-content">
+      <button class="tm-close" onclick="closeModal('modal-build')">&times;</button>
+      <h2 style="font-size:32px; font-weight:900; margin-top:0;">Build Mode</h2>
+      <p style="color:#94a3b8; margin-bottom:30px;">Create a new course or continue working on a saved draft.</p>
+      
+      <div style="display:flex; gap:15px; margin-bottom:30px;">
+          <button class="btn-play" style="flex:1; font-size:16px; padding:20px; background:#38bdf8; color:#0f172a;" onclick="window.location.href='arcade.html?v=' + Date.now() + '&autorun=new_build'">
+            + BYGG BANA
+          </button>
+          <button class="btn-play" style="flex:1; font-size:16px; padding:20px; background:#eab308; color:#0f172a;" onclick="window.location.href='arcade.html?v=' + Date.now() + '&autorun=new_build&mode=range'">
+            + BYGG RANGE
+          </button>
+      </div>
+      
+      <h3 style="color:#94a3b8; font-size:14px; text-transform:uppercase; margin-bottom:15px;">Your Drafts</h3>
+      <div id="drafts-container"></div>
+      
+      <h3 style="color:#94a3b8; font-size:14px; text-transform:uppercase; margin-bottom:15px; margin-top:30px;">Your Published Courses</h3>
+      <div id="published-courses-container" class="course-grid">
+         <div style="color:#94a3b8; text-align:center; padding:20px; grid-column: 1 / -1;">Laddar publicerade banor...</div>
+      </div>
+   </div>
+</div>
+
+<!-- MODAL: COURSES -->
+<div id="modal-courses" class="tm-modal" onclick="if(event.target===this) closeModal('modal-courses')">
+   <div class="tm-modal-content wide">
+      <button class="tm-close" onclick="closeModal('modal-courses')">&times;</button>
+      <h2 style="font-size:32px; font-weight:900; margin-top:0;">COURSES</h2>
+      
+      <div id="course-filters" style="display:flex; gap:8px; margin-bottom:15px;">
+          <button class="btn-play" style="padding:8px 16px; font-size:12px; background:#eab308;" onclick="filterCourses('all')" data-filter="all">ALL</button>
+          <button class="btn-play" style="padding:8px 16px; font-size:12px; background:#475569;" onclick="filterCourses(9)" data-filter="9">9 HOLES</button>
+          <button class="btn-play" style="padding:8px 16px; font-size:12px; background:#475569;" onclick="filterCourses(18)" data-filter="18">18 HOLES</button>
+      </div>
+
+      <div id="ugc-container" class="course-grid">
+         <div style="color:#94a3b8; text-align:center; padding:20px; grid-column: 1 / -1;">Laddar moln-banor...</div>
+      </div>
+   </div>
+</div>
+
+<!-- MODAL: RANGES -->
+<div id="modal-ranges" class="tm-modal" onclick="if(event.target===this) closeModal('modal-ranges')">
+   <div class="tm-modal-content wide">
+      <button class="tm-close" onclick="closeModal('modal-ranges')">&times;</button>
+      <h2 style="font-size:32px; font-weight:900; margin-top:0;">RANGES</h2>
+      <p style="color:#94a3b8; margin-bottom:20px;">Välj en sparad driving range och börja slå bollar direkt.</p>
+      <div id="range-container" class="course-grid">
+         <div style="color:#94a3b8; text-align:center; padding:20px; grid-column: 1 / -1;">Laddar ranges...</div>
+      </div>
+   </div>
+</div>
+
+<!-- LM STATUS -->
+<div id="lm-status">
+   <div id="lm-status-dot" style="width:8px; height:8px; border-radius:50%; background:#ef4444;"></div>
+   <span id="lm-status-text">LM Frånkopplad</span>
+</div>
+
+<script>
+function openModal(id) { document.getElementById(id).style.display = 'block'; }
+function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+function playCourse(courseCode) {
+    let url = "arcade.html?v=" + Date.now() + "&autorun=setup";
+    if(courseCode) { url += "&course=" + courseCode; }
+    window.location.href = url;
+}
+
+function playRange(rangeCode) {
+    let url = "arcade.html?v=" + Date.now() + "&course=" + rangeCode + "&mode=range";
+    window.location.href = url;
+}
+
+function loadDrafts() {
+    let drafts = JSON.parse(localStorage.getItem('golf_os_my_drafts') || "[]");
+    let hasLocalCopy = localStorage.getItem('arcade_custom_level') !== null;
+    let html = '';
+    
+    if (hasLocalCopy) {
+        html += `
+        <div class="course-item" style="border-color:#eab308; background:rgba(234,179,8,0.1);">
+            <div class="course-info">
+              <h4 style="color:#fde047;">⚠️ Snabbutkast (WIP)</h4>
+              <p>Din absolut senaste session i editor</p>
+            </div>
+            <div style="display:flex; gap:10px;">
+                <button class="btn-play" style="background:#38bdf8; font-size:12px; padding: 10px;" onclick="window.location.href='arcade.html?v=' + Date.now() + '&autorun=edit_build'">Edit</button>
+            </div>
+        </div>`;
+    }
+    
+    if (drafts.length > 0) {
+        drafts.reverse().forEach(d => {
+             let dDate = new Date(d.date).toLocaleDateString();
+             html += `
+             <div class="course-item">
+                <div class="course-info">
+                  <h4>${d.name}</h4>
+                  <p>Sparat: ${dDate}</p>
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <button class="btn-play" style="background:#38bdf8; font-size:12px; padding: 10px;" onclick="window.location.href='arcade.html?v=' + Date.now() + '&autorun=edit_build&edit=${d.code}'">Edit</button>
+                </div>
+             </div>`;
+        });
+    }
+
+    if (!hasLocalCopy && drafts.length === 0) {
+        html += "<p style='color:#94a3b8; font-size:14px; text-align:center;'>No drafts found.</p>";
+    }
+    
+    let container = document.getElementById('drafts-container');
+    if (container) container.innerHTML = html;
+}
+
+let _allCourses = [];
+
+async function loadUGC() {
+    try {
+        let res = await fetch('https://3d-golf-ar-production.up.railway.app/api/courses');
+        _allCourses = await res.json();
+        renderCourseCards(_allCourses);
+        renderMyPublishedCourses();
+    } catch(e) {
+        document.getElementById('ugc-container').innerHTML = `<div style="color:#ef4444; padding:20px; text-align:center;">Kunde inte ladda banor från nätverket. Servern kan vara nere.</div>`;
+    }
+}
+
+function filterCourses(filter) {
+    // Update button styles
+    document.querySelectorAll('#course-filters button').forEach(b => {
+        b.style.background = b.getAttribute('data-filter') == filter ? '#eab308' : '#475569';
+    });
+    if (filter === 'all') {
+        renderCourseCards(_allCourses);
+    } else {
+        let filtered = _allCourses.filter(c => {
+            let hc = c.hole_count || countHolesFromData(c);
+            if (filter === 9) return hc <= 9;
+            if (filter === 18) return hc > 9;
+            return true;
+        });
+        renderCourseCards(filtered);
+    }
+}
+
+function countHolesFromData(c) {
+    // Fallback: count holes with flag from raw data
+    if (c.holes && Array.isArray(c.holes)) {
+        return c.holes.filter(h => h && h.flag).length;
+    }
+    return 18; // Legacy default
+}
+
+function renderCourseCards(courses) {
+    let likedLocal = JSON.parse(localStorage.getItem('golf_os_likes') || "[]");
+    let html = '';
+    let placeholders = [
+        'https://images.unsplash.com/photo-1587174486073-ae5e1c402111?w=800&q=80',
+        'https://images.unsplash.com/photo-1535136104956-6134eb9bdc22?w=800&q=80',
+        'https://images.unsplash.com/photo-1593118247619-e2d6f056869e?w=800&q=80',
+        'https://images.unsplash.com/photo-1622279457486-62dcc4a431d6?w=800&q=80'
+    ];
+    
+    courses.forEach((c, i) => {
+        let isLiked = likedLocal.includes(c.share_code);
+        let heartColor = isLiked ? '#ef4444' : '#fff';
+        let bgImg = placeholders[i % placeholders.length];
+        
+        // Dynamic hole count & par
+        let holeCount = c.hole_count || countHolesFromData(c);
+        let totalPar = c.total_par || (holeCount * 4); // Fallback: par 4 avg
+        let holeLabel = holeCount + ' HOLES';
+        let holeBadgeColor = holeCount <= 9 ? 'rgba(56,189,248,0.8)' : 'rgba(16,185,129,0.8)';
+        
+        // Difficulty dots
+        let diffRating = (c.name.length % 5) + 1; 
+        let diffDots = '●'.repeat(diffRating) + '○'.repeat(5 - diffRating);
+        
+        html += `
+        <div class="course-card" onclick="playCourse('${c.share_code}')">
+           <div class="course-card-bg" style="background-image: url('${bgImg}');"></div>
+           <div class="course-card-overlay">
+              <div class="course-card-badge" style="background:${holeBadgeColor};">${holeLabel}</div>
+              <h4 class="course-card-title">${c.name}</h4>
+              <div class="course-card-meta">${c.author}</div>
+              <div class="course-card-meta">PAR ${totalPar}</div>
+              <div class="course-card-diff">Difficulty: ${diffDots}</div>
+              <div style="position:absolute; bottom:15px; right:15px; text-align:center; cursor:pointer; z-index:10;" onclick="${isLiked ? 'event.stopPropagation()' : `likeCourse(event, '${c.share_code}')`}">
+                   <div id="heart-${c.share_code}" style="color:${heartColor}; font-size:16px; text-shadow: 0 1px 3px rgba(0,0,0,0.8);">❤️ ${c.likes || 0}</div>
+              </div>
+           </div>
+        </div>`;
+    });
+    
+    if (courses.length === 0) {
+       html = "<div style='color:#94a3b8; padding:20px; text-align:center; grid-column: 1 / -1;'>Inga banor matchar filtret.</div>";
+    }
+    document.getElementById('ugc-container').innerHTML = html;
+}
+
+async function likeCourse(event, code) {
+    if(event) event.stopPropagation();
+    let likedLocal = JSON.parse(localStorage.getItem('golf_os_likes') || "[]");
+    if(likedLocal.includes(code)) return;
+    
+    likedLocal.push(code);
+    localStorage.setItem('golf_os_likes', JSON.stringify(likedLocal));
+    
+    let heart = document.getElementById('heart-'+code);
+    let likesDiv = document.getElementById('likes-'+code);
+    if(heart) heart.style.color = '#ef4444';
+    if(likesDiv) likesDiv.innerText = parseInt(likesDiv.innerText) + 1;
+    
+    try {
+        await fetch('https://3d-golf-ar-production.up.railway.app/api/courses/'+code+'/like', {method: 'POST'});
+    } catch(e) {}
+}
+
+function renderMyPublishedCourses() {
+    let myDeviceId = localStorage.getItem('golf_os_device_id');
+    if (!myDeviceId) {
+        document.getElementById('published-courses-container').innerHTML = "<div style='color:#94a3b8; padding:20px; text-align:center; grid-column: 1 / -1;'>Kunde inte verifiera ditt ID.</div>";
+        return;
+    }
+    
+    let myCourses = _allCourses.filter(c => c.owner_id === myDeviceId);
+    let html = '';
+    
+    let bgImg = c.cover_image || 'https://images.unsplash.com/photo-1593118247619-e2d6f056869e?w=800&q=80'; 
+    
+    myCourses.forEach((c) => {
+        let holeCount = c.hole_count || countHolesFromData(c);
+        let totalPar = c.total_par || (holeCount * 4);
+        
+        html += `
+        <div class="course-card" style="height: 250px;" onclick="playCourse('${c.share_code}')">
+           <div class="course-card-bg" style="background-image: url('${bgImg}');"></div>
+           <div class="course-card-overlay" style="padding-bottom: 20px;">
+              <div class="course-card-badge" style="background:rgba(56,189,248,0.8);">${holeCount} HOLES</div>
+              <h4 class="course-card-title">${c.name}</h4>
+              <div class="course-card-meta">PAR ${totalPar} • Spelad ${c.play_count || 0} ggr</div>
+              <div style="display:flex; gap:10px; margin-top: 15px; position:relative; z-index:20;">
+                  <button class="btn-play" style="flex:1; font-size:12px; padding:10px; background:rgba(56,189,248,0.9); color:#0f172a;" onclick="event.stopPropagation(); window.location.href='arcade.html?v=' + Date.now() + '&autorun=edit_build&edit=${c.share_code}'">✏️ EDIT</button>
+                  <button class="btn-play" style="font-size:12px; padding:10px; background:rgba(239,68,68,0.9); color:#fff;" onclick="event.stopPropagation(); deleteMyCourse('${c.share_code}')">🗑️</button>
+              </div>
+           </div>
+        </div>`;
+    });
+    
+    if (myCourses.length === 0) {
+        html = "<div style='color:#94a3b8; padding:20px; text-align:center; grid-column: 1 / -1;'>Du har inga publicerade banor än. Klicka på '+ BYGG BANA' för att börja!</div>";
+    }
+    
+    let container = document.getElementById('published-courses-container');
+    if(container) container.innerHTML = html;
+}
+
+async function deleteMyCourse(code) {
+    if (!confirm('Är du helt säker på att du vill radera denna bana? ALLA leaderboard-resultat kommer att försvinna permanent. Detta går inte att ångra.')) return;
+    try {
+        let deviceId = localStorage.getItem('golf_os_device_id');
+        let res = await fetch('https://3d-golf-ar-production.up.railway.app/api/courses/' + code, {
+            method: 'DELETE',
+            headers: { 'x-user-id': deviceId }
+        });
+        if (res.ok) {
+            loadUGC(); // Uppdatera listorna automatiskt
+        } else {
+            alert("Du saknar behörighet att radera denna bana.");
+        }
+    } catch(e) {
+        alert("Ett nätverksfel uppstod.");
+    }
+}
+
+// LM BRYGGE STATUS KOD
+function initLaunchMonitorBridge() {
+    var ws = new WebSocket('ws://localhost:8081');
+    var dot = document.getElementById('lm-status-dot');
+    var txt = document.getElementById('lm-status-text');
+
+    ws.onopen = function() {
+        if(txt) txt.textContent = "LM Brygga Redo";
+        if(dot) dot.style.background = "#eab308";
+    };
+    ws.onmessage = function(event) {
+        try {
+            var msg = JSON.parse(event.data);
+            if (msg.type === 'status') {
+                if(txt) txt.textContent = msg.data.message;
+                if(dot) dot.style.background = msg.data.color;
+            } else if (msg.type === 'shot') {
+                if(dot) {
+                    dot.style.background = "#4ade80";
+                    setTimeout(() => dot.style.background = "#eab308", 500);
+                }
+            }
+        } catch(e) {}
+    };
+    ws.onclose = function() {
+        if(txt) txt.textContent = "LM Brygga Nere";
+        if(dot) dot.style.background = "#ef4444";
+        setTimeout(initLaunchMonitorBridge, 5000);
+    };
+}
+
+// Boot
+// --- AUTH INIT ---
+async function initHub() {
+    if (window.GolfAuth) {
+        await window.GolfAuth.init();
+        updateProfileChip();
+    }
+    loadDrafts();
+    loadUGC();
+    loadRanges();
+    initLaunchMonitorBridge();
+}
+
+function updateProfileChip() {
+    let user = window.GolfAuth?.user;
+    if (!user) return;
+    let name = user.display_name || 'Golfer';
+    let initials = name.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
+    
+    let el = document.getElementById('hub-display-name');
+    if (el) el.textContent = name;
+    let av = document.getElementById('hub-avatar');
+    if (av) av.textContent = initials;
+    let tier = document.getElementById('hub-user-tier');
+    if (tier) tier.textContent = user.is_premium ? '⭐ Premium' : 'Free Player';
+    if (tier && user.is_premium) tier.style.color = '#fde047';
+}
+
+function promptDisplayName() {
+    let current = window.GolfAuth?.user?.display_name || '';
+    let name = prompt('Ange ditt spelarnamn:', current);
+    if (name && name.trim().length > 0) {
+        window.GolfAuth.setDisplayName(name.trim());
+        updateProfileChip();
+    }
+}
+
+initHub();
+
+async function loadRanges() {
+    try {
+        let res = await fetch('https://3d-golf-ar-production.up.railway.app/api/ranges');
+        let ranges = await res.json();
+        let html = '';
+        let placeholders = [
+            'https://images.unsplash.com/photo-1535132011086-b8818f016104?w=800&q=80',
+            'https://images.unsplash.com/photo-1587174486073-ae5e1c402111?w=800&q=80'
+        ];
+        
+        ranges.forEach((r, i) => {
+            let bgImg = placeholders[i % placeholders.length];
+            html += `
+            <div class="course-card" onclick="playRange('${r.share_code}')">
+               <div class="course-card-bg" style="background-image: url('${bgImg}');"></div>
+               <div class="course-card-overlay">
+                  <div class="course-card-badge" style="background:rgba(234,179,8,0.8);">DRIVING RANGE</div>
+                  <h4 class="course-card-title">${r.name}</h4>
+                  <div class="course-card-meta">${r.author}</div>
+                  <div class="course-card-meta">PRACTICE MODE</div>
+               </div>
+            </div>`;
+        });
+        
+        if (ranges.length === 0) {
+           html = "<div style='color:#94a3b8; padding:20px; text-align:center; grid-column: 1 / -1;'>Inga publicerade ranges hittades. Bygg en via Build → BYGG RANGE!</div>";
+        }
+        document.getElementById('range-container').innerHTML = html;
+    } catch(e) {
+        document.getElementById('range-container').innerHTML = `<div style="color:#ef4444; padding:20px; text-align:center; grid-column: 1 / -1;">Kunde inte ladda ranges.</div>`;
+    }
+}
+
+</script>
+</body>
+</html>

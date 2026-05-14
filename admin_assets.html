@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Golf OS - Asset Manager</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        body { margin: 0; padding: 0; background-color: #0f172a; color: #f8fafc; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; height: 100vh; overflow: hidden; }
+        #canvas-container { flex: 1; position: relative; }
+        #library-sidebar { width: 300px; background-color: #1e293b; padding: 20px; box-sizing: border-box; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; border-right: 1px solid #334155; }
+        #sidebar { width: 400px; background-color: #1e293b; padding: 20px; box-sizing: border-box; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; border-left: 1px solid #334155; }
+        h1 { margin: 0 0 10px 0; font-size: 20px; color: #38bdf8; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #334155; padding-bottom: 10px; }
+        .form-group { display: flex; flex-direction: column; gap: 5px; }
+        label { font-size: 11px; font-weight: bold; color: #94a3b8; text-transform: uppercase; }
+        input, select, button { background: #0f172a; border: 1px solid #334155; color: white; padding: 8px; border-radius: 4px; font-family: inherit; font-size: 14px; }
+        input[type="range"] { padding: 0; }
+        button { background: #38bdf8; color: #0f172a; font-weight: bold; cursor: pointer; border: none; padding: 12px; margin-top: 10px; transition: background 0.2s; }
+        button:hover { background: #0ea5e9; }
+        .row { display: flex; gap: 10px; }
+        .row > div { flex: 1; }
+        #log { font-size: 12px; padding: 10px; background: #000; border-radius: 4px; min-height: 20px; color: #4ade80; }
+        
+        /* Library Styles */
+        .lib-item { background: #0f172a; padding: 10px; border-radius: 6px; cursor: pointer; border: 1px solid #334155; display: flex; align-items: center; gap: 10px; transition: border-color 0.2s; }
+        .lib-item:hover { border-color: #38bdf8; }
+        .lib-item .icon { font-size: 20px; }
+        .lib-item .details { display: flex; flex-direction: column; }
+        .lib-item .name { font-weight: bold; font-size: 13px; color: #f8fafc; }
+        .lib-item .subcat { font-size: 10px; color: #94a3b8; text-transform: uppercase; }
+        
+        #btn-delete { background: #ef4444; color: white; display: none; margin-top:0; }
+        #btn-delete:hover { background: #dc2626; }
+    </style>
+</head>
+<body>
+
+    <div id="library-sidebar">
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid #334155; padding-bottom: 10px; margin-bottom: 10px;">
+            <h1 style="margin:0; border:none; padding:0;">Cloud Database</h1>
+            <button onclick="window.location.href='index.html'" style="margin:0; padding:6px 12px; background:#475569; color:#f8fafc; font-size:11px; border-radius:4px;">⬅ HOME</button>
+        </div>
+        
+        <div style="display:flex; gap:10px; margin-bottom:10px;">
+            <button id="tab-btn-assets" onclick="switchLibTab('ASSETS')" style="flex:1; margin:0; padding:8px; background:#38bdf8; color:#0f172a; font-size:12px;">📦 Assets</button>
+            <button id="tab-btn-themes" onclick="switchLibTab('THEMES')" style="flex:1; margin:0; padding:8px; background:#334155; color:#94a3b8; font-size:12px;">🎨 Themes</button>
+        </div>
+
+        <!-- ASSET TAB -->
+        <div id="tab-content-assets" style="display:flex; flex-direction:column;">
+            <select id="lib-biome-filter" style="margin-bottom:10px; width:100%;" onchange="renderLibrary()">
+                <option value="ALL">All Biomes</option>
+                <option value="GLOBAL">Global</option>
+                <option value="DESERT">Desert</option>
+                <option value="SNOW">Snow</option>
+                <option value="MOON">Moon</option>
+                <option value="AUTUMN">Autumn</option>
+            </select>
+            
+            <!-- BIOME WEIGHT CALCULATOR -->
+            <div id="biome-weight-calc" style="background:#0f172a; padding:10px; border-radius:6px; margin-bottom:10px; font-size:11px; border:1px solid #475569; display:none;">
+                <div style="display:flex; justify-content:space-between; color:#94a3b8; margin-bottom:4px;">
+                    <span>Global Assets:</span> <span id="weight-global" style="color:#f8fafc; font-weight:bold;">0.0 MB</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; color:#94a3b8; margin-bottom:6px;">
+                    <span id="weight-biome-label">Biome Assets:</span> <span id="weight-biome" style="color:#f8fafc; font-weight:bold;">0.0 MB</span>
+                </div>
+                <div style="height:1px; background:#334155; margin-bottom:6px;"></div>
+                <div style="display:flex; justify-content:space-between; color:#38bdf8; font-weight:bold;">
+                    <span>TOTAL LOAD:</span> <span id="weight-total">0.0 / 40.0 MB</span>
+                </div>
+                <div style="width:100%; height:4px; background:#334155; border-radius:2px; margin-top:6px; overflow:hidden;">
+                    <div id="weight-bar" style="width:0%; height:100%; background:#4ade80;"></div>
+                </div>
+            </div>
+
+            <div id="library-list" style="display:flex; flex-direction:column; gap:8px;">
+                <div style="color:#94a3b8; font-size:12px;">Loading assets...</div>
+            </div>
+        </div>
+
+        <!-- THEMES TAB -->
+        <div id="tab-content-themes" style="display:none; flex-direction:column; gap:10px; overflow-y:auto; padding-right:5px;">
+            <div class="form-group">
+                <label>Theme to Edit</label>
+                <select id="theme-selector" onchange="loadSelectedThemeUI()">
+                    <option value="GLOBAL">Global (Default Base)</option>
+                    <option value="AUTUMN">Autumn</option>
+                    <option value="DESERT">Desert</option>
+                    <option value="SNOW">Snow</option>
+                    <option value="MOON">Moon</option>
+                </select>
+            </div>
+            
+            <div class="form-group" style="margin-top:5px;">
+                <label>Sky / Fog Color</label>
+                <input type="color" id="theme-sky" value="#87ceeb" style="width:100%; height:30px; cursor:pointer;">
+            </div>
+            
+            <div class="form-group" style="margin-top:5px; border-top: 1px solid #334155; padding-top: 5px;">
+                <label style="color:#f8fafc;">Material Palette</label>
+            </div>
+            
+            <div style="display:flex; gap:10px;">
+                <div class="form-group" style="flex:1;">
+                    <label>OB</label>
+                    <input type="color" id="theme-ob" value="#ef4444" style="width:100%; height:30px; cursor:pointer;">
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label>Bunker</label>
+                    <input type="color" id="theme-bunker" value="#e0d8a4" style="width:100%; height:30px; cursor:pointer;">
+                </div>
+            </div>
+            
+            <div style="display:flex; gap:10px;">
+                <div class="form-group" style="flex:1;">
+                    <label>Waste</label>
+                    <input type="color" id="theme-waste" value="#c2af7c" style="width:100%; height:30px; cursor:pointer;">
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label>Tee Box</label>
+                    <input type="color" id="theme-tee" value="#7cb54c" style="width:100%; height:30px; cursor:pointer;">
+                </div>
+            </div>
+            
+            <div style="display:flex; gap:10px;">
+                <div class="form-group" style="flex:1;">
+                    <label>Green</label>
+                    <input type="color" id="theme-green" value="#98ce68" style="width:100%; height:30px; cursor:pointer;">
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label>Foregreen</label>
+                    <input type="color" id="theme-foregreen" value="#8bc45d" style="width:100%; height:30px; cursor:pointer;">
+                </div>
+            </div>
+            
+            <div style="display:flex; gap:10px;">
+                <div class="form-group" style="flex:1;">
+                    <label>Fairway</label>
+                    <input type="color" id="theme-fairway" value="#7db952" style="width:100%; height:30px; cursor:pointer;">
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label>Semi-Rough</label>
+                    <input type="color" id="theme-semi" value="#6b9e3d" style="width:100%; height:30px; cursor:pointer;">
+                </div>
+            </div>
+            
+            <div style="display:flex; gap:10px;">
+                <div class="form-group" style="flex:1;">
+                    <label>Rough</label>
+                    <input type="color" id="theme-rough" value="#4a782b" style="width:100%; height:30px; cursor:pointer;">
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label>Fescue</label>
+                    <input type="color" id="theme-fescue" value="#2d4c1a" style="width:100%; height:30px; cursor:pointer;">
+                </div>
+            </div>
+            
+            <div class="form-group" style="margin-top:5px; border-top: 1px solid #334155; padding-top: 5px;">
+                <label>Water Tool Color</label>
+                <input type="color" id="theme-water" value="#38bdf8" style="width:100%; height:30px; cursor:pointer;">
+            </div>
+            
+            <div class="form-group" style="margin-top:10px; border-top: 1px solid #334155; padding-top: 10px;">
+                <label>Admin Password</label>
+                <input type="password" id="theme-password" placeholder="golfadmin123">
+            </div>
+            
+            <div style="display:flex; gap:10px; margin-top:0;">
+                <button onclick="saveThemeToCloud()" style="background:#10b981; color:#fff; flex:2;">💾 Save Theme</button>
+                <button onclick="loadSelectedThemeUI()" style="background:#475569; color:#f8fafc; flex:1;" title="Discard unsaved changes">↩️ Revert</button>
+            </div>
+            <div id="theme-log" style="font-size:11px; color:#4ade80; display:none; text-align:center;">Theme saved successfully!</div>
+        </div>
+    </div>
+
+    <div id="canvas-container">
+        <!-- Overlay HUD -->
+        <div style="position:absolute; top:10px; left:10px; background:rgba(0,0,0,0.5); padding:10px; border-radius:6px; pointer-events:none; z-index:10;">
+            <div>Grid = 1x1 Meter</div>
+            <div>Red Wireframe = Hitbox</div>
+        </div>
+        <button onclick="resetCamera()" style="position:absolute; top:70px; left:10px; padding:6px 12px; background:#475569; border-radius:4px; border:none; color:white; cursor:pointer; z-index:10;">Reset Camera</button>
+    </div>
+
+    <div id="sidebar">
+        <h1>Asset Importer</h1>
+        
+        <div class="form-group">
+            <label>GLB File</label>
+            <input type="file" id="file-input" accept=".glb">
+        </div>
+
+        <div class="row">
+            <div class="form-group">
+                <label>Asset ID</label>
+                <input type="text" id="asset-id" placeholder="Ex: PINE_TALL">
+            </div>
+            <div class="form-group">
+                <label>Name</label>
+                <input type="text" id="asset-name" placeholder="Ex: Tall Pine">
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="form-group">
+                <label>Subcategory</label>
+                <select id="asset-subcat">
+                    <option value="TREES">Trees</option>
+                    <option value="ROCKS">Rocks</option>
+                    <option value="PLANTS">Plants</option>
+                    <option value="LANDSCAPE">Landscape</option>
+                </select>
+            </div>
+            <div class="form-group" style="align-items:flex-start;">
+                <label>Thumbnail</label>
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <img id="thumb-preview" src="" alt="None" style="width:40px; height:40px; border-radius:4px; border:1px solid #475569; object-fit:cover; background:#000;">
+                    <button id="btn-snap" onclick="snapThumbnail()" style="margin:0; padding:6px 10px; font-size:12px; border-radius:4px;">📸 CAPTURE</button>
+                </div>
+            </div>
+        </div>
+
+        <h1 style="margin-top: 15px; font-size: 14px;">Biomes (Miljöer)</h1>
+        <div class="form-group" style="flex-direction:row; flex-wrap:wrap; gap:10px;">
+            <label style="display:flex; align-items:center; gap:4px; font-size:12px; text-transform:none; cursor:pointer;"><input type="checkbox" class="biome-cb" value="GLOBAL" checked> Global</label>
+            <label style="display:flex; align-items:center; gap:4px; font-size:12px; text-transform:none; cursor:pointer;"><input type="checkbox" class="biome-cb" value="DESERT"> Desert</label>
+            <label style="display:flex; align-items:center; gap:4px; font-size:12px; text-transform:none; cursor:pointer;"><input type="checkbox" class="biome-cb" value="SNOW"> Snow</label>
+            <label style="display:flex; align-items:center; gap:4px; font-size:12px; text-transform:none; cursor:pointer;"><input type="checkbox" class="biome-cb" value="MOON"> Moon</label>
+            <label style="display:flex; align-items:center; gap:4px; font-size:12px; text-transform:none; cursor:pointer;"><input type="checkbox" class="biome-cb" value="AUTUMN"> Autumn</label>
+        </div>
+
+        <div class="row">
+            <div class="form-group">
+                <label>Target Height (m) <span id="val-height">15.0</span></label>
+                <input type="number" id="target-height" min="0.1" step="1" value="15.0" style="width:100%; padding:5px; background:#1e293b; color:#fff; border:1px solid #334155; border-radius:4px;" oninput="document.getElementById('val-height').innerText=parseFloat(this.value||0).toFixed(1); updateModelScale();">
+            </div>
+            <div class="form-group">
+                <label>Y Offset (m) <span id="val-offset">0.0</span></label>
+                <input type="number" id="y-offset" min="-500" max="500" step="1" value="0.0" style="width:100%; padding:5px; background:#1e293b; color:#fff; border:1px solid #334155; border-radius:4px;" oninput="document.getElementById('val-offset').innerText=parseFloat(this.value||0).toFixed(1); updateModelScale();">
+                <span style="color:#64748b; font-size:10px; margin-top:2px; display:block;">Negativt = sjunker under marken</span>
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label>Brightness Boost <span id="val-brightness">0.1</span></label>
+            <input type="range" id="brightness" min="-0.5" max="1.0" step="0.05" value="0.1">
+        </div>
+
+        <h1 style="margin-top: 20px; font-size: 16px; display:flex; justify-content:space-between; align-items:center;">
+            Physics Hitbox
+            <label style="font-size:10px; font-weight:normal; cursor:pointer; color:#cbd5e1; text-transform:none;">
+                <input type="checkbox" id="toggle-hitbox" checked style="vertical-align:middle;"> Show Wireframe
+            </label>
+        </h1>
+        <div class="form-group">
+            <label>Collision Shape</label>
+            <select id="physics-type">
+                <option value="tree">Tree (Trunk + Canopy)</option>
+                <option value="sphere">Sphere (Rock/Bush)</option>
+                <option value="cylinder">Cylinder (Cactus/Pole)</option>
+            </select>
+        </div>
+
+        <!-- Dynamic Physics Controls -->
+        <div id="phys-tree-ctrl" class="row">
+            <div class="form-group">
+                <label>Trunk Rad <span id="val-trunk">0.5</span></label>
+                <input type="range" id="tree-trunk" min="0.1" max="5" step="0.1" value="0.5">
+            </div>
+            <div class="form-group">
+                <label>Canopy Rad <span id="val-canopy">3.5</span></label>
+                <input type="range" id="tree-canopy" min="0.5" max="15" step="0.5" value="3.5">
+            </div>
+        </div>
+
+        <div id="phys-sphere-ctrl" class="form-group" style="display:none;">
+            <label>Radius (m) <span id="val-radius">2.0</span></label>
+            <input type="range" id="sphere-radius" min="0.5" max="15" step="0.1" value="2.0">
+        </div>
+
+        <div class="form-group" style="margin-top:20px;">
+            <label>Admin Password</label>
+            <input type="password" id="admin-pass" placeholder="Enter password">
+        </div>
+
+        <div class="row" style="margin-top:10px;">
+            <button id="btn-save" style="margin-top:0;">PUBLISH TO CLOUD</button>
+            <button id="btn-delete">DELETE FROM CLOUD</button>
+        </div>
+        <div id="log">Awaiting file...</div>
+    </div>
+
+    <script>
+        // Liten hjälp-funktion
+        function logMsg(str) {
+            console.log(str);
+            let el = document.getElementById('log');
+            if(el) el.innerText = str;
+        }
+
+        // --- THREE.JS SETUP ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color('#334155');
+
+        const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 10000);
+        camera.position.set(0, 10, 30);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.outputEncoding = THREE.sRGBEncoding;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.target.set(0, 5, 0);
+        controls.minDistance = 2;
+        controls.maxDistance = 5000;
+        
+        window.resetCamera = function() {
+            let th = 15;
+            let el = document.getElementById('target-height');
+            if (el && el.value) th = parseFloat(el.value);
+            let dist = Math.max(30, th * 2.5);
+            let h = Math.max(10, th / 2);
+            camera.position.set(0, h, dist);
+            controls.target.set(0, h, 0);
+            controls.update();
+        };
+
+        // Ljus
+        const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6);
+        hemiLight.position.set(0, 20, 0);
+        scene.add(hemiLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(10, 20, 10);
+        scene.add(dirLight);
+
+        // Mark
+        const grid = new THREE.GridHelper(50, 50, 0x475569, 0x475569);
+        grid.position.y = 0.01;
+        scene.add(grid);
+
+        // Palette Plane för Live Preview
+        const paletteCanvas = document.createElement('canvas');
+        paletteCanvas.width = 1024;
+        paletteCanvas.height = 1024;
+        const paletteCtx = paletteCanvas.getContext('2d');
+        const paletteTex = new THREE.CanvasTexture(paletteCanvas);
+        const paletteMat = new THREE.MeshLambertMaterial({ map: paletteTex });
+        const paletteGeo = new THREE.PlaneGeometry(50, 50);
+        paletteGeo.rotateX(-Math.PI / 2);
+        const palettePlane = new THREE.Mesh(paletteGeo, paletteMat);
+        scene.add(palettePlane);
+
+        // Grupper
+        const modelGroup = new THREE.Group();
+        scene.add(modelGroup);
+        const hitboxGroup = new THREE.Group();
+        scene.add(hitboxGroup);
+
+        let currentModel = null;
+        let base64Data = null;
+        let thumbnailBase64 = null;
+
+        // --- PREVIEW LOGIC ---
+        function updateHitbox() {
+            // Rensa gamla hitboxen
+            while(hitboxGroup.children.length > 0) {
+                hitboxGroup.remove(hitboxGroup.children[0]);
+            }
+
+            const pType = document.getElementById('physics-type').value;
+            const tHeight = parseFloat(document.getElementById('target-height').value);
+            const yOff = parseFloat(document.getElementById('y-offset').value);
+
+            const mat = new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true, transparent: true, opacity: 0.5 });
+
+            if (pType === 'tree') {
+                const trunkR = parseFloat(document.getElementById('tree-trunk').value);
+                const canR = parseFloat(document.getElementById('tree-canopy').value);
+                
+                // Stam (Cylinder) - går från marken upp till kronan
+                const trunkGeo = new THREE.CylinderGeometry(trunkR, trunkR, tHeight, 16);
+                const trunkMesh = new THREE.Mesh(trunkGeo, mat);
+                trunkMesh.position.y = tHeight / 2 + yOff;
+                hitboxGroup.add(trunkMesh);
+
+                // Krona (Sfär) - i toppen av trädet
+                const canGeo = new THREE.SphereGeometry(canR, 16, 16);
+                const canMesh = new THREE.Mesh(canGeo, mat);
+                canMesh.position.y = tHeight + yOff - (canR * 0.5); // Något ner från absolut topp
+                hitboxGroup.add(canMesh);
+            } 
+            else if (pType === 'sphere') {
+                const r = parseFloat(document.getElementById('sphere-radius').value);
+                const geo = new THREE.SphereGeometry(r, 16, 16);
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.y = r + yOff; // Centrerad ovanför mark baserat på radien
+                hitboxGroup.add(mesh);
+            }
+            else if (pType === 'cylinder') {
+                const r = parseFloat(document.getElementById('sphere-radius').value); // Återanvänder radius-slidern
+                const geo = new THREE.CylinderGeometry(r, r, tHeight, 16);
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.y = tHeight / 2 + yOff;
+                hitboxGroup.add(mesh);
+            }
+        }
+
+        function updateModelScale() {
+            if (!currentModel) return;
+            const tHeight = parseFloat(document.getElementById('target-height').value);
+            const yOff = parseFloat(document.getElementById('y-offset').value);
+            const bright = parseFloat(document.getElementById('brightness').value);
+
+            // Skala baserat på originalhöjd
+            const box = new THREE.Box3().setFromObject(currentModel);
+            const size = box.getSize(new THREE.Vector3());
+            
+            // Om vi redan skalat om modellen tidigare, måste vi räkna mot dess original bbox. 
+            // För enkelhetens skull låter vi loader:n skala till 1m, sedan multiplicerar vi med tHeight.
+            currentModel.scale.setScalar(tHeight);
+            currentModel.position.y = yOff;
+            
+            // Skala upp markytan (Grid + Palette Plane)
+            let groundScale = Math.max(1, tHeight / 15.0);
+            if (typeof grid !== 'undefined') grid.scale.setScalar(groundScale);
+            if (typeof palettePlane !== 'undefined') palettePlane.scale.setScalar(groundScale);
+
+            // Justera brightness
+            currentModel.traverse((child) => {
+                if (child.isMesh && child.material) {
+                    if (!child.userData.origEmissive) {
+                        child.userData.origEmissive = child.material.emissive ? child.material.emissive.clone() : new THREE.Color(0,0,0);
+                    }
+                    if (bright > 0) {
+                        child.material.emissive.setHex(0xffffff);
+                        child.material.emissiveIntensity = bright;
+                    } else {
+                        child.material.emissive.copy(child.userData.origEmissive);
+                        child.material.emissiveIntensity = 0;
+                    }
+                }
+            });
+
+            updateHitbox();
+            
+            // Auto-frame the camera if the object is huge
+            if (tHeight > 100 && window.resetCamera) {
+                window.resetCamera();
+            }
+        }
+
+        function snapThumbnail() {
+            // Hide helpers for clean shot
+            grid.visible = false;
+            hitboxGroup.visible = false;
+            
+            // Force a render so it's clean
+            renderer.render(scene, camera);
+            
+            // Capture canvas
+            const dataUrl = renderer.domElement.toDataURL('image/png');
+            thumbnailBase64 = dataUrl;
+            document.getElementById('thumb-preview').src = dataUrl;
+            
+            // Restore helpers
+            grid.visible = true;
+            hitboxGroup.visible = document.getElementById('toggle-hitbox').checked;
+        }
+
+        // --- EVENT LISTENERS ---
+        let fileSizeMB = 0;
+
+        document.getElementById('file-input').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            // Autogenerera namn
+            const baseName = file.name.split('.')[0];
+            document.getElementById('asset-id').value = baseName.toUpperCase().replace(/[^A-Z0-9]/g, '_');
+            document.getElementById('asset-name').value = baseName;
+
+            // Spara MB storlek
+            fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+            document.getElementById('log').innerText = `Vald fil: ${baseName} (${fileSizeMB} MB)`;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                base64Data = event.target.result;
+                loadModelFromBase64(base64Data);
+            };
+            reader.readAsDataURL(file);
+        });
+
+        function loadModelFromBase64(b64) {
+            const dracoLoader = new THREE.DRACOLoader();
+            dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.4.1/');
+            const loader = new THREE.GLTFLoader();
+            loader.setDRACOLoader(dracoLoader);
+            
+            loader.load(b64, function(gltf) {
+                // Rensa gamla
+                while(modelGroup.children.length > 0) {
+                    modelGroup.remove(modelGroup.children[0]);
+                }
+
+                currentModel = gltf.scene;
+                
+                // Normalisera storlek till 1 meter hög
+                const box = new THREE.Box3().setFromObject(currentModel);
+                const size = box.getSize(new THREE.Vector3());
+                const normalizeScale = 1.0 / size.y;
+                
+                // Centrera och lägg botten på marken
+                const center = box.getCenter(new THREE.Vector3());
+                const cymin = isFinite(box.min.y) ? box.min.y : 0;
+                
+                currentModel.scale.setScalar(normalizeScale);
+                currentModel.position.x = -center.x * normalizeScale;
+                currentModel.position.y = -cymin * normalizeScale;
+                currentModel.position.z = -center.z * normalizeScale;
+
+                // Lägg i en container för att hålla 1m referensen i botten
+                const containerMesh = new THREE.Group();
+                containerMesh.add(currentModel);
+                currentModel = containerMesh;
+
+                modelGroup.add(currentModel);
+                updateModelScale();
+                document.getElementById('log').innerText = "Model loaded successfully.";
+            });
+        }
+        
+        // --- CLOUD LIBRARY LOGIC ---
+        let allLibraryAssets = [];
+    let allThemes = {};
+
+    function switchLibTab(tab) {
+        let btnAssets = document.getElementById('tab-btn-assets');
+        let btnThemes = document.getElementById('tab-btn-themes');
+        let contentAssets = document.getElementById('tab-content-assets');
+        let contentThemes = document.getElementById('tab-content-themes');
+        
+        if (tab === 'ASSETS') {
+            btnAssets.style.background = '#38bdf8'; btnAssets.style.color = '#0f172a';
+            btnThemes.style.background = '#334155'; btnThemes.style.color = '#94a3b8';
+            contentAssets.style.display = 'flex';
+            contentThemes.style.display = 'none';
+            logMsg("Switched to Asset Library.");
+        } else {
+            btnThemes.style.background = '#38bdf8'; btnThemes.style.color = '#0f172a';
+            btnAssets.style.background = '#334155'; btnAssets.style.color = '#94a3b8';
+            contentThemes.style.display = 'flex';
+            contentAssets.style.display = 'none';
+            loadSelectedThemeUI();
+            logMsg("Switched to Theme Settings.");
+        }
+    }
+
+    async function fetchThemes() {
+        try {
+            const res = await fetch('/api/biomes');
+            if(res.ok) {
+                const data = await res.json();
+                data.forEach(t => {
+                    allThemes[t.id] = t.config;
+                });
+            }
+        } catch(e) {
+            console.error("Failed to fetch themes:", e);
+        }
+    }
+
+    function loadSelectedThemeUI() {
+        let themeId = document.getElementById('theme-selector').value;
+        let config = allThemes[themeId] || {};
+        
+        // Sätt default färger om de inte finns
+        document.getElementById('theme-sky').value = config.skyColor || '#87ceeb';
+        document.getElementById('theme-ob').value = config.obColor || '#ef4444';
+        document.getElementById('theme-bunker').value = config.bunkerColor || '#e0d8a4';
+        document.getElementById('theme-waste').value = config.wasteColor || '#c2af7c';
+        document.getElementById('theme-tee').value = config.teeColor || '#7cb54c';
+        document.getElementById('theme-green').value = config.greenColor || '#98ce68';
+        document.getElementById('theme-foregreen').value = config.foregreenColor || '#8bc45d';
+        document.getElementById('theme-fairway').value = config.fairwayColor || '#7db952';
+        document.getElementById('theme-semi').value = config.semiColor || '#6b9e3d';
+        document.getElementById('theme-rough').value = config.roughColor || '#4a782b';
+        document.getElementById('theme-fescue').value = config.fescueColor || '#2d4c1a';
+        document.getElementById('theme-water').value = config.waterColor || '#38bdf8';
+        
+        // Instant preview in the canvas!
+        updateCanvasPreview(config);
+    }
+
+    function updateCanvasPreview(config) {
+        if(scene) {
+            scene.background = new THREE.Color(config.skyColor || '#87ceeb');
+            
+            if(typeof paletteCtx !== 'undefined' && paletteCtx) {
+                // Fyll bakgrund
+                paletteCtx.fillStyle = config.roughColor || '#4a782b';
+                paletteCtx.fillRect(0, 0, 1024, 1024);
+                
+                let colors = [
+                    { name: "OB", col: config.obColor || '#ef4444' },
+                    { name: "Waste", col: config.wasteColor || '#c2af7c' },
+                    { name: "Bunker", col: config.bunkerColor || '#e0d8a4' },
+                    { name: "Fescue", col: config.fescueColor || '#2d4c1a' },
+                    { name: "Rough", col: config.roughColor || '#4a782b' },
+                    { name: "Semi-Rough", col: config.semiColor || '#6b9e3d' },
+                    { name: "Fairway", col: config.fairwayColor || '#7db952' },
+                    { name: "Foregreen", col: config.foregreenColor || '#8bc45d' },
+                    { name: "Green", col: config.greenColor || '#98ce68' },
+                    { name: "Tee Box", col: config.teeColor || '#7cb54c' },
+                    { name: "Water", col: config.waterColor || '#38bdf8' }
+                ];
+                
+                let h = 1024 / colors.length;
+                for(let i=0; i<colors.length; i++) {
+                    paletteCtx.fillStyle = colors[i].col;
+                    paletteCtx.fillRect(0, i*h, 1024, h);
+                    
+                    // Text
+                    paletteCtx.fillStyle = '#ffffff';
+                    paletteCtx.font = "bold 28px Arial";
+                    paletteCtx.fillText(colors[i].name, 20, i*h + h/2 + 10);
+                    
+                    // Outline för läsbarhet
+                    paletteCtx.lineWidth = 3;
+                    paletteCtx.strokeStyle = '#000000';
+                    paletteCtx.strokeText(colors[i].name, 20, i*h + h/2 + 10);
+                }
+                if(palettePlane && palettePlane.material.map) {
+                    palettePlane.material.map.needsUpdate = true;
+                }
+            }
+        }
+    }
+
+    // Add event listeners to color inputs to update preview live
+    ['sky','ob','bunker','waste','tee','green','foregreen','fairway','semi','rough','fescue','water'].forEach(key => {
+        let el = document.getElementById('theme-' + key);
+        if(el) {
+            el.addEventListener('input', () => {
+                let config = {
+                    skyColor: document.getElementById('theme-sky').value,
+                    obColor: document.getElementById('theme-ob').value,
+                    bunkerColor: document.getElementById('theme-bunker').value,
+                    wasteColor: document.getElementById('theme-waste').value,
+                    teeColor: document.getElementById('theme-tee').value,
+                    greenColor: document.getElementById('theme-green').value,
+                    foregreenColor: document.getElementById('theme-foregreen').value,
+                    fairwayColor: document.getElementById('theme-fairway').value,
+                    semiColor: document.getElementById('theme-semi').value,
+                    roughColor: document.getElementById('theme-rough').value,
+                    fescueColor: document.getElementById('theme-fescue').value,
+                    waterColor: document.getElementById('theme-water').value
+                };
+                updateCanvasPreview(config);
+            });
+        }
+    });
+
+    async function saveThemeToCloud() {
+        let password = document.getElementById('theme-password').value;
+        if (!password) { alert("Admin password required!"); return; }
+        
+        let themeId = document.getElementById('theme-selector').value;
+        let config = {
+            skyColor: document.getElementById('theme-sky').value,
+            obColor: document.getElementById('theme-ob').value,
+            bunkerColor: document.getElementById('theme-bunker').value,
+            wasteColor: document.getElementById('theme-waste').value,
+            teeColor: document.getElementById('theme-tee').value,
+            greenColor: document.getElementById('theme-green').value,
+            foregreenColor: document.getElementById('theme-foregreen').value,
+            fairwayColor: document.getElementById('theme-fairway').value,
+            semiColor: document.getElementById('theme-semi').value,
+            roughColor: document.getElementById('theme-rough').value,
+            fescueColor: document.getElementById('theme-fescue').value,
+            waterColor: document.getElementById('theme-water').value
+        };
+        
+        try {
+            const res = await fetch('/api/biomes', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    adminPassword: password,
+                    id: themeId,
+                    name: themeId,
+                    config: config
+                })
+            });
+            
+            let data;
+            try {
+                data = await res.json();
+            } catch(jsonErr) {
+                const text = await res.text();
+                throw new Error(`Server returned non-JSON: ${res.status} ${text.substring(0, 100)}`);
+            }
+            
+            if(data.error) {
+                alert("Server error: " + data.error);
+            } else {
+                allThemes[themeId] = config; // Update local cache
+                let msg = document.getElementById('theme-log');
+                msg.style.display = 'block';
+                setTimeout(() => { msg.style.display = 'none'; }, 3000);
+                logMsg(`Saved theme: ${themeId}`);
+            }
+        } catch(e) {
+            alert("Fetch failed: " + e.message);
+            console.error("Save Theme Error:", e);
+        }
+    }
+
+    async function fetchLibrary() {
+            try {
+                const res = await fetch('/api/assets');
+                allLibraryAssets = await res.json();
+                renderLibrary();
+            } catch(e) {
+                console.error(e);
+            }
+        }
+        
+        function renderLibrary() {
+            const list = document.getElementById('library-list');
+            list.innerHTML = '';
+            
+            if (allLibraryAssets.length === 0) {
+                list.innerHTML = '<div style="color:#94a3b8; font-size:12px;">No custom assets found.</div>';
+                document.getElementById('biome-weight-calc').style.display = 'none';
+                return;
+            }
+            
+            const filter = document.getElementById('lib-biome-filter').value;
+            
+            // --- WEIGHT CALCULATION ---
+            let globalWeight = 0;
+            let biomeWeight = 0;
+            
+            allLibraryAssets.forEach(a => {
+                const size = parseFloat(a.config?.fileSizeMB) || 0;
+                const biomes = a.config?.biomes || [];
+                
+                if (biomes.includes('GLOBAL')) {
+                    globalWeight += size;
+                } else if (filter !== 'ALL' && filter !== 'GLOBAL' && biomes.includes(filter)) {
+                    biomeWeight += size;
+                }
+            });
+            
+            const calcDiv = document.getElementById('biome-weight-calc');
+            if (filter === 'ALL') {
+                calcDiv.style.display = 'none';
+            } else {
+                calcDiv.style.display = 'block';
+                document.getElementById('weight-global').innerText = globalWeight.toFixed(2) + ' MB';
+                
+                if (filter === 'GLOBAL') {
+                    document.getElementById('weight-biome-label').innerText = 'Biome Assets:';
+                    document.getElementById('weight-biome').innerText = '0.00 MB';
+                } else {
+                    document.getElementById('weight-biome-label').innerText = filter + ' Assets:';
+                    document.getElementById('weight-biome').innerText = biomeWeight.toFixed(2) + ' MB';
+                }
+                
+                const totalLoad = globalWeight + biomeWeight;
+                const totalSpan = document.getElementById('weight-total');
+                totalSpan.innerText = totalLoad.toFixed(2) + ' / 40.0 MB';
+                
+                const bar = document.getElementById('weight-bar');
+                const pct = (totalLoad / 40.0) * 100;
+                bar.style.width = Math.min(pct, 100) + '%';
+                
+                if (totalLoad < 20) {
+                    bar.style.background = '#4ade80'; // Green
+                    totalSpan.style.color = '#38bdf8';
+                } else if (totalLoad < 35) {
+                    bar.style.background = '#fbbf24'; // Yellow
+                    totalSpan.style.color = '#fbbf24';
+                } else {
+                    bar.style.background = '#ef4444'; // Red
+                    totalSpan.style.color = '#ef4444';
+                }
+            }
+            // -------------------------
+
+            const filteredAssets = allLibraryAssets.filter(a => {
+                if (filter === 'ALL') return true;
+                if (!a.config || !a.config.biomes) return false;
+                return a.config.biomes.includes(filter);
+            });
+            
+            if (filteredAssets.length === 0) {
+                list.innerHTML = '<div style="color:#94a3b8; font-size:12px;">No assets in this biome.</div>';
+                return;
+            }
+            
+            filteredAssets.forEach(a => {
+                    const div = document.createElement('div');
+                    div.className = 'lib-item';
+                    const thumbHtml = (a.config && a.config.thumbnail) 
+                        ? `<img src="${a.config.thumbnail}" style="width:30px; height:30px; object-fit:cover; border-radius:4px;">` 
+                        : `<div class="icon">📦</div>`;
+                    
+                    div.innerHTML = `
+                        ${thumbHtml}
+                        <div class="details">
+                            <span class="name">${a.name}</span>
+                            <span class="subcat">${a.subcategory || a.category}</span>
+                        </div>
+                    `;
+                    div.onclick = () => loadAssetFromLibrary(a);
+                    list.appendChild(div);
+                });
+        }
+        
+        async function loadAssetFromLibrary(assetInfo) {
+            document.getElementById('log').innerText = "Downloading " + assetInfo.id + "...";
+            try {
+                // Populate Form
+                document.getElementById('asset-id').value = assetInfo.id;
+                document.getElementById('asset-name').value = assetInfo.name;
+                document.getElementById('asset-subcat').value = assetInfo.subcategory || 'TREES';
+                
+                // Populate Config if exists
+                if (assetInfo.config) {
+                    if (assetInfo.config.thumbnail) {
+                        thumbnailBase64 = assetInfo.config.thumbnail;
+                        document.getElementById('thumb-preview').src = thumbnailBase64;
+                    } else {
+                        thumbnailBase64 = null;
+                        document.getElementById('thumb-preview').src = '';
+                    }
+                    if (assetInfo.config.targetHeight) document.getElementById('target-height').value = assetInfo.config.targetHeight;
+                    if (assetInfo.config.yOffset) document.getElementById('y-offset').value = assetInfo.config.yOffset;
+                    if (assetInfo.config.brightness !== undefined) document.getElementById('brightness').value = assetInfo.config.brightness;
+                    
+                    if (assetInfo.config.physics) {
+                        const physType = assetInfo.config.physics.type || 'tree';
+                        document.getElementById('physics-type').value = physType;
+                        document.getElementById('physics-type').dispatchEvent(new Event('change'));
+                        
+                        if (physType === 'tree') {
+                            if (assetInfo.config.physics.trunkRadius) document.getElementById('tree-trunk').value = assetInfo.config.physics.trunkRadius;
+                            if (assetInfo.config.physics.canopyRadius) document.getElementById('tree-canopy').value = assetInfo.config.physics.canopyRadius;
+                        } else {
+                            if (assetInfo.config.physics.radius) document.getElementById('sphere-radius').value = assetInfo.config.physics.radius;
+                        }
+                    }
+                    
+                    // Checkboxes (Biomes)
+                    document.querySelectorAll('.biome-cb').forEach(cb => {
+                        cb.checked = assetInfo.config.biomes && assetInfo.config.biomes.includes(cb.value);
+                    });
+                }
+                
+                // Show Delete button
+                document.getElementById('btn-delete').style.display = 'block';
+                
+                // Update Value Labels
+                ['target-height', 'y-offset', 'brightness', 'tree-trunk', 'tree-canopy', 'sphere-radius'].forEach(id => {
+                    document.getElementById(id).dispatchEvent(new Event('input'));
+                });
+
+                // Fetch Base64 data
+                const res = await fetch('/api/assets/' + assetInfo.id + '/download');
+                const data = await res.json();
+                
+                if (data.file_data) {
+                    base64Data = data.file_data;
+                    loadModelFromBase64(base64Data);
+                    document.getElementById('log').innerText = "Loaded from Cloud: " + assetInfo.name;
+                } else {
+                    document.getElementById('log').innerText = "❌ Missing 3D data";
+                }
+            } catch(e) {
+                console.error(e);
+                document.getElementById('log').innerText = "❌ Failed to load asset";
+            }
+        }
+        
+        // Load library on start
+        fetchThemes();
+        fetchLibrary();
+
+        // Koppla sliders till uppdatering
+        ['target-height', 'y-offset', 'brightness', 'tree-trunk', 'tree-canopy', 'sphere-radius'].forEach(id => {
+            document.getElementById(id).addEventListener('input', function(e) {
+                let suffix = id;
+                if(id.includes('-')) {
+                    suffix = id.split('-')[1];
+                }
+                const valId = 'val-' + suffix;
+                if (document.getElementById(valId)) {
+                    document.getElementById(valId).innerText = parseFloat(e.target.value).toFixed(2);
+                }
+                updateModelScale();
+            });
+        });
+
+        document.getElementById('physics-type').addEventListener('change', function(e) {
+            const t = e.target.value;
+            document.getElementById('phys-tree-ctrl').style.display = t === 'tree' ? 'flex' : 'none';
+            document.getElementById('phys-sphere-ctrl').style.display = (t === 'sphere' || t === 'cylinder') ? 'flex' : 'none';
+            updateHitbox();
+        });
+
+        // Automatisk ifyllnad: Ändrar du kategori till Rock, så ställs fysiken om till Sphere
+        document.getElementById('asset-subcat').addEventListener('change', function(e) {
+            const val = e.target.value;
+            const physSelect = document.getElementById('physics-type');
+            if (val === 'TREES') physSelect.value = 'tree';
+            else if (val === 'ROCKS') physSelect.value = 'sphere';
+            else if (val === 'PLANTS') physSelect.value = 'sphere';
+            else if (val === 'LANDSCAPE') physSelect.value = 'sphere';
+            physSelect.dispatchEvent(new Event('change'));
+        });
+
+        // Dölj/Visa Hitbox
+        document.getElementById('toggle-hitbox').addEventListener('change', function(e) {
+            hitboxGroup.visible = e.target.checked;
+        });
+
+        // --- SPARA TILL BACKEND ---
+        document.getElementById('btn-save').addEventListener('click', async () => {
+            if (!base64Data) return alert("Please load a .glb file first!");
+            const pass = document.getElementById('admin-pass').value;
+            if (!pass) return alert("Password required");
+
+            const id = document.getElementById('asset-id').value;
+            const name = document.getElementById('asset-name').value;
+            const subcat = document.getElementById('asset-subcat').value;
+            
+            const pType = document.getElementById('physics-type').value;
+            let physicsConf = { type: pType };
+            if (pType === 'tree') {
+                physicsConf.trunkRadius = parseFloat(document.getElementById('tree-trunk').value);
+                physicsConf.height = parseFloat(document.getElementById('target-height').value);
+                physicsConf.canopyRadius = parseFloat(document.getElementById('tree-canopy').value);
+            } else if (pType === 'sphere') {
+                physicsConf.radius = parseFloat(document.getElementById('sphere-radius').value);
+            } else if (pType === 'cylinder') {
+                physicsConf.radius = parseFloat(document.getElementById('sphere-radius').value);
+                physicsConf.height = parseFloat(document.getElementById('target-height').value);
+            }
+
+            const config = {
+                targetHeight: parseFloat(document.getElementById('target-height').value),
+                yOffset: parseFloat(document.getElementById('y-offset').value),
+                brightness: parseFloat(document.getElementById('brightness').value),
+                cat: 'nature',
+                subcat: subcat,
+                thumbnail: thumbnailBase64,
+                physics: physicsConf,
+                biomes: Array.from(document.querySelectorAll('.biome-cb:checked')).map(cb => cb.value),
+                fileSizeMB: parseFloat(fileSizeMB)
+            };
+
+            document.getElementById('log').innerText = "Uploading to Cloud...";
+
+            try {
+                const res = await fetch('/api/assets', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        id, name, category: 'nature', subcategory: subcat, icon: '', file_data: base64Data, config, password: pass
+                    })
+                });
+                
+                const data = await res.json();
+                if (data.success) {
+                    document.getElementById('log').innerText = "✅ Successfully Published: " + id;
+                    document.getElementById('btn-delete').style.display = 'block'; // Show delete now that it exists
+                    fetchLibrary(); // Refresh library
+                } else {
+                    document.getElementById('log').innerText = "❌ Error: " + data.error;
+                }
+            } catch(e) {
+                document.getElementById('log').innerText = "❌ Exception: " + e.message;
+            }
+        });
+        
+        // --- DELETE FRÅN BACKEND ---
+        document.getElementById('btn-delete').addEventListener('click', async () => {
+            const pass = document.getElementById('admin-pass').value;
+            if (!pass) return alert("Password required to delete");
+            const id = document.getElementById('asset-id').value;
+            
+            if (!confirm("Are you sure you want to permanently delete '" + id + "' from the Cloud? This will break any courses using it.")) return;
+            
+            document.getElementById('log').innerText = "Deleting...";
+            try {
+                const res = await fetch('/api/assets/' + id, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: pass })
+                });
+                
+                const data = await res.json();
+                if (data.success) {
+                    document.getElementById('log').innerText = "✅ Successfully Deleted: " + id;
+                    document.getElementById('btn-delete').style.display = 'none';
+                    // Clear 3D view
+                    while(modelGroup.children.length > 0) modelGroup.remove(modelGroup.children[0]);
+                    while(hitboxGroup.children.length > 0) hitboxGroup.remove(hitboxGroup.children[0]);
+                    
+                    // Clear Inputs
+                    document.getElementById('asset-id').value = '';
+                    document.getElementById('asset-name').value = '';
+                    document.getElementById('thumb-preview').src = '';
+                    thumbnailBase64 = null;
+                    
+                    base64Data = null;
+                    currentModel = null;
+                    fetchLibrary(); // Refresh library
+                } else {
+                    document.getElementById('log').innerText = "❌ Error: " + data.error;
+                }
+            } catch(e) {
+                document.getElementById('log').innerText = "❌ Exception: " + e.message;
+            }
+        });
+
+        // --- RENDER LOOP ---
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        });
+    </script>
+</body>
+</html>
