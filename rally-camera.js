@@ -82,7 +82,8 @@ function update(camera, physDt, realDt) {
     while (diff > Math.PI)  diff -= Math.PI * 2;
     while (diff < -Math.PI) diff += Math.PI * 2;
     let sf = Math.min(1, Math.abs(car.speed) / 10);
-    camHeading += diff * (CAM.ROT_LERP + sf * 0.1);
+    let headingRate = CAM.ROT_LERP + sf * 0.1;
+    camHeading += diff * (1 - Math.pow(1 - headingRate, physDt * 60));
 
     let camFwd   = new THREE.Vector3(Math.sin(camHeading), 0, Math.cos(camHeading));
     let camRight  = new THREE.Vector3(Math.cos(camHeading), 0, -Math.sin(camHeading));
