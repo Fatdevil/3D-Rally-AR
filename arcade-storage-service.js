@@ -16,6 +16,7 @@ window.ArcadeStorage = {
         CUSTOM_LEVEL:   'arcade_custom_level',
         CUSTOM_LEVEL_Z: 'arcade_custom_level_z',
         MY_DRAFTS:      'golf_os_my_drafts',
+        TERRAIN_SNAP:   'rally_terrain_snapshot',  // heightmap + biomemap for rally.html
     },
 
     // ----- PRO MODE -----
@@ -63,6 +64,34 @@ window.ArcadeStorage = {
             console.error('Decompression failed:', e);
             return null;
         }
+    },
+
+    // ----- TERRAIN SNAPSHOT (rally.html reads this) -----
+    // Saves a compact heightmap (H16 format) + biome data URL so rally.html
+    // can reconstruct the sculpted terrain without needing the server.
+    saveTerrainSnapshot(heightmapH16, biomemapDataUrl) {
+        try {
+            const snap = { terrain_heightmap: heightmapH16, terrain_biomemap: biomemapDataUrl, ts: Date.now() };
+            localStorage.setItem(this.KEYS.TERRAIN_SNAP, JSON.stringify(snap));
+            console.log('💾 Terrain snapshot saved (' + (JSON.stringify(snap).length / 1024).toFixed(1) + 'KB)');
+            return true;
+        } catch (e) {
+            // localStorage may be full (biomemap is large)
+            console.warn('⚠️ Terrain snapshot save failed (storage full?):', e.message);
+            return false;
+        }
+    },
+    loadTerrainSnapshot() {
+        try {
+            const raw = localStorage.getItem(this.KEYS.TERRAIN_SNAP);
+            return raw ? JSON.parse(raw) : null;
+        } catch (e) {
+            console.warn('Terrain snapshot parse failed:', e);
+            return null;
+        }
+    },
+    clearTerrainSnapshot() {
+        localStorage.removeItem(this.KEYS.TERRAIN_SNAP);
     },
 
     // ----- DRAFTS -----

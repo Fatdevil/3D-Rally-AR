@@ -188,11 +188,13 @@
 
     // ── Load Terrain Data ──
     function loadTerrain() {
-        // Try compressed first, then uncompressed
-        let data = ArcadeStorage.loadCompressedLevel() || ArcadeStorage.loadCustomLevel();
+        // Priority: 1) Terrain snapshot (from arcade.html saveLevel)
+        //           2) Compressed full course (pako)
+        //           3) Uncompressed full course
+        let snap = ArcadeStorage.loadTerrainSnapshot();
+        let data = snap || ArcadeStorage.loadCompressedLevel() || ArcadeStorage.loadCustomLevel();
 
         if (!data) {
-            // No saved terrain — show message
             document.getElementById('loading').style.display = 'none';
             document.getElementById('no-terrain').style.display = 'flex';
             return false;
@@ -201,27 +203,54 @@
         // Load heightmap if present
         if (data.terrain_heightmap) {
             let positions = planeGeo.attributes.position.array;
-            let heightData;
+            let hm = data.terrain_heightmap;
 
-            if (data.terrain_heightmap.startsWith('H16|')) {
-                // Compressed 16-bit format
-                let b64 = data.terrain_heightmap.substring(4);
-                let binary = atob(b64);
-                let bytes = new Uint8Array(binary.length);
-                for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-                let inflated = pako.inflate(bytes);
-                let int16 = new Int16Array(inflated.buffer);
-                for (let i = 0; i < int16.length && i < planeGeo.attributes.position.count; i++) {
-                    positions[i * 3 + 2] = int16[i] / 100;
+            // Guard: if it's a JSON object (cloud format), extract ground array
+            if (typeof hm === 'object' && hm !== null && hm.ground) {
+                let groundArr = hm.ground;
+                for (let i = 0; i < groundArr.length && i < planeGeo.attributes.position.count; i++) {
+                    positions[i * 3 + 2] = groundArr[i];
                 }
-            } else {
-                // Legacy base64 float array
-                let binary = atob(data.terrain_heightmap);
-                let bytes = new Uint8Array(binary.length);
-                for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-                let floats = new Float32Array(bytes.buffer);
-                for (let i = 0; i < floats.length && i < planeGeo.attributes.position.count; i++) {
-                    positions[i * 3 + 2] = floats[i];
+            } else if (typeof hm === 'string') {
+                if (hm.startsWith('H16|')) {
+                    // Compressed 16-bit format (from arcade.html saveLevel snapshot)
+                    let b64 = hm.substring(4);
+                    try {
+                        let binary = atob(b64);
+                        let bytes = new Uint8Array(binary.length);
+                        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                        let inflated = pako.inflate(bytes);
+                        let int16 = new Int16Array(inflated.buffer);
+                        for (let i = 0; i < int16.length && i < planeGeo.attributes.position.count; i++) {
+                            positions[i * 3 + 2] = int16[i] / 100;
+                        }
+                    } catch (e) {
+                        console.error('H16 heightmap decode failed:', e);
+                    }
+                } else if (hm.startsWith('{') || hm.startsWith('[')) {
+                    // JSON string (cloud format) — parse then extract ground array
+                    try {
+                        let parsed = JSON.parse(hm);
+                        let groundArr = parsed.ground || parsed;
+                        for (let i = 0; i < groundArr.length && i < planeGeo.attributes.position.count; i++) {
+                            positions[i * 3 + 2] = groundArr[i];
+                        }
+                    } catch (e) {
+                        console.error('JSON heightmap parse failed:', e);
+                    }
+                } else {
+                    // Legacy base64 float array — guard against atob() crash
+                    try {
+                        let binary = atob(hm);
+                        let bytes = new Uint8Array(binary.length);
+                        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                        let floats = new Float32Array(bytes.buffer);
+                        for (let i = 0; i < floats.length && i < planeGeo.attributes.position.count; i++) {
+                            positions[i * 3 + 2] = floats[i];
+                        }
+                    } catch (e) {
+                        console.error('Legacy base64 heightmap decode failed:', e);
+                    }
                 }
             }
 
@@ -240,7 +269,6 @@
                 planeMat.map = tex;
                 planeMat.needsUpdate = true;
                 planeMat.color.set(0xffffff);
-                // Create offscreen canvas for per-pixel surface detection
                 let c = document.createElement('canvas');
                 c.width = img.width; c.height = img.height;
                 let ctx = c.getContext('2d');
@@ -254,6 +282,7 @@
 
         return true;
     }
+
 
     // ── Initialize ──
     let terrainLoaded = loadTerrain();
