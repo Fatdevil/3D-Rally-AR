@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Golf Arcade Mode 👾</title>
+<title>Rally AR — Track Builder 🏁</title>
 <link rel="stylesheet" href="arcade.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -11,21 +11,23 @@
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
 
-<!-- Hämta vår grymma Fysikmotor! -->
-<script src="physics.js?v=4"></script>
+<!-- GOLF MODULES DISABLED — replaced by rally-vehicle.js + rally-surfaces.js -->
+<!-- <script src="physics.js?v=4"></script> -->
 <script src="arcade-auth.js"></script>
 <script src="arcade-feature-flags.js"></script>
 <script src="arcade-api-service.js"></script>
 <script src="arcade-storage-service.js"></script>
-<script src="arcade-swing-engine.js"></script>
+<!-- <script src="arcade-swing-engine.js"></script> -->
 <script src="arcade-perlin.js"></script>
 <script src="arcade-terrain-overlays.js"></script>
 <script src="arcade-scene-engine.js"></script>
-<script src="arcade-tracer-engine.js"></script>
-<script src="arcade-audio-engine.js"></script>
+<!-- <script src="arcade-tracer-engine.js"></script> -->
+<!-- <script src="arcade-audio-engine.js"></script> -->
+<script src="golf-stubs.js"></script> <!-- Stubs for disabled golf modules -->
 <script src="arcade-particle-engine.js"></script>
 <script src="arcade-wind-sway.js"></script>
 <script src="arcade-leaves.js"></script>
+<script src="rally-jump-tool.js"></script>
 </head>
 <body>
 <div id="global-loader">
@@ -356,7 +358,7 @@
         <button id="tool-forest" onclick="setTool('FOREST')" class="pro-tool"><span style="font-size:16px;">🌲</span> FOREST</button>
         <button id="tool-block" onclick="setTool('BLOCK')"><span style="font-size:16px;">🧱</span> BLOCK</button>
         <div style="height:1px; background:#475569; width:100%; margin:4px 0; grid-column:1 / -1;"></div>
-        <button id="tool-hole" onclick="setTool('HOLE')"><span style="font-size:16px;">🕳️</span> HOLE</button>
+        <button id="tool-jump" onclick="setTool('JUMP')" class="pro-tool"><span style="font-size:16px;">🚀</span> JUMP</button>
         <button id="tool-measure" onclick="setTool('MEASURE')"><span style="font-size:16px;">📏</span> MEASURE</button>
         <button id="tool-eraser" onclick="setTool('ERASER')" class="pro-tool"><span style="font-size:16px;">🗑️</span> ERASER</button>
         <button id="tool-colorize" onclick="setTool('COLORIZE')" class="pro-tool"><span style="font-size:16px;">🎨</span> COLORIZE</button>
@@ -7302,6 +7304,12 @@
         if(appMode !== 'BUILD') return;
         if(currentTool === 'INSPECT') return;
         
+        // === JUMP TOOL: Place trajectory on terrain ===
+        if (currentTool === 'JUMP' && e.button === 0 && lastHitPoint) {
+            if (window.onJumpToolClick) window.onJumpToolClick(lastHitPoint);
+            return;
+        }
+        
         // === ERASER TOOL ===
         if (currentTool === 'ERASER' && e.button === 0 && lastHitPoint) {
             saveUndoState();
@@ -7853,7 +7861,7 @@
         
         currentTool = toolName;
         
-        let tools = ['inspect', 'sculpt', 'smooth', 'flatten', 'ramp', 'noise', 'water', 'spline', 'paint', 'smartbuilder', 'testputt', 'ridge', 'nature', 'forest', 'block', 'hole', 'measure', 'eraser', 'colorize'];
+        let tools = ['inspect', 'sculpt', 'smooth', 'flatten', 'ramp', 'noise', 'water', 'spline', 'paint', 'smartbuilder', 'testputt', 'ridge', 'nature', 'forest', 'block', 'jump', 'measure', 'eraser', 'colorize'];
         
         tools.forEach(t => {
             let btn = document.getElementById('tool-' + t);
@@ -7878,6 +7886,9 @@
         document.getElementById('color-picker-group').style.display = (toolName === 'BLOCK' || toolName === 'PAINT') ? 'flex' : 'none';
         document.getElementById('nature-picker-group').style.display = (toolName === 'NATURE') ? 'flex' : 'none';
         document.getElementById('hole-picker-group').style.display = (toolName === 'HOLE') ? 'flex' : 'none';
+        // Jump tool activation/deactivation
+        if (toolName === 'JUMP' && window.activateJumpTool) window.activateJumpTool();
+        else if (window.deactivateJumpTool) window.deactivateJumpTool();
         document.getElementById('colorize-picker-group').style.display = (toolName === 'COLORIZE') ? 'flex' : 'none';
         document.getElementById('putt-settings-group').style.display = (toolName === 'TEST_PUTT') ? 'flex' : 'none';
         document.getElementById('sculpt-settings-group').style.display = (toolName === 'SCULPT' || toolName === 'SMOOTH' || toolName === 'FLATTEN' || toolName === 'PAINT' || toolName === 'WATER' || toolName === 'RIDGE' || toolName === 'NOISE') ? 'flex' : 'none';
@@ -7910,6 +7921,8 @@
             sculptBrushCursor.material.color.setHex(0x38bdf8); // Blå
         } else if(toolName === 'RAMP') {
             sculptBrushCursor.material.color.setHex(0x38bdf8); // Light Blue for Ramp
+        } else if(toolName === 'JUMP') {
+            sculptBrushCursor.material.color.setHex(0xdc2626); // Röd för Jump
         } else if(toolName === 'SPLINE') {
             sculptBrushCursor.material.color.setHex(0xec4899); // Rosa för Spline
         } else if(toolName === 'COLORIZE') {

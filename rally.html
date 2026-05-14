@@ -62,6 +62,7 @@
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
 <script src="arcade-storage-service.js"></script>
+<script src="rally-surfaces.js"></script>
 <script src="rally-vehicle.js"></script>
 
 <script>
@@ -116,6 +117,31 @@
     terrainMesh.receiveShadow = true;
     scene.add(terrainMesh);
 
+    // ── Biome color → surface type classifier ──
+    // Matches pixel RGB to nearest golf biome (then rally-surfaces.js maps to rally type)
+    const BIOME_COLORS = [
+        { r:0x98, g:0xce, b:0x68, type:'GREEN' },
+        { r:0x7c, g:0xb5, b:0x4c, type:'TEE' },
+        { r:0x8b, g:0xc4, b:0x5d, type:'FOREGREEN' },
+        { r:0x7d, g:0xb9, b:0x52, type:'FAIRWAY' },
+        { r:0x6b, g:0x9e, b:0x3d, type:'SEMI-ROUGH' },
+        { r:0x4a, g:0x78, b:0x2b, type:'ROUGH' },
+        { r:0x2d, g:0x4c, b:0x1a, type:'FESCUE' },
+        { r:0xe0, g:0xd8, b:0xa4, type:'SAND' },
+        { r:0xc2, g:0xaf, b:0x7c, type:'WASTE' },
+        { r:0xef, g:0x44, b:0x44, type:'OB' },
+        { r:0x38, g:0xbd, b:0xf8, type:'WATER' }
+    ];
+    function classifyBiomeColor(r, g, b) {
+        let best = 'ROUGH', bestDist = Infinity;
+        for (let bc of BIOME_COLORS) {
+            let dr = r-bc.r, dg = g-bc.g, db = b-bc.b;
+            let d = dr*dr + dg*dg + db*db;
+            if (d < bestDist) { bestDist = d; best = bc.type; }
+        }
+        return best;
+    }
+
     // ── localGetTerrainAt (needed by rally-vehicle.js) ──
     window.localGetTerrainAt = function(px, py) {
         let threeX = px;
@@ -140,10 +166,20 @@
         let dy = (hD - height) / step;
         let len = Math.sqrt(dx * dx + dy * dy + 1.0);
 
+        // Biome detection from color data (if available)
+        let surfType = 'FAIRWAY';
+        if (window._biomeCanvas) {
+            let bx = Math.round((threeX + TERRAIN_SIZE/2) / TERRAIN_SIZE * window._biomeCanvas.width);
+            let by = Math.round((threeZ + TERRAIN_SIZE/2) / TERRAIN_SIZE * window._biomeCanvas.height);
+            bx = Math.max(0, Math.min(window._biomeCanvas.width-1, bx));
+            by = Math.max(0, Math.min(window._biomeCanvas.height-1, by));
+            let px = window._biomeCtx.getImageData(bx, by, 1, 1).data;
+            surfType = classifyBiomeColor(px[0], px[1], px[2]);
+        }
         return {
             z: height,
             normal: [-dx / len, -dy / len, 1.0 / len],
-            type: 'FAIRWAY' // Default surface — no biome data in rally (yet)
+            type: surfType
         };
     };
 
@@ -200,8 +236,15 @@
                 tex.needsUpdate = true;
                 planeMat.map = tex;
                 planeMat.needsUpdate = true;
-                planeMat.color.set(0xffffff); // Let texture control color
-                console.log('✅ Terrain biome texture loaded');
+                planeMat.color.set(0xffffff);
+                // Create offscreen canvas for per-pixel surface detection
+                let c = document.createElement('canvas');
+                c.width = img.width; c.height = img.height;
+                let ctx = c.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                window._biomeCanvas = c;
+                window._biomeCtx = ctx;
+                console.log('✅ Terrain biome texture + surface detection loaded');
             };
             img.src = data.terrain_biomemap;
         }
