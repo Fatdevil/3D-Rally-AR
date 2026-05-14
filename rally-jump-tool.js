@@ -191,7 +191,7 @@ function renderTrajectory(calc, startPos, direction) {
     let apexTerrY = startPos.y;
     if (window.localGetTerrainAt) {
         let s = window.localGetTerrainAt(apexPos.x, -apexPos.z);
-        if (s) apexTerrY = s.z;
+        if (s && Number.isFinite(s.z)) apexTerrY = s.z;
     }
     let vLineGeo = new THREE.BufferGeometry().setFromPoints([
         new THREE.Vector3(apexPos.x, apexTerrY, apexPos.z),
@@ -422,7 +422,9 @@ function recalculate() {
                 advice.textContent += ' ⚠️ Faktisk landningslutning (' + Math.round(raw) + '°) understiger verktygets min (-30°) — verklig landning kan vara mjukare men verifiera manuellt.';
             } else if (raw > 10) {
                 advice.textContent += ' ⚠️ Faktisk terränglutning (' + Math.round(raw) + '°) överstiger verktygets max (10°) — landning kan vara brantare än beräknat.';
-                advice.style.color = '#fbbf24';
+                if (relLandAngle <= 40) {
+                    advice.style.color = '#fbbf24';
+                }
             }
         }
     }
@@ -453,11 +455,20 @@ function _doAutoSlope(pos, dir) {
     }
 
     // Fynd A: beräkna candidateCalc med aktuella parametrar för initial distance,
-    // oavsett om lastCalc är invalid. Om candidate är invalid: visa fel via recalculate().
-    let candidateCalc = calculateJump(jumpSpeed, rampAngle, landingSlope);
+    // Fynd A: beräkna candidateCalc med en säker initial landingSlope för att förhindra att
+    // en ogiltig (brant) manuell landingSlope blockerar första terrängsamplingen.
+    let seedSlope = Math.min(landingSlope, rampAngle - 1);
+    let candidateCalc = calculateJump(jumpSpeed, rampAngle, seedSlope);
+    
+    // Fallback om rampvinkeln är extremt liten
+    if (candidateCalc.invalid) {
+        candidateCalc = calculateJump(jumpSpeed, rampAngle, Math.min(0, rampAngle - 1));
+    }
+
     if (candidateCalc.invalid) {
         window._rawAutoSlope = null;
-        lastCalc = candidateCalc;
+        // Använd faktiska värden för recalculate så att felet presenteras korrekt
+        lastCalc = calculateJump(jumpSpeed, rampAngle, landingSlope);
         recalculate();
         return;
     }
@@ -530,8 +541,14 @@ window.onJumpToolClick = function(hitPoint) {
         let dir = new THREE.Vector3();
         cam.getWorldDirection(dir);
         dir.y = 0;
-        dir.normalize();
-        window._jumpPlacementDir = dir;
+        
+        if (dir.lengthSq() < 0.0001) {
+            // Om kameran tittar rakt ner/upp
+            window._jumpPlacementDir = window._jumpPlacementDir || new THREE.Vector3(0, 0, -1);
+        } else {
+            dir.normalize();
+            window._jumpPlacementDir = dir;
+        }
     } else {
         window._jumpPlacementDir = new THREE.Vector3(0, 0, -1);
     }
