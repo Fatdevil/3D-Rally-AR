@@ -375,12 +375,15 @@ window.rallyVehicle = {
         if (window.rallyDamage) window.rallyDamage.reset();
         // Save spawn position for respawn fallback (after terrain adjust)
         car._spawnPosition = car.position.clone();
-        console.log('🏎️ Rally Vehicle activated (drift physics v4 + damage + camera)');
+        // Init respawn system
+        if (window.rallyRespawn) window.rallyRespawn.init(car);
+        console.log('🏎️ Rally Vehicle activated (drift physics v4 + damage + camera + respawn)');
     },
     deactivate: function(scene) {
         car.active=false;
         if(car.mesh){scene.remove(car.mesh); car.mesh=null;}
         let h=document.getElementById('rally-hud'); if(h)h.remove();
+        if (window.rallyRespawn) window.rallyRespawn.cleanup();
         keys={}; console.log('🏎️ Rally Vehicle deactivated');
     },
     update: function(camera) {
@@ -393,6 +396,7 @@ window.rallyVehicle = {
         updateVehicle(physDt);
         if (window.rallyCamera) window.rallyCamera.update(camera, physDt, realDt);
         if (window.rallyDamage) window.rallyDamage.update(physDt);
+        if (window.rallyRespawn) window.rallyRespawn.update(physDt);
         updateHUD();
     },
     isActive:()=>car.active,
@@ -400,6 +404,7 @@ window.rallyVehicle = {
     getPosition:()=>car.position,
     getCar:()=>car,
     isDrifting:()=>car.isDrifting,
-    getSlipAngle:()=>car.slipAngleDeg
+    getSlipAngle:()=>car.slipAngleDeg,
+    getKeys:()=>keys
 };
 })();

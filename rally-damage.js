@@ -303,6 +303,14 @@ function reset() {
     }
 }
 
+function resetFlipState() {
+    isVolting = false;
+    voltTimer = 0;
+    isFlipped = false;
+    flipTimer = 0;
+    flipTotalTimer = 0;
+}
+
 // ─── HELPERS ───
 function getCar() {
     return window.rallyVehicle ? window.rallyVehicle.getCar() : null;
@@ -331,6 +339,7 @@ window.rallyDamage = {
     getModifiers: getModifiers,
     triggerVolt: triggerVolt,
     reset: reset,
+    resetFlipState: resetFlipState,
     getDamage: function() { return damage; },
     isVolting: function() { return isVolting; },
     isFlipped: function() { return isFlipped; },
