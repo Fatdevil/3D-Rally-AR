@@ -6,11 +6,15 @@ function lerp(a,b,t){ return a+(b-a)*Math.max(0,Math.min(1,t)); }
 function clamp(v,lo,hi){ return Math.max(lo,Math.min(hi,v)); }
 
 const CFG = {
-    MASS: 1100, ENGINE_FORCE: 9000, MAX_SPEED: 52,
-    BRAKE_FORCE: 15000, REVERSE_MAX: 12,
-    DRAG: 0.97, HANDBRAKE_DRAG: 0.92,
-    MAX_STEER: 28, MIN_STEER: 2, WHEELBASE: 2.7,
-    DRIFT_STEER_BONUS: 1.3, HANDBRAKE_GRIP: 0.05,
+    MASS: 1100, 
+    ENGINE_FORCE: 55000, 
+    MAX_SPEED: 80, // m/s (ca 288 km/h i absolut max teoretisk topfart)
+    BRAKE_FORCE: 65000, 
+    REVERSE_MAX: 15,
+    DRAG: 0.995, // Minskade luftmotståndet avsevärt för att tillåta högre toppfarter
+    HANDBRAKE_DRAG: 0.92,
+    MAX_STEER: 28, MIN_STEER: 3, WHEELBASE: 2.7,
+    DRIFT_STEER_BONUS: 1.5, HANDBRAKE_GRIP: 0.05,
     GRAVITY: 9.81, GRAVITY_AIR_MULT: 1.4, AIR_CONTROL: 0.3,
     CAR_HEIGHT: 0.35, WHEEL_SPIN: 0.15,
     ROLL_SENS: 0.8, PITCH_SENS: 0.4
@@ -33,35 +37,58 @@ let keys = {}, lastTime = 0;
 // ─── CAR MESH ───
 function createCarMesh() {
     let g = new THREE.Group(); g.name = 'RallyCar';
-    let bodyMat = new THREE.MeshLambertMaterial({color:0xdc2626});
-    let body = new THREE.Mesh(new THREE.BoxGeometry(2.0,0.55,4.2), bodyMat);
-    body.position.y=0.35; body.castShadow=true; g.add(body);
-    let roof = new THREE.Mesh(new THREE.BoxGeometry(1.6,0.45,1.8), new THREE.MeshLambertMaterial({color:0xb91c1c}));
-    roof.position.set(0,0.85,-0.3); roof.castShadow=true; g.add(roof);
-    let windMat = new THREE.MeshLambertMaterial({color:0x1e293b,transparent:true,opacity:0.7});
-    let ws = new THREE.Mesh(new THREE.BoxGeometry(1.5,0.4,0.05), windMat);
-    ws.position.set(0,0.82,0.6); ws.rotation.x=-0.25; g.add(ws);
-    let rw = ws.clone(); rw.position.set(0,0.82,-1.2); rw.rotation.x=0.2; g.add(rw);
-    let lgeo = new THREE.BoxGeometry(0.35,0.15,0.05);
-    [-0.6,0.6].forEach(x=>{
-        g.add(Object.assign(new THREE.Mesh(lgeo, new THREE.MeshBasicMaterial({color:0xfef08a})),{position:new THREE.Vector3(x,0.35,2.13)}));
-        g.add(Object.assign(new THREE.Mesh(lgeo, new THREE.MeshBasicMaterial({color:0xef4444})),{position:new THREE.Vector3(x,0.35,-2.13)}));
-    });
-    let platGeo=new THREE.BoxGeometry(0.05,0.4,0.5), platMat=new THREE.MeshLambertMaterial({color:0xffffff});
-    [-1.02,1.02].forEach(x=>{ let p=new THREE.Mesh(platGeo,platMat); p.position.set(x,0.45,0); g.add(p); });
-    let bar=new THREE.Mesh(new THREE.BoxGeometry(1.8,0.08,0.15), new THREE.MeshLambertMaterial({color:0x334155}));
-    bar.position.set(0,1.12,-0.1); g.add(bar);
-    let podMat=new THREE.MeshBasicMaterial({color:0xfef9c3}), podGeo=new THREE.BoxGeometry(0.2,0.12,0.12);
-    [-0.6,-0.2,0.2,0.6].forEach(x=>{ let p=new THREE.Mesh(podGeo,podMat); p.position.set(x,1.2,-0.1); g.add(p); });
-    car.wheels=[];
-    [{x:-0.95,z:1.3},{x:0.95,z:1.3},{x:-0.95,z:-1.3},{x:0.95,z:-1.3}].forEach(wp=>{
-        let wg=new THREE.Group();
-        let tire=new THREE.Mesh(new THREE.CylinderGeometry(0.32,0.32,0.22,10), new THREE.MeshLambertMaterial({color:0x1a1a1a}));
-        tire.rotation.z=Math.PI/2; tire.castShadow=true; wg.add(tire);
-        let rim=new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.15,0.24,6), new THREE.MeshLambertMaterial({color:0x94a3b8}));
-        rim.rotation.z=Math.PI/2; wg.add(rim);
-        wg.position.set(wp.x,0,wp.z); g.add(wg); car.wheels.push(wg);
-    });
+    
+    // LÅDBILEN: Bygg en tydlig visuell bil för att förstå fysiken
+    let chassisGeom = new THREE.BoxGeometry(1.8, 0.6, 4.0);
+    let chassisMat = new THREE.MeshLambertMaterial({color: 0xdc2626});
+    let chassis = new THREE.Mesh(chassisGeom, chassisMat);
+    chassis.position.y = 0.55; 
+    g.add(chassis);
+    
+    // Vit huv för att visa vad som är FRAMÅT (+Z)
+    let hoodGeom = new THREE.BoxGeometry(1.6, 0.3, 1.2);
+    let hoodMat = new THREE.MeshLambertMaterial({color: 0xffffff});
+    let hood = new THREE.Mesh(hoodGeom, hoodMat);
+    hood.position.set(0, 0.7, 1.4); 
+    g.add(hood);
+
+    car.wheels = [];
+    let wheelGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.3, 16);
+    wheelGeo.rotateZ(Math.PI / 2);
+    let wheelMat = new THREE.MeshLambertMaterial({color: 0x111111});
+    let rimGeo = new THREE.BoxGeometry(0.4, 0.6, 0.35);
+    let rimMat = new THREE.MeshLambertMaterial({color: 0xffffff});
+
+    let wheelPos = [
+        [-1.0, 0.35,  1.3], // Fram vänster
+        [ 1.0, 0.35,  1.3], // Fram höger
+        [-1.0, 0.35, -1.3], // Bak vänster
+        [ 1.0, 0.35, -1.3]  // Bak höger
+    ];
+    
+    for(let i=0; i<4; i++) {
+        let steerGroup = new THREE.Group();
+        steerGroup.position.set(...wheelPos[i]);
+        
+        let spinGroup = new THREE.Group();
+        let w = new THREE.Mesh(wheelGeo, wheelMat);
+        let rim = new THREE.Mesh(rimGeo, rimMat);
+        
+        spinGroup.add(w);
+        spinGroup.add(rim);
+        steerGroup.add(spinGroup);
+        g.add(steerGroup);
+        
+        // Spara båda grupperna så vi kan styra dem separat i update()
+        car.wheels.push({ steer: steerGroup, spin: spinGroup });
+    }
+
+    // TILLFÄLLIGT BORTKOPPLAD GLB FÖR ATT FELSÖKA FYSISK RIKTNING
+    /*
+    if (window.THREE && window.THREE.GLTFLoader) {
+        ... (GLB koden sparad men inaktiv) ...
+    }
+    */
     return g;
 }
 
@@ -69,10 +96,12 @@ function createCarMesh() {
 window.addEventListener('keydown', e=>{ if(car.active) keys[e.code]=true; });
 window.addEventListener('keyup', e=>{ keys[e.code]=false; });
 function readInput() {
-    input.throttle=(keys['KeyW']||keys['ArrowUp'])?1:0;
-    input.brake=(keys['KeyS']||keys['ArrowDown'])?1:0;
-    input.steer=((keys['KeyA']||keys['ArrowLeft'])?-1:0)+((keys['KeyD']||keys['ArrowRight'])?1:0);
-    input.handbrake=!!keys['Space'];
+    input.throttle = 0; input.brake = 0; input.steer = 0; input.handbrake = false;
+    if(keys['KeyW'] || keys['ArrowUp']) input.throttle = 1;
+    if(keys['KeyS'] || keys['ArrowDown']) input.brake = 1;
+    if(keys['KeyA'] || keys['ArrowLeft']) input.steer = 1;
+    if(keys['KeyD'] || keys['ArrowRight']) input.steer = -1;
+    if(keys['Space']) input.handbrake = true;
     let gps=navigator.getGamepads?navigator.getGamepads():[];
     for(let gp of gps){ if(!gp||!gp.connected)continue;
         let sx=gp.axes[0]||0; if(Math.abs(sx)<0.12)sx=0;
@@ -148,7 +177,9 @@ function updateVehicle(dt) {
         car.velocity.addScaledVector(fwd, accel*dt);
     } else if(input.throttle>0 && forwardVel<0) {
         // Throttle while reversing = brake
-        car.velocity.addScaledVector(fwd, (CFG.BRAKE_FORCE/CFG.MASS)*0.5*dt);
+        // ARKAD-FIX: Om man har spunnit 180 grader och håller gasen (W) vill vi 
+        // stoppa bakåt-glidet extremt snabbt så det inte känns som att W backar!
+        car.velocity.addScaledVector(fwd, (CFG.BRAKE_FORCE/CFG.MASS) * 2.0 * dt);
     }
     // Reverse — aktiveras när bilen är nästan stillastående (forwardVel ≤0.1 m/s)
     if(input.brake>0 && forwardVel<=0.1) {
@@ -287,14 +318,21 @@ function updateVehicle(dt) {
     // === VISUAL SUSPENSION (time-normalized lerps) ===
     let latAccel = (lateralVel - car.prevLateralVel) / Math.max(dt,0.001);
     car.prevLateralVel = lateralVel;
-    let tgtRoll = clamp(-latAccel*CFG.ROLL_SENS, -8, 8);
-    let rollRate = 1 - Math.pow(1 - 0.12, dt * 60);
+    // SPELKÄNSLA: Öka roll/krängning markant vid styrning så bilen lutar utåt i svängen (centrifugalkraft)
+    let rollAssist = input.steer * 4.0; 
+    let tgtRoll = clamp(-latAccel*CFG.ROLL_SENS + rollAssist, -15, 15);
+    let rollRate = 1 - Math.pow(1 - 0.2, dt * 60);
     car.visualRoll = lerp(car.visualRoll, tgtRoll, rollRate);
 
     let fwdAccel = (forwardVel - car.prevForwardVel) / Math.max(dt,0.001);
     car.prevForwardVel = forwardVel;
-    let tgtPitch = clamp(fwdAccel*CFG.PITCH_SENS, -5, 5);
-    let pitchRate = 1 - Math.pow(1 - 0.10, dt * 60);
+    // SPELKÄNSLA: Öka pitch markant vid gas/broms så nosen lyfts/dyker
+    let pitchAssist = 0;
+    if(input.throttle > 0) pitchAssist = -4.0; // W = Nosen upp
+    if(input.brake > 0) pitchAssist = 6.0;    // S = Nosen ner
+    // FIX: fwdAccel måste vara negativ för att lyfta nosen!
+    let tgtPitch = clamp(-fwdAccel*CFG.PITCH_SENS + pitchAssist, -12, 12);
+    let pitchRate = 1 - Math.pow(1 - 0.2, dt * 60);
     car.visualPitch = lerp(car.visualPitch, tgtPitch, pitchRate);
 
     // Terrain slope
@@ -305,28 +343,31 @@ function updateVehicle(dt) {
     // Skip mesh rotation if volting (damage system controls rotation)
     if (window.rallyDamage && window.rallyDamage.isVolting()) {
         car.mesh.position.copy(car.position);
+        car.mesh.rotation.order = "YXZ"; // Viktigt för Pitch/Roll
         // Volt handles rotation — only set Y (heading)
-        car.mesh.rotation.y = -car.heading;
+        car.mesh.rotation.y = car.heading;
     } else if (window.rallyDamage && window.rallyDamage.isFlipped()) {
         car.mesh.position.copy(car.position);
-        car.mesh.rotation.y = -car.heading; // Keep heading updated during flip
+        car.mesh.rotation.order = "YXZ"; // Viktigt för Pitch/Roll
+        car.mesh.rotation.y = car.heading; // Keep heading updated during flip
         // Flip recovery handles x/z rotation
     } else {
         // Normal mesh update
         car.mesh.position.copy(car.position);
-        car.mesh.rotation.y = -car.heading;
+        car.mesh.rotation.order = "YXZ"; // FIX: Pitch/Roll måste räknas från bilens lokala riktning!
+        car.mesh.rotation.y = car.heading; // FIX: Tog bort minustecknet som gjorde att bilen svängde åt fel håll visuellt!
         car.mesh.rotation.x = slopePitch + car.visualPitch*Math.PI/180;
         car.mesh.rotation.z = slopeRoll + car.visualRoll*Math.PI/180;
     }
 
     // Wheel spin + steer
-    let spinSpd = forwardVel * CFG.WHEEL_SPIN;
-    car.wheels.forEach((w,i)=>{
-        if(w.children[0]){
-            w.children[0].rotation.x += spinSpd*dt*10;
-            w.children[1].rotation.x += spinSpd*dt*10;
-        }
-        if(i<2) w.rotation.y = -input.steer*0.35;
+    let wheelRotSpeed = car.speed / 0.35; // radie
+    car.wheels.forEach((w, i) => {
+        // w.spin hanterar däckens snurr runt X-axeln
+        w.spin.rotation.x += wheelRotSpeed * dt;
+        // w.steer hanterar hjulens svängning runt Y-axeln
+        w.steer.rotation.y = 0; // reset
+        if(i<2) w.steer.rotation.y = input.steer * 0.45; // FIX: Tog bort minustecknet så hjulen svänger åt rätt håll
     });
 }
 

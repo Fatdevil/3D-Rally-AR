@@ -60,6 +60,8 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
 <script src="arcade-storage-service.js"></script>
 <script src="rally-surfaces.js"></script>
@@ -102,15 +104,27 @@
     // Lighting
     const ambLight = new THREE.AmbientLight(0xffffff, 0.5);
     scene.add(ambLight);
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    dirLight.position.set(200, 300, 100);
-    dirLight.castShadow = true;
-    dirLight.shadow.mapSize.set(2048, 2048);
-    dirLight.shadow.camera.left = -200;
-    dirLight.shadow.camera.right = 200;
-    dirLight.shadow.camera.top = 200;
-    dirLight.shadow.camera.bottom = -200;
-    scene.add(dirLight);
+    const dLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    dLight.position.set(200, 500, 100);
+    dLight.castShadow = true;
+    dLight.shadow.camera.left = -100;
+    dLight.shadow.camera.right = 100;
+    dLight.shadow.camera.top = 100;
+    dLight.shadow.camera.bottom = -100;
+    dLight.shadow.camera.near = 0.5;
+    dLight.shadow.camera.far = 1000;
+    dLight.shadow.mapSize.width = 2048;
+    dLight.shadow.mapSize.height = 2048;
+    scene.add(dLight);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+    
+    // VISUELL HJÄLP: Ett gigantiskt rutnät för att se att världen faktiskt roterar
+    // Eftersom himlen och gräset är solida färger blir det en synvilla annars.
+    const gridHelper = new THREE.GridHelper(900, 100, 0x000000, 0x000000);
+    gridHelper.position.y = 0.1; // Strax över marknivå
+    gridHelper.material.opacity = 0.2;
+    gridHelper.material.transparent = true;
+    scene.add(gridHelper);
 
     // ── Terrain ──
     const planeGeo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, TERRAIN_SEGS, TERRAIN_SEGS);

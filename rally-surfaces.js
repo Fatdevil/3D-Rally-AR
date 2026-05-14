@@ -16,7 +16,7 @@ const SURFACES = {
     },
     GRAVEL: {
         grip: 0.62, longGrip: 0.70, brake: 0.75,
-        maxSpeed: 0.88, accel: 0.84, dragAdd: 0.008,
+        maxSpeed: 0.88, accel: 0.84, dragAdd: 0.002, // Rejält sänkt
         driftThreshold: 12, driftSustain: 1.3, driftRecovery: 0.70,
         particle: 'gravel_spray', particleIntensity: 0.9,
         rumble: 0.4, depthVariance: 0.12, landing: 0.75,
@@ -24,7 +24,7 @@ const SURFACES = {
     },
     MUD: {
         grip: 0.38, longGrip: 0.45, brake: 0.50,
-        maxSpeed: 0.72, accel: 0.68, dragAdd: 0.025,
+        maxSpeed: 0.72, accel: 0.68, dragAdd: 0.008, // Sänkt
         driftThreshold: 7, driftSustain: 1.8, driftRecovery: 0.40,
         particle: 'mud_heavy', particleIntensity: 1.0,
         rumble: 0.3, depthVariance: 0.25, landing: 0.55,
@@ -32,7 +32,7 @@ const SURFACES = {
     },
     SNOW: {
         grip: 0.48, longGrip: 0.55, brake: 0.55,
-        maxSpeed: 0.80, accel: 0.76, dragAdd: 0.012,
+        maxSpeed: 0.80, accel: 0.76, dragAdd: 0.004,
         driftThreshold: 9, driftSustain: 1.5, driftRecovery: 0.60,
         particle: 'snow_spray', particleIntensity: 0.85,
         rumble: 0.2, depthVariance: 0.08, landing: 0.70,
@@ -48,7 +48,7 @@ const SURFACES = {
     },
     DIRT: {
         grip: 0.55, longGrip: 0.60, brake: 0.65,
-        maxSpeed: 0.82, accel: 0.78, dragAdd: 0.015,
+        maxSpeed: 0.82, accel: 0.78, dragAdd: 0.003, // Rejält sänkt
         driftThreshold: 10, driftSustain: 1.4, driftRecovery: 0.65,
         particle: 'dust_cloud', particleIntensity: 0.75,
         rumble: 0.35, depthVariance: 0.18, landing: 0.65,
@@ -72,7 +72,7 @@ const SURFACES = {
     },
     WATER: {
         grip: 0.05, longGrip: 0.05, brake: 0.10,
-        maxSpeed: 0.15, accel: 0.10, dragAdd: 0.08,
+        maxSpeed: 0.15, accel: 0.10, dragAdd: 0.04, // Sänkt
         driftThreshold: 2, driftSustain: 5.0, driftRecovery: 0.10,
         particle: 'water_spray', particleIntensity: 1.0,
         rumble: 0.6, depthVariance: 0.0, landing: 0.3,

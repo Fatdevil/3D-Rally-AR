@@ -120,11 +120,11 @@
       </div>
 
     <!-- NEW DYNAMIC HUD -->
-    <div id="dynamic-hud">
+    <div id="dynamic-hud" style="display:none !important;">
         <!-- Genereras dynamiskt via JS baserat på hb-toggle -->
     </div>
     
-    <div id="lm-status" style="position:absolute; bottom: 20px; left: 20px; background: rgba(15,23,42,0.9); padding: 8px 14px; border-radius: 20px; font-weight: 600; font-size: 13px; color: #94a3b8; pointer-events:auto; display:flex; align-items:center; gap: 8px; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 5px 15px rgba(0,0,0,0.5); z-index:50;">
+    <div id="lm-status" style="display:none !important; position:absolute; bottom: 20px; left: 20px; background: rgba(15,23,42,0.9); padding: 8px 14px; border-radius: 20px; font-weight: 600; font-size: 13px; color: #94a3b8; pointer-events:auto; align-items:center; gap: 8px; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 5px 15px rgba(0,0,0,0.5); z-index:50;">
        <div id="lm-status-dot" style="width:8px; height:8px; border-radius:50%; background:#ef4444;"></div>
        <span id="lm-status-text" style="text-transform: uppercase;">LM Frånkopplad</span>
     </div>
@@ -10365,22 +10365,22 @@ window.triggerExplosion = function(x, y, z) {
 
 <!-- Smart Builder Action Panel -->
 <div id="smart-green-action-panel" style="display:none; position:absolute; bottom:60px; right:10px; background:#0f172a; border:2px solid #4ade80; border-radius:12px; padding:12px 14px; z-index:500; box-shadow: 0 10px 25px rgba(0,0,0,0.5); text-align:center; width:210px;">
-    <h3 style="margin:0 0 8px 0; color:#fff; font-size:12px; text-transform:uppercase; letter-spacing:1px;">🏗️ Smart Builder</h3>
+    <h3 style="margin:0 0 8px 0; color:#fff; font-size:12px; text-transform:uppercase; letter-spacing:1px;">🏗️ Track Builder</h3>
     
     <!-- Hole Selector -->
     <div style="display:flex; justify-content:space-between; align-items:center; background:#1e293b; border-radius:6px; padding:4px 6px; margin-bottom:8px;">
         <button onclick="changeHole(-1); updateSBHoleDisplay()" style="background:transparent; color:#94a3b8; border:none; font-weight:bold; cursor:pointer; padding:4px 8px; font-size:16px;">&lt;</button>
-        <div id="sb-hole-display" style="color:#4ade80; font-weight:bold; font-size:11px;">Hole 1 (Par 4) ○</div>
+        <div id="sb-hole-display" style="color:#4ade80; font-weight:bold; font-size:11px;">Track 1</div>
         <button onclick="changeHole(1); updateSBHoleDisplay()" style="background:transparent; color:#94a3b8; border:none; font-weight:bold; cursor:pointer; padding:4px 8px; font-size:16px;">&gt;</button>
     </div>
     
     <!-- Type Selector - 2 column grid -->
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; margin-bottom:4px;">
-        <button id="sb-type-green" onclick="setSmartBuilderType('GREEN')" style="background:#4ade80; color:#0f172a; border:none; padding:7px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer;">⛳ GREEN</button>
-        <button id="sb-type-bunker" onclick="setSmartBuilderType('BUNKER')" style="background:#334155; color:#94a3b8; border:none; padding:7px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer;">🏖️ BUNKER</button>
-        <button id="sb-type-fairway" onclick="setSmartBuilderType('FAIRWAY')" style="background:#334155; color:#94a3b8; border:none; padding:7px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer;">🏌️ FAIRWAY</button>
-        <button id="sb-type-tee" onclick="setSmartBuilderType('TEE')" style="background:#334155; color:#94a3b8; border:none; padding:7px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer;">🟦 TEE</button>
-        <button id="sb-type-aim" onclick="setSmartBuilderType('AIM')" style="background:#334155; color:#94a3b8; border:none; padding:7px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer; ">🎯 AIM</button>
+        <button id="sb-type-green" onclick="setSmartBuilderType('GREEN')" style="background:#4ade80; color:#0f172a; border:none; padding:7px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer;">🏁 PADDOCK</button>
+        <button id="sb-type-bunker" onclick="setSmartBuilderType('BUNKER')" style="background:#334155; color:#94a3b8; border:none; padding:7px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer;">🏜️ GRAVEL</button>
+        <button id="sb-type-fairway" onclick="setSmartBuilderType('FAIRWAY')" style="background:#334155; color:#94a3b8; border:none; padding:7px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer;">🛣️ TRACK</button>
+        <button id="sb-type-tee" onclick="setSmartBuilderType('TEE')" style="background:#334155; color:#94a3b8; border:none; padding:7px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer;">🟩 START</button>
+        <button id="sb-type-aim" onclick="setSmartBuilderType('AIM')" style="background:#334155; color:#94a3b8; border:none; padding:7px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer; ">🎯 CP</button>
         <button id="sb-type-paint" onclick="setSmartBuilderType('PAINT')" style="background:#334155; color:#94a3b8; border:none; padding:7px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer;">🎨 PAINT</button>
         <button id="sb-type-stamp" onclick="setSmartBuilderType('STAMP')" style="background:#334155; color:#94a3b8; border:none; padding:7px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer; grid-column: span 2;">🔨 STAMP</button>
     </div>

@@ -11,7 +11,7 @@ function clamp(v,lo,hi){ return Math.max(lo,Math.min(hi,v)); }
 
 const CAM = {
     BEHIND: 8, HEIGHT: 3.5, LOOK_AHEAD: 5,
-    POS_LERP: 0.08, ROT_LERP: 0.12,
+    POS_LERP: 0.1, ROT_LERP: 0.2, // Snabb lerp så bilen hinner svänga lite i bild, men kameran hakar på snabbt
     DRIFT_SENS: 0.3,
     FOV_BASE: 65, FOV_BOOST: 15,
     // Volt camera: pull out wider
@@ -77,7 +77,7 @@ function update(camera, physDt, realDt) {
     if (!car || !car.active || !car.mesh) return;
     if (!camTarget || !camLookAt) init(car);
 
-    // Smooth heading follow
+    // Smooth heading follow (snabb för att inte tappa bort bilen, men mjuk för körkänsla)
     let diff = car.heading - camHeading;
     while (diff > Math.PI)  diff -= Math.PI * 2;
     while (diff < -Math.PI) diff += Math.PI * 2;
@@ -103,11 +103,8 @@ function update(camera, physDt, realDt) {
         .sub(camFwd.clone().multiplyScalar(behindDist))
         .add(new THREE.Vector3(0, CAM.HEIGHT + heightBoost, 0));
 
-    // Drift camera offset
-    if (car.isDrifting && !isVolt) {
-        let driftOffset = car.prevLateralVel * CAM.DRIFT_SENS;
-        targetPos.addScaledVector(camRight, driftOffset);
-    }
+    // Drift camera offset borttagen: orsakade total desorientering i höga hastigheter
+    // eftersom den svingade kameran ut på sidan av bilen.
 
     // Terrain clip prevention
     if (typeof window.localGetTerrainAt === 'function') {
