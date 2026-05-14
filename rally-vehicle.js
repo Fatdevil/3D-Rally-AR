@@ -18,6 +18,7 @@ const CFG = {
     CAM_POS_LERP: 0.08, CAM_ROT_LERP: 0.12,
     CAM_DRIFT_SENS: 0.3, FOV_BASE: 65, FOV_BOOST: 15
 };
+const DMG_VOLT_THRESH = 25; // m/s barrier impact to trigger volt
 
 let car = {
     position: null, velocity: null, heading: 0, speed: 0,
@@ -119,9 +120,14 @@ function updateVehicle(dt) {
     car.slipAngleDeg = slipAngle * 180/Math.PI;
 
     // Drift state (with hysteresis)
-    let threshRad = surface.driftThreshold * Math.PI/180;
-    if(Math.abs(slipAngle) > threshRad) car.isDrifting = true;
-    else if(Math.abs(slipAngle) < threshRad*0.5) car.isDrifting = false;
+    // Post-flip grace: suppress drift entry for 1.5s after volt recovery
+    if (window.rallyDamage && window.rallyDamage.hasPostFlipGrace()) {
+        car.isDrifting = false;
+    } else {
+        let threshRad = surface.driftThreshold * Math.PI/180;
+        if(Math.abs(slipAngle) > threshRad) car.isDrifting = true;
+        else if(Math.abs(slipAngle) < threshRad*0.5) car.isDrifting = false;
+    }
 
     // Grip factor curve (lerped, not binary)
     let targetGrip;
@@ -136,6 +142,9 @@ function updateVehicle(dt) {
         let speedRatio = clamp(forwardVel/CFG.MAX_SPEED, 0, 1);
         let throttleScale = 1.0 - speedRatio*speedRatio;
         let accel = (CFG.ENGINE_FORCE/CFG.MASS) * throttleScale * input.throttle * surface.accel;
+        // Damage engine penalty
+        let dmgMod = window.rallyDamage ? window.rallyDamage.getModifiers() : {steerMult:1,accelMult:1,maxSpeedMult:1};
+        accel *= dmgMod.accelMult;
         car.velocity.addScaledVector(fwd, accel*dt);
     } else if(input.throttle>0 && forwardVel<0) {
         // Throttle while reversing = brake
@@ -168,8 +177,9 @@ function updateVehicle(dt) {
     if(input.throttle===0 && input.brake===0 && spd<1.0) car.velocity.multiplyScalar(0.95);
     if(spd<0.1 && input.throttle===0) car.velocity.set(0,car.velocity.y,0);
 
-    // Speed cap
-    let maxSpd = CFG.MAX_SPEED * surface.maxSpeed;
+    // Speed cap (with damage penalty)
+    let dmgMod2 = window.rallyDamage ? window.rallyDamage.getModifiers() : {steerMult:1,accelMult:1,maxSpeedMult:1};
+    let maxSpd = CFG.MAX_SPEED * surface.maxSpeed * dmgMod2.maxSpeedMult;
     let hSpd = Math.sqrt(car.velocity.x*car.velocity.x + car.velocity.z*car.velocity.z);
     if(hSpd>maxSpd) { let s=maxSpd/hSpd; car.velocity.x*=s; car.velocity.z*=s; }
     // Reverse cap
@@ -178,14 +188,29 @@ function updateVehicle(dt) {
         car.velocity.addScaledVector(fwd, -CFG.REVERSE_MAX - fv2);
     }
 
-    // BARRIER = wall
-    if(terrain.type==='OB') { car.velocity.x*=0.9; car.velocity.z*=0.9; }
+    // BARRIER = wall + damage
+    if(terrain.type==='OB') {
+        let barrierSpeed = car.displaySpeed;
+        car.velocity.x *= 0.9; car.velocity.z *= 0.9;
+        if (window.rallyDamage && barrierSpeed > 5) {
+            window.rallyDamage.applyDamage(barrierSpeed);
+            // Severe barrier hit → volt
+            if (barrierSpeed > DMG_VOLT_THRESH) {
+                let latComp = Math.abs(car.velocity.dot(right));
+                if (latComp > 5 || barrierSpeed > 35)
+                    window.rallyDamage.triggerVolt(car, fwd, right);
+            }
+        }
+    }
 
     // === STEERING (circle-arc model) ===
     let postDragFwd = car.velocity.dot(fwd); // recalc after drag/lateral correction
     if(car.onGround && Math.abs(postDragFwd)>0.3 && Math.abs(input.steer)>0.01) {
         let speedT = clamp(Math.abs(postDragFwd)/CFG.MAX_SPEED, 0, 1);
         let steerDeg = lerp(CFG.MAX_STEER, CFG.MIN_STEER, speedT);
+        // Damage steering penalty
+        let dmgMod3 = window.rallyDamage ? window.rallyDamage.getModifiers() : {steerMult:1,accelMult:1,maxSpeedMult:1};
+        steerDeg *= dmgMod3.steerMult;
         if(car.isDrifting) steerDeg *= CFG.DRIFT_STEER_BONUS;
         let steerRad = steerDeg * Math.PI/180 * Math.abs(input.steer);
         let turnRadius = CFG.WHEELBASE / Math.tan(steerRad + 0.001);
@@ -210,10 +235,15 @@ function updateVehicle(dt) {
         if(car.position.y <= groundY + CFG.CAR_HEIGHT) {
             car.position.y = groundY + CFG.CAR_HEIGHT;
             // Landing absorption
+            let landingImpact = -car.velocity.y; // positive m/s downward
             if(car.velocity.y < -5) car.visualPitch = clamp(car.velocity.y*0.5, -8, 0);
             car.velocity.y *= -0.15 * surface.landing;
             if(Math.abs(car.velocity.y)<0.5) car.velocity.y=0;
             car.onGround = true;
+            // Damage from hard landing
+            if (window.rallyDamage && landingImpact > 8) {
+                window.rallyDamage.applyDamage(landingImpact);
+            }
         }
     } else {
         car.onGround = true;
@@ -242,11 +272,21 @@ function updateVehicle(dt) {
     let slopePitch = -(nx*Math.sin(car.heading) + nz*Math.cos(car.heading))*0.6;
     let slopeRoll = (nx*Math.cos(car.heading) - nz*Math.sin(car.heading))*0.5;
 
-    // Apply to mesh
-    car.mesh.position.copy(car.position);
-    car.mesh.rotation.y = -car.heading;
-    car.mesh.rotation.x = slopePitch + car.visualPitch*Math.PI/180;
-    car.mesh.rotation.z = slopeRoll + car.visualRoll*Math.PI/180;
+    // Skip mesh rotation if volting (damage system controls rotation)
+    if (window.rallyDamage && window.rallyDamage.isVolting()) {
+        car.mesh.position.copy(car.position);
+        // Volt handles rotation — only set Y (heading)
+        car.mesh.rotation.y = -car.heading;
+    } else if (window.rallyDamage && window.rallyDamage.isFlipped()) {
+        car.mesh.position.copy(car.position);
+        // Flip recovery handles rotation
+    } else {
+        // Normal mesh update
+        car.mesh.position.copy(car.position);
+        car.mesh.rotation.y = -car.heading;
+        car.mesh.rotation.x = slopePitch + car.visualPitch*Math.PI/180;
+        car.mesh.rotation.z = slopeRoll + car.visualRoll*Math.PI/180;
+    }
 
     // Wheel spin + steer
     let spinSpd = forwardVel * CFG.WHEEL_SPIN;
@@ -371,6 +411,8 @@ window.rallyVehicle = {
         car.prevLateralVel=0; car.prevForwardVel=0;
         keys={};
         lastTime = 0; // prevent stale dt on reactivation
+        car._invulnerable = 0;
+        car._spawnPosition = new THREE.Vector3(0, 2, 0);
         chaseCamTarget = new THREE.Vector3();
         chaseCamLookAt = new THREE.Vector3();
         if(typeof window.localGetTerrainAt==='function'){
@@ -383,7 +425,11 @@ window.rallyVehicle = {
         chaseCamTarget.copy(car.position).sub(cf.clone().multiplyScalar(CFG.CAM_BEHIND)).add(new THREE.Vector3(0,CFG.CAM_HEIGHT,0));
         chaseCamLookAt.copy(car.position).add(cf.clone().multiplyScalar(CFG.CAM_LOOK_AHEAD));
         createHUD();
-        console.log('🏎️ Rally Vehicle activated (drift physics v2)');
+        // Reset damage system
+        if (window.rallyDamage) window.rallyDamage.reset();
+        // Save spawn position for respawn fallback
+        car._spawnPosition = car.position.clone();
+        console.log('🏎️ Rally Vehicle activated (drift physics v3 + damage)');
     },
     deactivate: function(scene) {
         car.active=false;
@@ -397,6 +443,7 @@ window.rallyVehicle = {
         lastTime=now;
         updateVehicle(dt);
         updateChaseCamera(camera);
+        if (window.rallyDamage) window.rallyDamage.update(dt);
         updateHUD();
     },
     isActive:()=>car.active,
