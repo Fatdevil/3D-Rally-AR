@@ -4635,6 +4635,11 @@
                     ArcadeStorage.clearTerrainSnapshot();
                     console.warn('⚠️ Terrain snapshot cleared (save failed — storage full?)');
                 }
+            } else {
+                // Fix #4: pako unavailable (CDN failed) or planeGeo missing.
+                // Clear any stale snapshot so rally.html doesn't load old terrain.
+                ArcadeStorage.clearTerrainSnapshot();
+                console.warn('⚠️ Terrain snapshot cleared (pako or planeGeo unavailable)');
             }
         } catch (e) {
             ArcadeStorage.clearTerrainSnapshot();

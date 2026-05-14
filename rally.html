@@ -186,11 +186,47 @@
         };
     };
 
+    // ── Bilinear heightmap resampler (inline — not shared with arcade.html) ──
+    function resampleHeightmap(srcArr, srcSegs, dstSegs) {
+        let srcStride = srcSegs + 1, dstStride = dstSegs + 1;
+        let result = new Float32Array(dstStride * dstStride);
+        for (let dz = 0; dz < dstStride; dz++) {
+            for (let dx = 0; dx < dstStride; dx++) {
+                let sx = (dx / dstSegs) * srcSegs, sz = (dz / dstSegs) * srcSegs;
+                let x0 = Math.floor(sx), x1 = Math.min(x0 + 1, srcSegs);
+                let z0 = Math.floor(sz), z1 = Math.min(z0 + 1, srcSegs);
+                let fx = sx - x0, fz = sz - z0;
+                let h00 = srcArr[z0 * srcStride + x0] || 0;
+                let h10 = srcArr[z0 * srcStride + x1] || 0;
+                let h01 = srcArr[z1 * srcStride + x0] || 0;
+                let h11 = srcArr[z1 * srcStride + x1] || 0;
+                result[dz * dstStride + dx] = h00*(1-fx)*(1-fz) + h10*fx*(1-fz) + h01*(1-fx)*fz + h11*fx*fz;
+            }
+        }
+        return result;
+    }
+
+    // ── Apply heightmap array to terrain geometry ──
+    function applyHeightArray(arr, segs) {
+        let positions = planeGeo.attributes.position.array;
+        // Resample if saved at different resolution (e.g. mobile 400 vs desktop 600)
+        let source = (segs && segs !== TERRAIN_SEGS)
+            ? (console.warn('Resampling heightmap:', segs, '→', TERRAIN_SEGS),
+               resampleHeightmap(arr, segs, TERRAIN_SEGS))
+            : arr;
+        for (let i = 0; i < source.length && i < planeGeo.attributes.position.count; i++) {
+            positions[i * 3 + 2] = source[i];
+        }
+        planeGeo.attributes.position.needsUpdate = true;
+        planeGeo.computeVertexNormals();
+        planeGeo.computeBoundingBox();
+    }
+
     // ── Load Terrain Data ──
     function loadTerrain() {
-        // Priority: 1) Terrain snapshot (from arcade.html saveLevel)
-        //           2) Compressed full course (pako)
-        //           3) Uncompressed full course
+        // Priority: 1) Terrain snapshot (from arcade.html saveLevel — H16 format)
+        //           2) Compressed full course (pako — shared via URL)
+        //           3) Uncompressed full course (localStorage)
         let snap = ArcadeStorage.loadTerrainSnapshot();
         let data = snap || ArcadeStorage.loadCompressedLevel() || ArcadeStorage.loadCustomLevel();
 
@@ -200,87 +236,83 @@
             return false;
         }
 
-        // Load heightmap if present
         if (data.terrain_heightmap) {
-            let positions = planeGeo.attributes.position.array;
             let hm = data.terrain_heightmap;
 
-            // Guard: if it's a JSON object (cloud format), extract ground array
             if (typeof hm === 'object' && hm !== null && hm.ground) {
-                let groundArr = hm.ground;
-                for (let i = 0; i < groundArr.length && i < planeGeo.attributes.position.count; i++) {
-                    positions[i * 3 + 2] = groundArr[i];
-                }
-            } else if (typeof hm === 'string') {
-                if (hm.startsWith('H16|')) {
-                    // Compressed 16-bit format — Fix #4: guard pako presence
-                    if (typeof pako === 'undefined') {
-                        console.warn('H16: pako not loaded, skipping snapshot. Falling back.');
-                        data = ArcadeStorage.loadCompressedLevel() || ArcadeStorage.loadCustomLevel();
-                        // Re-run with fallback data if available
-                        if (data && data.terrain_heightmap) { loadTerrain(); return true; }
+                // Cloud format: {ground: [...], segs: N}
+                applyHeightArray(hm.ground, hm.segs);
+
+            } else if (typeof hm === 'string' && hm.startsWith('H16|')) {
+                // Compressed 16-bit snapshot format
+                if (typeof pako === 'undefined') {
+                    // pako CDN failed — use fallback data source directly (non-recursive)
+                    console.warn('H16: pako not loaded. Using fallback data source.');
+                    let fallback = ArcadeStorage.loadCompressedLevel() || ArcadeStorage.loadCustomLevel();
+                    if (fallback && fallback.terrain_heightmap) {
+                        // Recurse only into fallback — guaranteed not to be H16 snap
+                        // (fallback cannot be terrain snapshot, so no infinite loop)
+                        data = fallback;
+                        hm = fallback.terrain_heightmap;
+                        // Re-enter the object/string/legacy branches below
+                        // (handled by fall-through to the else-blocks)
                     } else {
-                        let b64 = hm.substring(4);
-                        try {
-                            let binary = atob(b64);
-                            let bytes = new Uint8Array(binary.length);
-                            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-                            let inflated = pako.inflate(bytes);
-                            let int16 = new Int16Array(inflated.buffer);
-                            // Fix #3: resample if snapshot segs != rally TERRAIN_SEGS
-                            let snapSegs = (snap && snap.segs) ? snap.segs : TERRAIN_SEGS;
-                            if (snapSegs !== TERRAIN_SEGS) {
-                                console.warn('Resampling heightmap:', snapSegs, '→', TERRAIN_SEGS);
-                                // Convert Int16 to float array for resampling
-                                let floatSrc = new Float32Array(int16.length);
-                                for (let i = 0; i < int16.length; i++) floatSrc[i] = int16[i] / 100;
-                                let resampled = (typeof window._resampleHeightmap === 'function')
-                                    ? window._resampleHeightmap(floatSrc, snapSegs, TERRAIN_SEGS)
-                                    : floatSrc; // no helper available — accept distortion
-                                for (let i = 0; i < resampled.length && i < planeGeo.attributes.position.count; i++) {
-                                    positions[i * 3 + 2] = resampled[i];
-                                }
-                            } else {
-                                for (let i = 0; i < int16.length && i < planeGeo.attributes.position.count; i++) {
-                                    positions[i * 3 + 2] = int16[i] / 100;
-                                }
-                            }
-                        } catch (e) {
-                            console.error('H16 heightmap decode failed:', e);
-                        }
-                    }
-                } else if (hm.startsWith('{') || hm.startsWith('[')) {
-                    // JSON string (cloud format) — parse then extract ground array
-                    try {
-                        let parsed = JSON.parse(hm);
-                        let groundArr = parsed.ground || parsed;
-                        for (let i = 0; i < groundArr.length && i < planeGeo.attributes.position.count; i++) {
-                            positions[i * 3 + 2] = groundArr[i];
-                        }
-                    } catch (e) {
-                        console.error('JSON heightmap parse failed:', e);
+                        console.warn('No usable fallback terrain data found.');
                     }
                 } else {
-                    // Legacy base64 float array — guard against atob() crash
+                    // H16 decode (pako available)
                     try {
-                        let binary = atob(hm);
+                        let b64 = hm.substring(4);
+                        let binary = atob(b64);
                         let bytes = new Uint8Array(binary.length);
                         for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-                        let floats = new Float32Array(bytes.buffer);
-                        for (let i = 0; i < floats.length && i < planeGeo.attributes.position.count; i++) {
-                            positions[i * 3 + 2] = floats[i];
+                        let inflated = pako.inflate(bytes);
+                        // Fix #5: validate byte length before creating Int16Array
+                        if (inflated.byteLength % 2 !== 0) {
+                            throw new Error('H16: inflated byte length is odd (' + inflated.byteLength + ')');
                         }
+                        // Use exact slice to avoid byteOffset issues with typed array views
+                        let exact = inflated.buffer.slice(inflated.byteOffset, inflated.byteOffset + inflated.byteLength);
+                        let int16 = new Int16Array(exact);
+                        let snapSegs = (snap && snap.segs) ? snap.segs : TERRAIN_SEGS;
+                        let expectedCount = (snapSegs + 1) * (snapSegs + 1);
+                        if (int16.length !== expectedCount) {
+                            console.warn('H16: length mismatch, expected', expectedCount, 'got', int16.length, '— applying anyway');
+                        }
+                        // Convert to float for applyHeightArray
+                        let floatSrc = new Float32Array(int16.length);
+                        for (let i = 0; i < int16.length; i++) floatSrc[i] = int16[i] / 100;
+                        applyHeightArray(floatSrc, snapSegs);
                     } catch (e) {
-                        console.error('Legacy base64 heightmap decode failed:', e);
+                        console.error('H16 heightmap decode failed:', e);
                     }
+                    hm = null; // mark as handled
                 }
             }
 
-            planeGeo.attributes.position.needsUpdate = true;
-            planeGeo.computeVertexNormals();
-            planeGeo.computeBoundingBox();
+            // JSON string (cloud format) — non-H16 fallback path or hm re-assigned above
+            if (hm && typeof hm === 'string' && (hm.startsWith('{') || hm.startsWith('['))) {
+                try {
+                    let parsed = JSON.parse(hm);
+                    let groundArr = parsed.ground || parsed;
+                    applyHeightArray(groundArr, parsed.segs);
+                } catch (e) { console.error('JSON heightmap parse failed:', e); }
+                hm = null;
+            }
+
+            // Legacy base64 float array
+            if (hm && typeof hm === 'string') {
+                try {
+                    let binary = atob(hm);
+                    let bytes = new Uint8Array(binary.length);
+                    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                    applyHeightArray(new Float32Array(bytes.buffer), null);
+                } catch (e) { console.error('Legacy base64 heightmap decode failed:', e); }
+            }
+
             console.log('✅ Terrain heightmap loaded');
         }
+
 
         // Load biome texture if present
         if (data.terrain_biomemap) {
