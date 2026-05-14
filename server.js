@@ -837,10 +837,10 @@ app.use(express.static(__dirname));
 
 // Fallback för allt annat (Catch-all)
 app.use((req, res) => {
-    res.sendFile(path.join(__dirname, 'hub.html'));
+    res.sendFile(path.join(__dirname, 'rally_hub.html'));
 });
 
 // --- START SERVER ---
 app.listen(port, () => {
-    console.log(`🚀 Golf Backend running on port ${port}`);
+    console.log(`🏎️ Rally AR Backend running on port ${port}`);
 });

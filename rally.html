@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rally AR — Drive</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #0a0e1a; overflow: hidden; font-family: 'Inter','Segoe UI',sans-serif; }
+        canvas { display: block; width: 100%; height: 100vh; }
+        #loading {
+            position: fixed; inset: 0; z-index: 999;
+            background: #0a0e1a;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            transition: opacity 0.5s;
+        }
+        #loading h1 { color: #e2e8f0; font-size: 28px; font-weight: 900; letter-spacing: 2px; }
+        #loading p { color: #64748b; font-size: 13px; margin-top: 8px; }
+        .spinner { width: 40px; height: 40px; border: 3px solid #334155; border-top-color: #dc2626;
+            border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 20px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        #back-btn {
+            position: fixed; top: 16px; left: 16px; z-index: 100;
+            background: rgba(15,23,42,0.85); color: #94a3b8; border: 1px solid #334155;
+            padding: 8px 16px; border-radius: 10px; font-size: 12px; font-weight: 700;
+            cursor: pointer; backdrop-filter: blur(8px); transition: all 0.2s;
+        }
+        #back-btn:hover { color: #fff; border-color: #dc2626; }
+        #no-terrain {
+            position: fixed; inset: 0; z-index: 998;
+            background: rgba(10,14,26,0.95);
+            display: none; flex-direction: column;
+            align-items: center; justify-content: center;
+            gap: 16px;
+        }
+        #no-terrain h2 { color: #e2e8f0; font-size: 22px; font-weight: 800; }
+        #no-terrain p { color: #94a3b8; font-size: 13px; max-width: 300px; text-align: center; }
+        #no-terrain a {
+            background: #dc2626; color: #fff; text-decoration: none;
+            padding: 12px 28px; border-radius: 10px; font-weight: 800; font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="loading">
+    <div class="spinner"></div>
+    <h1>RALLY AR</h1>
+    <p>Loading terrain...</p>
+</div>
+
+<div id="no-terrain">
+    <h2>🏗️ No Track Found</h2>
+    <p>Build a track first in the terrain editor, then come back to drive on it.</p>
+    <a href="arcade.html?autorun=edit_build">→ Open Builder</a>
+</div>
+
+<button id="back-btn" onclick="window.location.href='rally_hub.html'">← Hub</button>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
+<script src="arcade-storage-service.js"></script>
+<script src="rally-vehicle.js"></script>
+
+<script>
+(function() {
+    'use strict';
+
+    const TERRAIN_SIZE = 900;
+    const TERRAIN_SEGS = 600;
+    window.TERRAIN_SIZE = TERRAIN_SIZE;
+    window.TERRAIN_SEGS = TERRAIN_SEGS;
+
+    // ── Scene Setup ──
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x87ceeb);
+    scene.fog = new THREE.Fog(0x87ceeb, 400, 900);
+    window.scene = scene;
+
+    const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.5, 3000);
+    camera.position.set(0, 30, 50);
+    window.camera = camera;
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    document.body.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.maxPolarAngle = Math.PI / 2.1;
+
+    // Lighting
+    const ambLight = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(ambLight);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(200, 300, 100);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.set(2048, 2048);
+    dirLight.shadow.camera.left = -200;
+    dirLight.shadow.camera.right = 200;
+    dirLight.shadow.camera.top = 200;
+    dirLight.shadow.camera.bottom = -200;
+    scene.add(dirLight);
+
+    // ── Terrain ──
+    const planeGeo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, TERRAIN_SEGS, TERRAIN_SEGS);
+    const planeMat = new THREE.MeshLambertMaterial({ color: 0x4a7c2b, flatShading: false });
+    const terrainMesh = new THREE.Mesh(planeGeo, planeMat);
+    terrainMesh.rotation.x = -Math.PI / 2;
+    terrainMesh.receiveShadow = true;
+    scene.add(terrainMesh);
+
+    // ── localGetTerrainAt (needed by rally-vehicle.js) ──
+    window.localGetTerrainAt = function(px, py) {
+        let threeX = px;
+        let threeZ = -py;
+        let step = TERRAIN_SIZE / TERRAIN_SEGS;
+        let positions = planeGeo.attributes.position.array;
+
+        let gx = Math.round((threeX + TERRAIN_SIZE / 2) / step);
+        let gz = Math.round((threeZ + TERRAIN_SIZE / 2) / step);
+        gx = Math.max(0, Math.min(TERRAIN_SEGS, gx));
+        gz = Math.max(0, Math.min(TERRAIN_SEGS, gz));
+
+        let idx = gz * (TERRAIN_SEGS + 1) + gx;
+        let height = positions[idx * 3 + 2];
+
+        // Normal calculation
+        let gxR = Math.min(TERRAIN_SEGS, gx + 1);
+        let gzD = Math.max(0, gz - 1);
+        let hR = positions[(gz * (TERRAIN_SEGS + 1) + gxR) * 3 + 2];
+        let hD = positions[(gzD * (TERRAIN_SEGS + 1) + gx) * 3 + 2];
+        let dx = (hR - height) / step;
+        let dy = (hD - height) / step;
+        let len = Math.sqrt(dx * dx + dy * dy + 1.0);
+
+        return {
+            z: height,
+            normal: [-dx / len, -dy / len, 1.0 / len],
+            type: 'FAIRWAY' // Default surface — no biome data in rally (yet)
+        };
+    };
+
+    // ── Load Terrain Data ──
+    function loadTerrain() {
+        // Try compressed first, then uncompressed
+        let data = ArcadeStorage.loadCompressedLevel() || ArcadeStorage.loadCustomLevel();
+
+        if (!data) {
+            // No saved terrain — show message
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('no-terrain').style.display = 'flex';
+            return false;
+        }
+
+        // Load heightmap if present
+        if (data.terrain_heightmap) {
+            let positions = planeGeo.attributes.position.array;
+            let heightData;
+
+            if (data.terrain_heightmap.startsWith('H16|')) {
+                // Compressed 16-bit format
+                let b64 = data.terrain_heightmap.substring(4);
+                let binary = atob(b64);
+                let bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                let inflated = pako.inflate(bytes);
+                let int16 = new Int16Array(inflated.buffer);
+                for (let i = 0; i < int16.length && i < planeGeo.attributes.position.count; i++) {
+                    positions[i * 3 + 2] = int16[i] / 100;
+                }
+            } else {
+                // Legacy base64 float array
+                let binary = atob(data.terrain_heightmap);
+                let bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                let floats = new Float32Array(bytes.buffer);
+                for (let i = 0; i < floats.length && i < planeGeo.attributes.position.count; i++) {
+                    positions[i * 3 + 2] = floats[i];
+                }
+            }
+
+            planeGeo.attributes.position.needsUpdate = true;
+            planeGeo.computeVertexNormals();
+            planeGeo.computeBoundingBox();
+            console.log('✅ Terrain heightmap loaded');
+        }
+
+        // Load biome texture if present
+        if (data.terrain_biomemap) {
+            let img = new Image();
+            img.onload = function() {
+                let tex = new THREE.Texture(img);
+                tex.needsUpdate = true;
+                planeMat.map = tex;
+                planeMat.needsUpdate = true;
+                planeMat.color.set(0xffffff); // Let texture control color
+                console.log('✅ Terrain biome texture loaded');
+            };
+            img.src = data.terrain_biomemap;
+        }
+
+        return true;
+    }
+
+    // ── Initialize ──
+    let terrainLoaded = loadTerrain();
+
+    if (terrainLoaded) {
+        // Hide loading, start driving
+        setTimeout(() => {
+            document.getElementById('loading').style.opacity = '0';
+            setTimeout(() => document.getElementById('loading').style.display = 'none', 500);
+
+            // Activate rally vehicle
+            controls.enabled = false; // Disable orbit controls during driving
+            window.rallyVehicle.activate(scene, camera, controls);
+        }, 500);
+    }
+
+    // ── Animate Loop ──
+    function animate() {
+        requestAnimationFrame(animate);
+
+        if (window.rallyVehicle && window.rallyVehicle.isActive()) {
+            window.rallyVehicle.update(camera, controls);
+        } else {
+            controls.update();
+        }
+
+        renderer.render(scene, camera);
+    }
+    animate();
+
+    // ── Resize ──
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // ── ESC to return to hub ──
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            window.location.href = 'rally_hub.html';
+        }
+    });
+
+})();
+</script>
+
+</body>
+</html>

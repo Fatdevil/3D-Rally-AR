@@ -78,7 +78,7 @@
             <button onclick="toggleHamburgerMenu()" style="background:none;border:none;color:#94a3b8;font-size:24px;cursor:pointer;">&times;</button>
         </div>
         
-        <button class="hb-btn" onclick="window.location.href='arcade_hub.html'">← Return to Hub</button>
+        <button class="hb-btn" onclick="window.location.href='rally_hub.html'">← Return to Hub</button>
         <button class="hb-btn" onclick="toggleHamburgerMenu(); openMatchSettings();">⚙️ Match Settings</button>
         <button class="hb-btn" id="hb-scorecard-btn" style="display:none;" onclick="toggleHamburgerMenu(); renderScorecard(); let eB=document.getElementById('scorecard-endround-btns'); if(eB) eB.style.display='none'; let cB=document.getElementById('scorecard-footer'); if(cB) cB.style.display='flex'; document.getElementById('scorecard-modal').style.display='flex';">📋 Scorecard</button>
         
@@ -277,7 +277,7 @@
         <div class="top-left">
             <button id="btn-hamburger" class="sys-btn" onclick="toggleMenu()">☰</button>
             <button id="btn-mode-build" class="sys-btn" onclick="setMode('BUILD')" style="border-color:#38bdf8; color:#38bdf8;">🔨 BUILD</button>
-            <button id="btn-mode-play" class="sys-btn" onclick="setMode('TEST')">🔥 TESTA BANAN</button>
+            <button id="btn-mode-play" class="sys-btn" onclick="window.location.href='rally.html'" style="background:#dc2626; border-color:#dc2626; color:#fff;">🏎️ KÖR</button>
         </div>
         <!-- CENTER: Asset Budget removed (Managed by Admin) -->
         <div class="top-center">
@@ -294,7 +294,7 @@
                     <option value="WINTER">❄️ Winter</option>
                 </select>
             </div>
-            <a href="arcade_hub.html" class="sys-btn" style="text-decoration:none; font-size:16px; padding:8px 12px;">🏠</a>
+            <a href="rally_hub.html" class="sys-btn" style="text-decoration:none; font-size:16px; padding:8px 12px;">🏠</a>
         </div>
     </div>
     
@@ -882,7 +882,7 @@
                     <h2 style="color:#fff; margin:0; font-weight:800; font-size:22px; letter-spacing:0.5px;">⛳ <span style="color:#38bdf8;">ROUND SETUP</span></h2>
                     <div id="setup-course-info" style="color:#64748b; font-size:12px; margin-top:4px; font-weight:500;"></div>
                 </div>
-                <button onclick="window.location.href='arcade_hub.html'" style="background:transparent; color:#64748b; border:1px solid #334155; padding:6px 14px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; transition:all 0.2s;" onmouseover="this.style.color='#fff';this.style.borderColor='#475569'" onmouseout="this.style.color='#64748b';this.style.borderColor='#334155'">← Back to Hub</button>
+                <button onclick="window.location.href='rally_hub.html'" style="background:transparent; color:#64748b; border:1px solid #334155; padding:6px 14px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; transition:all 0.2s;" onmouseover="this.style.color='#fff';this.style.borderColor='#475569'" onmouseout="this.style.color='#64748b';this.style.borderColor='#334155'">← Back to Hub</button>
             </div>
 
             <!-- 3-COLUMN BODY -->
@@ -1269,7 +1269,7 @@
             </div>
             <div id="scorecard-endround-btns" style="display:none; margin-top:15px; text-align:center; display:flex; gap:15px; justify-content:center;">
                 <button onclick="document.getElementById('scorecard-modal').style.display='none'; commitSettingsAndStart();" style="background:#10b981; color:#fff; border:none; padding:14px 30px; border-radius:10px; font-weight:900; font-size:16px; cursor:pointer; box-shadow:0 4px 15px rgba(16,185,129,0.4);">🔄 Play Again</button>
-                <button onclick="window.location.href='arcade_hub.html'" style="background:#6366f1; color:#fff; border:none; padding:14px 30px; border-radius:10px; font-weight:900; font-size:16px; cursor:pointer; box-shadow:0 4px 15px rgba(99,102,241,0.4);">🏠 Return to Hub</button>
+                <button onclick="window.location.href='rally_hub.html'" style="background:#6366f1; color:#fff; border:none; padding:14px 30px; border-radius:10px; font-weight:900; font-size:16px; cursor:pointer; box-shadow:0 4px 15px rgba(99,102,241,0.4);">🏠 Return to Hub</button>
             </div>
         </div>
     </div>

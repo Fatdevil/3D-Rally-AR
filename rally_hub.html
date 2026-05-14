@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rally AR — Select Activity</title>
+    <meta name="description" content="Rally AR — Build terrain, race on it. 3D rally racing game with terrain editor.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background: #0a0e1a;
+            color: #e2e8f0;
+            font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Subtle animated background gradient */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: 
+                radial-gradient(ellipse at 20% 50%, rgba(220, 38, 38, 0.06) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 20%, rgba(251, 146, 60, 0.05) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 90%, rgba(56, 189, 248, 0.04) 0%, transparent 50%);
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 36px 32px 48px;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 36px;
+        }
+
+        .header-left {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .breadcrumb {
+            font-size: 12px;
+            color: #64748b;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .breadcrumb a {
+            color: #64748b;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+        .breadcrumb a:hover { color: #fb923c; }
+
+        h1 {
+            font-size: clamp(28px, 4vw, 42px);
+            font-weight: 900;
+            color: #f8fafc;
+            letter-spacing: -1px;
+            line-height: 1.1;
+        }
+
+        .user-badge {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(30, 41, 59, 0.6);
+            border: 1px solid #334155;
+            border-radius: 50px;
+            padding: 6px 16px 6px 6px;
+            backdrop-filter: blur(8px);
+        }
+
+        .user-avatar {
+            width: 36px; height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #dc2626, #fb923c);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            font-size: 14px;
+            color: #fff;
+        }
+
+        .user-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .user-name {
+            font-size: 13px;
+            font-weight: 700;
+            color: #f1f5f9;
+        }
+
+        .user-tier {
+            font-size: 10px;
+            color: #64748b;
+            font-weight: 600;
+        }
+
+        /* Cards Grid */
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+        }
+
+        @media (max-width: 1024px) {
+            .cards { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        @media (max-width: 600px) {
+            .cards { grid-template-columns: 1fr; }
+            .container { padding: 20px 16px 32px; }
+        }
+
+        .card {
+            position: relative;
+            border-radius: 16px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), 
+                        box-shadow 0.3s ease;
+            aspect-ratio: 3 / 4;
+            border: 1px solid rgba(51, 65, 85, 0.5);
+        }
+
+        .card:hover {
+            transform: translateY(-6px) scale(1.02);
+            box-shadow: 
+                0 20px 40px rgba(0, 0, 0, 0.4),
+                0 0 0 1px rgba(251, 146, 60, 0.3);
+        }
+
+        .card-bg {
+            position: absolute;
+            inset: 0;
+            background-size: cover;
+            background-position: center;
+            transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .card:hover .card-bg {
+            transform: scale(1.08);
+        }
+
+        /* Gradient overlay at bottom */
+        .card-overlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(
+                0deg,
+                rgba(10, 14, 26, 0.95) 0%,
+                rgba(10, 14, 26, 0.6) 35%,
+                rgba(10, 14, 26, 0.1) 55%,
+                transparent 100%
+            );
+            z-index: 1;
+        }
+
+        .card-content {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 20px;
+            z-index: 2;
+        }
+
+        .card-tag {
+            display: inline-block;
+            font-size: 9px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            padding: 3px 10px;
+            border-radius: 4px;
+            margin-bottom: 8px;
+        }
+
+        .tag-garage   { background: #fb923c; color: #0a0e1a; }
+        .tag-tracks   { background: #fbbf24; color: #0a0e1a; }
+        .tag-editor   { background: #dc2626; color: #fff; }
+        .tag-coming   { background: rgba(148, 163, 184, 0.3); color: #94a3b8; border: 1px solid #475569; }
+
+        .card-title {
+            font-size: clamp(22px, 2.5vw, 32px);
+            font-weight: 900;
+            color: #f8fafc;
+            letter-spacing: -0.5px;
+            line-height: 1.1;
+            margin-bottom: 6px;
+        }
+
+        .card-desc {
+            font-size: 12px;
+            color: #94a3b8;
+            line-height: 1.4;
+            max-width: 220px;
+        }
+
+        /* Shine effect on hover */
+        .card::after {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%;
+            width: 60%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.04), transparent);
+            z-index: 3;
+            transition: left 0.6s ease;
+            pointer-events: none;
+        }
+
+        .card:hover::after {
+            left: 120%;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            margin-top: 48px;
+            padding-top: 24px;
+        }
+
+        .footer-brand {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            color: #334155;
+        }
+
+        /* Coming soon overlay */
+        .card.coming-soon {
+            cursor: default;
+        }
+
+        .card.coming-soon .card-bg {
+            filter: brightness(0.6) saturate(0.8);
+        }
+
+        .card.coming-soon:hover {
+            transform: none;
+            box-shadow: none;
+        }
+
+        .card.coming-soon:hover .card-bg {
+            transform: none;
+        }
+
+        /* Subtle pulse on garage card */
+        @keyframes subtlePulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(251, 146, 60, 0); }
+            50% { box-shadow: 0 0 20px 2px rgba(251, 146, 60, 0.15); }
+        }
+
+        .card:first-child {
+            animation: subtlePulse 3s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- Header -->
+    <div class="header">
+        <div class="header-left">
+            <div class="breadcrumb"><a href="index.html">← RALLY AR</a></div>
+            <h1>SELECT ACTIVITY</h1>
+        </div>
+        <div class="user-badge">
+            <div class="user-avatar">R</div>
+            <div class="user-info">
+                <span class="user-name">Racer</span>
+                <span class="user-tier">Free Driver</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cards -->
+    <div class="cards">
+        <!-- GARAGE -->
+        <div class="card" id="card-garage" onclick="window.location.href='rally.html'">
+            <div class="card-bg" style="background-image: url('rally_garage.png');"></div>
+            <div class="card-overlay"></div>
+            <div class="card-content">
+                <div class="card-tag tag-garage">GARAGE</div>
+                <div class="card-title">GARAGE</div>
+                <div class="card-desc">Välj bil och testa på en sparad bana.</div>
+            </div>
+        </div>
+
+        <!-- TRACKS -->
+        <div class="card" id="card-tracks" onclick="window.location.href='arcade.html?autorun=edit_build'">
+            <div class="card-bg" style="background-image: url('rally_tracks.png');"></div>
+            <div class="card-overlay"></div>
+            <div class="card-content">
+                <div class="card-tag tag-tracks">COMMUNITY</div>
+                <div class="card-title">TRACKS</div>
+                <div class="card-desc">Kör banor byggda av andra. Utmana världen.</div>
+            </div>
+        </div>
+
+        <!-- BUILD -->
+        <div class="card" id="card-build" onclick="window.location.href='arcade.html?autorun=edit_build'">
+            <div class="card-bg" style="background-image: url('rally_build.png');"></div>
+            <div class="card-overlay"></div>
+            <div class="card-content">
+                <div class="card-tag tag-editor">EDITOR</div>
+                <div class="card-title">BUILD</div>
+                <div class="card-desc">Skulptera terräng och bygg dina egna rallybanor.</div>
+            </div>
+        </div>
+
+        <!-- GAMES (Coming Soon) -->
+        <div class="card coming-soon" id="card-games">
+            <div class="card-bg" style="background-image: url('rally_games.png');"></div>
+            <div class="card-overlay"></div>
+            <div class="card-content">
+                <div class="card-tag tag-coming">COMING SOON</div>
+                <div class="card-title">GAMES</div>
+                <div class="card-desc">Night rally, drift challenge, time attack och mer.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        <div class="footer-brand">RALLY AR ARCADE</div>
+    </div>
+</div>
+
+</body>
+</html>
