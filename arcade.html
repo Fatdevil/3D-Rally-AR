@@ -2128,12 +2128,27 @@
             { key: 'waste',     rgb: hex2rgb(cfg.wasteColor      || '#c2af7c'), coarse: 16, fine: 6,  freqC: 0.015, freqF: 0.06 },
         ];
 
+        // Mountain paint colors (all presets) — skip these pixels entirely
+        const mtnColors = [
+            '#A09060','#7A7A6E','#656059','#95908A',  // NORDIC
+            '#9B8B70','#8A8478','#706860','#C0B8A8',  // ALPINE
+            '#C4A870','#B89E78','#8B7355','#D4C4A0',  // DESERT
+            '#6B5E50','#4A4540','#2D2825','#5A5550',  // VOLCANO
+        ].map(hex2rgb);
+
         let changed = 0, skipped = 0;
 
         for (let y = 0; y < h; y++) {
             for (let x = 0; x < w; x++) {
                 const i = (y * w + x) * 4;
                 const pr = px[i], pg = px[i+1], pb = px[i+2];
+
+                // Check if pixel is a mountain color — skip if closer to any mtn color
+                let minMtnDist = 999999;
+                for (let m = 0; m < mtnColors.length; m++) {
+                    const d = (pr-mtnColors[m][0])*(pr-mtnColors[m][0]) + (pg-mtnColors[m][1])*(pg-mtnColors[m][1]) + (pb-mtnColors[m][2])*(pb-mtnColors[m][2]);
+                    if (d < minMtnDist) minMtnDist = d;
+                }
 
                 let matched = null;
                 let bestDist = 999999;
@@ -2143,7 +2158,8 @@
                     if (dist < bestDist) { bestDist = dist; matched = surfaces[s]; }
                 }
 
-                if (!matched || bestDist > 4000) { skipped++; continue; }
+                // Skip if: no match, too far from any surface, OR closer to mountain color
+                if (!matched || bestDist > 4000 || minMtnDist < bestDist) { skipped++; continue; }
 
                 if (factor > 0) {
                     const n1 = window.fbm(x * matched.freqC, y * matched.freqC, 3, 2.0, 0.5);
