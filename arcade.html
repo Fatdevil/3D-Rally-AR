@@ -31,6 +31,7 @@
 <script src="rally-camera.js"></script>
 <script src="rally-respawn.js"></script>
 <script src="rally-jump-tool.js"></script>
+<script src="terrain-auto-paint.js"></script>
 </head>
 <body>
 <div id="global-loader">
@@ -355,6 +356,7 @@
         <button id="tool-spline" onclick="setTool('SPLINE')" class="pro-tool"><span style="font-size:16px;">〰️</span> PATH</button>
         <div style="height:1px; background:#475569; width:100%; margin:4px 0; grid-column:1 / -1;"></div>
         <button id="tool-paint" onclick="setTool('PAINT')"><span style="font-size:16px;">🖌️</span> PAINT</button>
+        <button id="tool-mtn" onclick="setTool('MTN')"><span style="font-size:16px;">🏔️</span> MTN</button>
         <button id="tool-smartbuilder" onclick="setTool('SMART_BUILDER')" class="pro-tool"><span style="font-size:16px;">🏗️</span> SMART</button>
         <button id="tool-ridge" onclick="setTool('RIDGE')" class="pro-tool"><span style="font-size:16px;">📊</span> RIDGE</button>
         <button id="tool-nature" onclick="setTool('NATURE')"><span style="font-size:16px;">🌴</span> NATURE</button>
@@ -486,6 +488,63 @@
                 <div id="pal-fescue" class="palette-btn" style="background:#2d4c1a; color:#fff; position:relative;" onclick="setPaletteColor('fescue', this)">Deep Rough <span class="color-edit-icon" onclick="event.stopPropagation(); window.openColorPicker('fescue')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer; display:none;">⚙️</span></div>
                 
             </div>
+        </div>
+
+        <!-- Terrain Auto-Paint Preset (shown for MTN tool) -->
+        <div id="terrain-paint-group" class="prop-panel" style="display:none; flex-direction:column; gap:6px;">
+            <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">🏔️ Terrain Colors</label>
+            <input type="hidden" id="terrain-paint-preset" value="NORDIC">
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">
+                <!-- NORDIC -->
+                <div class="terrain-style-card active" data-preset="NORDIC" onclick="window._selectTerrainPreset('NORDIC', this)" style="cursor:pointer; padding:6px; border-radius:6px; border:2px solid #4ade80; background:#1e293b; text-align:center;">
+                    <div style="display:flex; gap:2px; justify-content:center; margin-bottom:3px;">
+                        <span style="width:14px;height:14px;border-radius:3px;background:#A09060;display:inline-block;" title="Earth"></span>
+                        <span style="width:14px;height:14px;border-radius:3px;background:#7A7A6E;display:inline-block;" title="Rock"></span>
+                        <span style="width:14px;height:14px;border-radius:3px;background:#656059;display:inline-block;" title="Cliff"></span>
+                        <span style="width:14px;height:14px;border-radius:3px;background:#95908A;display:inline-block;" title="Peak"></span>
+                    </div>
+                    <div style="color:#e2e8f0; font-size:10px; font-weight:bold;">🌲 Nordisk</div>
+                </div>
+                <!-- ALPINE -->
+                <div class="terrain-style-card" data-preset="ALPINE" onclick="window._selectTerrainPreset('ALPINE', this)" style="cursor:pointer; padding:6px; border-radius:6px; border:2px solid #334155; background:#1e293b; text-align:center;">
+                    <div style="display:flex; gap:2px; justify-content:center; margin-bottom:3px;">
+                        <span style="width:14px;height:14px;border-radius:3px;background:#9B8B70;display:inline-block;" title="Earth"></span>
+                        <span style="width:14px;height:14px;border-radius:3px;background:#8A8478;display:inline-block;" title="Rock"></span>
+                        <span style="width:14px;height:14px;border-radius:3px;background:#706860;display:inline-block;" title="Cliff"></span>
+                        <span style="width:14px;height:14px;border-radius:3px;background:#C0B8A8;display:inline-block;" title="Peak"></span>
+                    </div>
+                    <div style="color:#e2e8f0; font-size:10px; font-weight:bold;">🏔️ Alpin</div>
+                </div>
+                <!-- DESERT -->
+                <div class="terrain-style-card" data-preset="DESERT" onclick="window._selectTerrainPreset('DESERT', this)" style="cursor:pointer; padding:6px; border-radius:6px; border:2px solid #334155; background:#1e293b; text-align:center;">
+                    <div style="display:flex; gap:2px; justify-content:center; margin-bottom:3px;">
+                        <span style="width:14px;height:14px;border-radius:3px;background:#C4A870;display:inline-block;" title="Earth"></span>
+                        <span style="width:14px;height:14px;border-radius:3px;background:#B89E78;display:inline-block;" title="Rock"></span>
+                        <span style="width:14px;height:14px;border-radius:3px;background:#8B7355;display:inline-block;" title="Cliff"></span>
+                        <span style="width:14px;height:14px;border-radius:3px;background:#D4C4A0;display:inline-block;" title="Peak"></span>
+                    </div>
+                    <div style="color:#e2e8f0; font-size:10px; font-weight:bold;">🏜️ Öken</div>
+                </div>
+                <!-- VOLCANO -->
+                <div class="terrain-style-card" data-preset="VOLCANO" onclick="window._selectTerrainPreset('VOLCANO', this)" style="cursor:pointer; padding:6px; border-radius:6px; border:2px solid #334155; background:#1e293b; text-align:center;">
+                    <div style="display:flex; gap:2px; justify-content:center; margin-bottom:3px;">
+                        <span style="width:14px;height:14px;border-radius:3px;background:#6B5E50;display:inline-block;" title="Earth"></span>
+                        <span style="width:14px;height:14px;border-radius:3px;background:#4A4540;display:inline-block;" title="Rock"></span>
+                        <span style="width:14px;height:14px;border-radius:3px;background:#2D2825;display:inline-block;" title="Cliff"></span>
+                        <span style="width:14px;height:14px;border-radius:3px;background:#5A5550;display:inline-block;" title="Peak"></span>
+                    </div>
+                    <div style="color:#e2e8f0; font-size:10px; font-weight:bold;">🌋 Vulkan</div>
+                </div>
+            </div>
+            <script>
+                window._selectTerrainPreset = function(key, el) {
+                    document.getElementById('terrain-paint-preset').value = key;
+                    document.querySelectorAll('.terrain-style-card').forEach(c => {
+                        c.style.borderColor = '#334155';
+                    });
+                    el.style.borderColor = '#4ade80';
+                };
+            </script>
         </div>
 
         <!-- Naturväljare -->
@@ -2051,6 +2110,34 @@
         // 200² = 40000 — catches even heavily blended brush edges
         let maxDistSq = 40000;
         
+        // ── PRE-COMPUTE mountain terrain colors (ONCE, outside pixel loop) ────
+        // Collect all rock/cliff/earth/peak RGB values so we can protect them
+        let mtnRGBs = []; // array of {r,g,b}
+        if (window.terrainAutoPaint && window.terrainAutoPaint.PRESETS) {
+            let presets = window.terrainAutoPaint.PRESETS;
+            let hexes = [];
+            for (let pKey in presets) {
+                let p = presets[pKey];
+                hexes.push(p.dirt, p.rock, p.cliff, p.peak);
+            }
+            if (newConfig.rockColor)  hexes.push(newConfig.rockColor);
+            if (newConfig.cliffColor) hexes.push(newConfig.cliffColor);
+            if (newConfig.earthColor) hexes.push(newConfig.earthColor);
+            if (newConfig.peakColor)  hexes.push(newConfig.peakColor);
+            if (oldConfig.rockColor)  hexes.push(oldConfig.rockColor);
+            if (oldConfig.cliffColor) hexes.push(oldConfig.cliffColor);
+            if (oldConfig.earthColor) hexes.push(oldConfig.earthColor);
+            if (oldConfig.peakColor)  hexes.push(oldConfig.peakColor);
+            for (let h = 0; h < hexes.length; h++) {
+                if (!hexes[h]) continue;
+                mtnRGBs.push({
+                    r: parseInt(hexes[h].slice(1,3),16),
+                    g: parseInt(hexes[h].slice(3,5),16),
+                    b: parseInt(hexes[h].slice(5,7),16)
+                });
+            }
+        }
+        
         for (let i = 0; i < data.length; i += 4) {
             let r = data[i], g = data[i+1], b = data[i+2];
             
@@ -2072,6 +2159,20 @@
             }
             
             if (best1 < 0 || best1Dist > maxDistSq) continue;
+            
+            // ── MOUNTAIN PAINT PROTECTION (fast: pre-computed RGB) ─────
+            // If pixel is closer to ANY terrain paint color than best biome match → skip
+            if (mtnRGBs.length > 0) {
+                let isMountain = false;
+                for (let tc = 0; tc < mtnRGBs.length; tc++) {
+                    let dr = r - mtnRGBs[tc].r;
+                    let dg = g - mtnRGBs[tc].g;
+                    let db = b - mtnRGBs[tc].b;
+                    let tDist = dr*dr + dg*dg + db*db;
+                    if (tDist < best1Dist) { isMountain = true; break; }
+                }
+                if (isMountain) continue;
+            }
             
             if (best2 < 0 || best2Dist > maxDistSq || best1Dist < 10) {
                 // Single closest color (exact or near-exact match)
@@ -7914,7 +8015,7 @@
         
         currentTool = toolName;
         
-        let tools = ['inspect', 'sculpt', 'smooth', 'flatten', 'ramp', 'noise', 'water', 'spline', 'paint', 'smartbuilder', 'testputt', 'ridge', 'nature', 'forest', 'block', 'jump', 'measure', 'eraser', 'colorize'];
+        let tools = ['inspect', 'sculpt', 'smooth', 'flatten', 'ramp', 'noise', 'water', 'spline', 'paint', 'mtn', 'smartbuilder', 'testputt', 'ridge', 'nature', 'forest', 'block', 'jump', 'measure', 'eraser', 'colorize'];
         
         tools.forEach(t => {
             let btn = document.getElementById('tool-' + t);
@@ -7929,7 +8030,8 @@
         if (activeBtn) {
             let isPro = activeBtn.classList.contains('pro-tool');
             let base = isPro ? 'pro-tool ' : '';
-            if (toolName === 'SMART_BUILDER') activeBtn.className = base + 'active-green';
+            if (toolName === 'MTN') activeBtn.className = base + 'active-yellow';
+            else if (toolName === 'SMART_BUILDER') activeBtn.className = base + 'active-green';
             else if (toolName === 'MEASURE') activeBtn.className = base + 'active-yellow';
             else if (toolName === 'TEST_PUTT') activeBtn.className = 'sys-btn active';
             else if (toolName === 'ERASER') activeBtn.className = base + 'active-red';
@@ -7937,6 +8039,7 @@
         }
         
         document.getElementById('color-picker-group').style.display = (toolName === 'BLOCK' || toolName === 'PAINT') ? 'flex' : 'none';
+        document.getElementById('terrain-paint-group').style.display = (toolName === 'MTN') ? 'flex' : 'none';
         document.getElementById('nature-picker-group').style.display = (toolName === 'NATURE') ? 'flex' : 'none';
         document.getElementById('hole-picker-group').style.display = (toolName === 'HOLE') ? 'flex' : 'none';
         // Jump tool activation/deactivation
@@ -7984,6 +8087,12 @@
         }
         
         let hintHtml = "";
+        // Hide brush for non-brush tools
+        if (toolName === 'MTN' || toolName === 'INSPECT') {
+            sculptBrushCursor.visible = false;
+        } else if (sculptBrushCursor) {
+            sculptBrushCursor.visible = true;
+        }
         if (toolName === 'INSPECT') hintHtml = "<b>Safe Mode</b>: Look around without modifying terrain";
         else if (toolName === 'BLOCK') hintHtml = "Left Click: <b>Build Block</b><br>Right Click: <b>Remove</b>";
         else if (toolName === 'NATURE') hintHtml = "Left Click: <b>Plant Nature</b><br>Right Click: <b>Remove Tree</b>";
@@ -8003,6 +8112,7 @@
         else if (toolName === 'SPLINE') hintHtml = "Left Click: <b>Place Point</b><br>Right Click: <b>Remove Last Point</b><br>Draw a path and select Path Type";
         else if (toolName === 'FOREST') hintHtml = "Hold Mouse: <b>Scatter trees</b> (respects biome toggle)";
         else if (toolName === 'NOISE') hintHtml = "Hold Left: <b>Add organic bumps</b><br>Hold Right: <b>Erode terrain</b>";
+        else if (toolName === 'MTN') hintHtml = "Click on mountain: <b>Auto-paint with terrain colors</b> (flood-fill detects mountain)";
         
         document.getElementById('tool-hints').innerHTML = hintHtml;
         
@@ -8230,7 +8340,7 @@
                 ghostTree.visible = false;
                 lastHitPoint = null;
             }
-        } else if (currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'MEASURE' || currentTool === 'HOLE' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'FOREST' || currentTool === 'RAMP' || currentTool === 'SPLINE' || currentTool === 'COLORIZE' || currentTool === 'ERASER' || currentTool === 'SMART_BUILDER') {
+        } else if (currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'MEASURE' || currentTool === 'HOLE' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'FOREST' || currentTool === 'RAMP' || currentTool === 'SPLINE' || currentTool === 'COLORIZE' || currentTool === 'ERASER' || currentTool === 'SMART_BUILDER' || currentTool === 'MTN') {
             ghostBlock.visible = false;
             ghostTree.visible = false;
             raycaster.setFromCamera(mouse, camera);
@@ -8238,6 +8348,7 @@
             if(intersects.length > 0) {
                 lastHitPoint = intersects[0].point;
                 if(typeof window.updateElevationHUD === 'function') window.updateElevationHUD(lastHitPoint);
+                
                 
                 if (currentTool === 'COLORIZE' && event.buttons === 1) {
                     let closest = null; let minDist = currentBrushSize || 10;
@@ -8335,6 +8446,22 @@
     
     function onMouseClick(event) {
         if(appMode !== 'BUILD') return;
+        
+        // MTN TOOL — single click to auto-paint mountain via flood-fill
+        if (currentTool === 'MTN') {
+            raycaster.setFromCamera(mouse, camera);
+            let intersects = raycaster.intersectObject(plane);
+            if (intersects.length > 0 && window.terrainAutoPaint) {
+                let pt = intersects[0].point;
+                let presetEl = document.getElementById('terrain-paint-preset');
+                let preset = presetEl ? presetEl.value : 'NORDIC';
+                window.terrainAutoPaint.paintNaturalTerrain({
+                    preset: preset,
+                    aimPoint: { x: pt.x, z: pt.z }
+                });
+            }
+            return;
+        }
         
         if (currentTool === 'HOLE' && lastHitPoint) {
             let hole = courseHoles[currentHoleIndex];
