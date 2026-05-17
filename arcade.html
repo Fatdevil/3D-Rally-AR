@@ -10608,7 +10608,8 @@ window.triggerExplosion = function(x, y, z) {
         <button id="sb-type-tee" onclick="setSmartBuilderType('TEE')" style="background:#334155; color:#94a3b8; border:none; padding:7px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer;">🟩 START</button>
         <button id="sb-type-aim" onclick="setSmartBuilderType('AIM')" style="background:#334155; color:#94a3b8; border:none; padding:7px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer; ">🎯 CP</button>
         <button id="sb-type-paint" onclick="setSmartBuilderType('PAINT')" style="background:#334155; color:#94a3b8; border:none; padding:7px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer;">🎨 PAINT</button>
-        <button id="sb-type-stamp" onclick="setSmartBuilderType('STAMP')" style="background:#334155; color:#94a3b8; border:none; padding:7px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer; grid-column: span 2;">🔨 STAMP</button>
+        <button id="sb-type-stamp" onclick="setSmartBuilderType('STAMP')" style="background:#334155; color:#94a3b8; border:none; padding:7px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer;">🔨 STAMP</button>
+        <button id="sb-type-road" onclick="setSmartBuilderType('ROAD')" style="background:#334155; color:#94a3b8; border:none; padding:7px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer;">🛣️ ROAD</button>
     </div>
 
     <!-- Separator between type selector and controls -->
@@ -10776,6 +10777,19 @@ window.triggerExplosion = function(x, y, z) {
         </div>
     </div>
 
+    <!-- ROAD controls -->
+    <div id="sb-road-controls" style="display:none;">
+        <div style="color:#64748b; font-size:9px; font-weight:bold; text-transform:uppercase; margin-bottom:4px; text-align:left;">Road Foundation</div>
+        <label style="color:#94a3b8; font-size:9px; font-weight:bold; text-transform:uppercase;">Width <span id="sr-width-val" style="color:#f59e0b;">10m</span></label>
+        <input type="range" id="sr-road-width" min="4" max="24" value="10" step="1" oninput="window._smartRoadWidth = parseInt(this.value); document.getElementById('sr-width-val').textContent = this.value + 'm';" style="width:100%; accent-color:#f59e0b; cursor:pointer;">
+        <div style="display:flex; justify-content:space-between; color:#475569; font-size:8px; margin-bottom:6px;"><span>4m Stig</span><span>24m Motorväg</span></div>
+        <label style="color:#94a3b8; font-size:9px; font-weight:bold; text-transform:uppercase;">Shoulder <span id="sr-shoulder-val" style="color:#38bdf8;">4m</span></label>
+        <input type="range" id="sr-road-shoulder" min="1" max="12" value="4" step="1" oninput="window._smartRoadShoulder = parseInt(this.value); document.getElementById('sr-shoulder-val').textContent = this.value + 'm';" style="width:100%; accent-color:#38bdf8; cursor:pointer;">
+        <div style="display:flex; justify-content:space-between; color:#475569; font-size:8px; margin-bottom:6px;"><span>1m Brant</span><span>12m Mjuk</span></div>
+        <div style="color:#475569; font-size:8px; margin-top:4px;">Click terrain to place waypoints. Min 2 points.</div>
+        <div style="color:#475569; font-size:8px;">Height interpolates between waypoints automatically.</div>
+    </div>
+
     <!-- Mowing Pattern Selector (shared by GREEN + FAIRWAY) -->
     <div id="sb-mow-controls" style="background:#1e293b; padding:5px 8px; border-radius:6px; margin-bottom:6px;">
         <div style="color:#94a3b8; font-size:8px; font-weight:bold; text-transform:uppercase; margin-bottom:4px;">Mowing Pattern</div>
@@ -10902,7 +10916,7 @@ window.triggerExplosion = function(x, y, z) {
                 if (typeof sculptBrushCursor !== 'undefined') sculptBrushCursor.visible = false;
             }
             window._smartBuilderType = type;
-            ['GREEN','BUNKER','FAIRWAY','TEE','AIM','PAINT','STAMP'].forEach(t => {
+            ['GREEN','BUNKER','FAIRWAY','TEE','AIM','PAINT','STAMP','ROAD'].forEach(t => {
                 let btn = document.getElementById('sb-type-' + t.toLowerCase());
                 if(btn) {
                     btn.style.background = (t === type) ? '#4ade80' : '#334155';
@@ -10916,6 +10930,7 @@ window.triggerExplosion = function(x, y, z) {
             document.getElementById('sb-aim-controls').style.display = (type === 'AIM') ? 'block' : 'none';
             document.getElementById('sb-paint-controls').style.display = (type === 'PAINT') ? 'block' : 'none';
             document.getElementById('sb-stamp-controls').style.display = (type === 'STAMP') ? 'block' : 'none';
+            document.getElementById('sb-road-controls').style.display = (type === 'ROAD') ? 'block' : 'none';
             document.getElementById('sb-mow-controls').style.display = (type === 'GREEN' || type === 'FAIRWAY' || type === 'TEE') ? 'block' : 'none';
             // Reset mowing pattern when leaving GREEN/FAIRWAY/TEE to prevent pattern leaking
             // (e.g. GREEN checkerboard bleeding into PAINT foregreen)
@@ -10925,7 +10940,7 @@ window.triggerExplosion = function(x, y, z) {
             }
             // Update panel border color
             let panel = document.getElementById('smart-green-action-panel');
-            let colors = {GREEN: '#4ade80', BUNKER: '#f59e0b', FAIRWAY: '#7db952', TEE: '#38bdf8', AIM: '#f59e0b', PAINT: '#a78bfa', STAMP: '#f59e0b'};
+            let colors = {GREEN: '#4ade80', BUNKER: '#f59e0b', FAIRWAY: '#7db952', TEE: '#38bdf8', AIM: '#f59e0b', PAINT: '#a78bfa', STAMP: '#f59e0b', ROAD: '#f59e0b'};
             panel.style.borderColor = colors[type] || '#4ade80';
             // Update build button
             let buildBtn = document.getElementById('sb-build-btn');
@@ -10960,6 +10975,9 @@ window.triggerExplosion = function(x, y, z) {
                     if (window.renderStampLibrary) window.renderStampLibrary();
                     let countEl = document.getElementById('stamp-count');
                     if (countEl) countEl.textContent = (window._stampLibrary || []).length;
+                } else if(type === 'ROAD') {
+                    buildBtn.textContent = '🏗️ Build Foundation';
+                    buildBtn.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
                 } else {
                     buildBtn.textContent = '⛳ Build Green';
                     buildBtn.style.background = 'linear-gradient(135deg, #4ade80, #22c55e)';

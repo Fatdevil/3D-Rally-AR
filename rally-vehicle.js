@@ -196,6 +196,30 @@ function updateVehicle(dt) {
         car.velocity.addScaledVector(fwd, (newFwd-forwardVel));
     }
 
+    // === SLOPE GRAVITY (mountain physics) ===
+    // terrain.normal = [nx, nz, ny] where ny≈1 for flat ground
+    // When surface tilts, nx/nz indicate slope direction
+    // Gravity component along slope surface pushes car downhill
+    if (car.onGround) {
+        let nx = terrain.normal[0] || 0;
+        let nz = terrain.normal[1] || 0;
+
+        // Gravity force projected onto terrain surface (world space)
+        let slopeGravX = CFG.GRAVITY * nx;
+        let slopeGravZ = CFG.GRAVITY * nz;
+
+        // Decompose into car-relative axes
+        let slopeFwd = slopeGravX * fwd.x + slopeGravZ * fwd.z;      // uphill(-) / downhill(+)
+        let slopeLat = slopeGravX * right.x + slopeGravZ * right.z;   // side push
+
+        // Forward: full gravity effect (uphills slow you, downhills speed you up)
+        car.velocity.addScaledVector(fwd, slopeFwd * dt);
+
+        // Lateral: reduced by grip (high grip = tires resist side-slide)
+        let sideSlipFactor = 1.0 - car.gripFactor * surface.grip;     // 0 = no slide, 1 = full slide
+        car.velocity.addScaledVector(right, slopeLat * sideSlipFactor * dt);
+    }
+
     // === LATERAL CORRECTION (THE DRIFT MAGIC) ===
     let lateralRetain = Math.pow(1-car.gripFactor, 60*dt);
     car.velocity.addScaledVector(right, lateralVel*(lateralRetain-1));

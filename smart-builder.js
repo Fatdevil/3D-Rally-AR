@@ -173,6 +173,12 @@ function smartAddPoint(pt) {
     // If shape is already closed, don't add more points
     if(window._smartShapeClosed) return false;
     
+    // ROAD mode: open path, no magnet-snap
+    if(window._smartBuilderType === 'ROAD') {
+        smartGreenPoints.push(pt);
+        return true;
+    }
+    
     // Magnet-snap: if >= 3 points and new click is within 10m of FIRST point → close shape
     if(smartGreenPoints.length >= 3) {
         let first = smartGreenPoints[0];
@@ -321,13 +327,14 @@ function updateSmartGreenPreview() {
     });
 
     if(smartGreenPoints.length > 1) {
-        // Open spline while placing — closes when magnet-snapped to first point
-        let shouldClose = !!window._smartShapeClosed;
+        // ROAD: always open spline. Others: closes when magnet-snapped
+        let isRoad = window._smartBuilderType === 'ROAD';
+        let shouldClose = isRoad ? false : !!window._smartShapeClosed;
         let curve = new THREE.CatmullRomCurve3(smartGreenPoints, shouldClose);
         let curvePts = curve.getPoints(50 * smartGreenPoints.length);
         let lineGeo = new THREE.BufferGeometry().setFromPoints(curvePts);
-        // Gold line when closed, green when open
-        let lineColor = shouldClose ? 0xfbbf24 : 0x4ade80;
+        // Gold when closed, orange for road, green when open
+        let lineColor = isRoad ? 0xf59e0b : (shouldClose ? 0xfbbf24 : 0x4ade80);
         let lineMat = new THREE.LineBasicMaterial({ color: lineColor, linewidth: 3 });
         smartGreenLineMesh = new THREE.Line(lineGeo, lineMat);
         smartGreenLineMesh.position.y += 0.5;
@@ -1758,6 +1765,8 @@ window.executeSplineSmartGreen = function() {
             executeSmartTee();
         } else if(window._smartBuilderType === 'PAINT') {
             window.executeSmartPaint();
+        } else if(window._smartBuilderType === 'ROAD') {
+            window.executeSmartRoad();
         } else {
             executeSplineSmartGreen();
         }
@@ -2090,4 +2099,232 @@ window.executeSplineSmartGreen = function() {
             if (window.showBuildToast) window.showBuildToast('⚠️ Storage full! Delete some stamps.', '#ef4444');
         }
     }
+
+// === SMART ROAD: Foundation — Terrain-hugging spline with max-grade constraint ===
+window.executeSmartRoad = function() {
+    if(smartGreenPoints.length < 2) {
+        window.showBuildToast('🛣️ Place at least 2 points for a road', '#ef4444');
+        return;
+    }
+    window.saveUndoState();
+
+    let roadWidth = window._smartRoadWidth || 10;
+    let halfW = roadWidth / 2;
+    let shoulderW = window._smartRoadShoulder || 4;
+    let maxGrade = 0.12; // 12% max slope — adjustable later
+
+    // Build OPEN spline through waypoints
+    let curve = new THREE.CatmullRomCurve3(smartGreenPoints, false);
+    let numSamples = Math.max(300, smartGreenPoints.length * 60);
+    let splinePts = curve.getPoints(numSamples);
+
+    let positions = window._arcadePlaneGeo.attributes.position.array;
+    let step = window.TERRAIN_SIZE / window.TERRAIN_SEGS;
+    let stride = window.TERRAIN_SEGS + 1;
+
+    // === STEP 1: Sample ACTUAL terrain height at every spline point ===
+    let rawTerrainH = new Float32Array(splinePts.length);
+    let arcLens = new Float32Array(splinePts.length); // cumulative arc length
+    arcLens[0] = 0;
+
+    for(let i = 0; i < splinePts.length; i++) {
+        let pt = splinePts[i];
+        // Bilinear terrain height sample
+        let fx = (pt.x + window.TERRAIN_SIZE/2) / step;
+        let fz = (pt.z + window.TERRAIN_SIZE/2) / step;
+        let gxi = Math.floor(fx), gzi = Math.floor(fz);
+        gxi = Math.max(0, Math.min(window.TERRAIN_SEGS-1, gxi));
+        gzi = Math.max(0, Math.min(window.TERRAIN_SEGS-1, gzi));
+        let tx = fx - gxi, tz = fz - gzi;
+        let h00 = positions[(gzi * stride + gxi) * 3 + 2];
+        let h10 = positions[(gzi * stride + gxi+1) * 3 + 2];
+        let h01 = positions[((gzi+1) * stride + gxi) * 3 + 2];
+        let h11 = positions[((gzi+1) * stride + gxi+1) * 3 + 2];
+        rawTerrainH[i] = h00*(1-tx)*(1-tz) + h10*tx*(1-tz) + h01*(1-tx)*tz + h11*tx*tz;
+
+        if(i > 0) {
+            let dx = splinePts[i].x - splinePts[i-1].x;
+            let dz = splinePts[i].z - splinePts[i-1].z;
+            arcLens[i] = arcLens[i-1] + Math.sqrt(dx*dx + dz*dz);
+        }
+    }
+    let totalArc = arcLens[splinePts.length - 1];
+
+    // === STEP 2: Smooth the raw terrain profile (remove micro-bumps) ===
+    // 3-pass moving average with window = 5 samples
+    let smoothedH = new Float32Array(rawTerrainH);
+    for(let pass = 0; pass < 3; pass++) {
+        let tmp = new Float32Array(smoothedH);
+        for(let i = 2; i < smoothedH.length - 2; i++) {
+            tmp[i] = (smoothedH[i-2] + smoothedH[i-1] + smoothedH[i] + smoothedH[i+1] + smoothedH[i+2]) / 5;
+        }
+        smoothedH = tmp;
+    }
+    // Pin endpoints to actual terrain
+    smoothedH[0] = rawTerrainH[0];
+    smoothedH[smoothedH.length-1] = rawTerrainH[rawTerrainH.length-1];
+
+    // === STEP 3: Bidirectional max-grade constraint ===
+    // Forward pass: ensure slope from i to i+1 doesn't exceed maxGrade
+    let roadH = new Float32Array(smoothedH);
+    for(let i = 1; i < roadH.length; i++) {
+        let dist = arcLens[i] - arcLens[i-1];
+        if(dist < 0.01) continue;
+        let maxRise = dist * maxGrade;
+        let diff = roadH[i] - roadH[i-1];
+        if(diff > maxRise) roadH[i] = roadH[i-1] + maxRise;
+        else if(diff < -maxRise) roadH[i] = roadH[i-1] - maxRise;
+    }
+    // Backward pass: same constraint from end to start
+    for(let i = roadH.length - 2; i >= 0; i--) {
+        let dist = arcLens[i+1] - arcLens[i];
+        if(dist < 0.01) continue;
+        let maxRise = dist * maxGrade;
+        let diff = roadH[i] - roadH[i+1];
+        if(diff > maxRise) roadH[i] = roadH[i+1] + maxRise;
+        else if(diff < -maxRise) roadH[i] = roadH[i+1] - maxRise;
+    }
+
+    // === STEP 4: Build road centerline data ===
+    let roadData = [];
+    for(let i = 0; i < splinePts.length; i++) {
+        let pt = splinePts[i];
+
+        // Tangent (forward direction)
+        let prev = splinePts[Math.max(0, i-1)];
+        let next = splinePts[Math.min(splinePts.length-1, i+1)];
+        let tx = next.x - prev.x;
+        let tz = next.z - prev.z;
+        let tLen = Math.sqrt(tx*tx + tz*tz) + 0.001;
+        tx /= tLen; tz /= tLen;
+
+        // Perpendicular (road width direction)
+        let nx = -tz;
+        let nz = tx;
+
+        roadData.push({ x: pt.x, z: pt.z, roadH: roadH[i], nx, nz, idx: i });
+    }
+
+    // === STEP 5: Bounding box for terrain vertex iteration ===
+    let pathMinX = Infinity, pathMaxX = -Infinity;
+    let pathMinZ = Infinity, pathMaxZ = -Infinity;
+    for(let rd of roadData) {
+        let expand = halfW + shoulderW + 4;
+        if(rd.x - expand < pathMinX) pathMinX = rd.x - expand;
+        if(rd.x + expand > pathMaxX) pathMaxX = rd.x + expand;
+        if(rd.z - expand < pathMinZ) pathMinZ = rd.z - expand;
+        if(rd.z + expand > pathMaxZ) pathMaxZ = rd.z + expand;
+    }
+
+    let gxStart = Math.max(0, Math.floor((pathMinX + window.TERRAIN_SIZE/2) / step));
+    let gxEnd = Math.min(window.TERRAIN_SEGS, Math.ceil((pathMaxX + window.TERRAIN_SIZE/2) / step));
+    let gzStart = Math.max(0, Math.floor((pathMinZ + window.TERRAIN_SIZE/2) / step));
+    let gzEnd = Math.min(window.TERRAIN_SEGS, Math.ceil((pathMaxZ + window.TERRAIN_SIZE/2) / step));
+
+    // === STEP 6: Sculpt terrain ===
+    let modified = 0;
+    let maxCut = 0, maxFill = 0;
+    for(let gz = gzStart; gz <= gzEnd; gz++) {
+        for(let gx = gxStart; gx <= gxEnd; gx++) {
+            let idx = gz * stride + gx;
+            let vx = positions[idx*3];
+            let vz = -positions[idx*3+1];
+
+            // Find closest road center point (coarse then refine)
+            let bestDist = Infinity;
+            let bestRD = null;
+            let bestRIdx = -1;
+            for(let r = 0; r < roadData.length; r += 3) {
+                let rd = roadData[r];
+                let dx = vx - rd.x;
+                let dz = vz - rd.z;
+                let d = dx*dx + dz*dz;
+                if(d < bestDist) { bestDist = d; bestRD = rd; bestRIdx = r; }
+            }
+            // Refine neighbors
+            if(bestRIdx >= 0) {
+                let lo = Math.max(0, bestRIdx - 4);
+                let hi = Math.min(roadData.length-1, bestRIdx + 4);
+                for(let r = lo; r <= hi; r++) {
+                    let rd = roadData[r];
+                    let dx = vx - rd.x;
+                    let dz = vz - rd.z;
+                    let d = dx*dx + dz*dz;
+                    if(d < bestDist) { bestDist = d; bestRD = rd; bestRIdx = r; }
+                }
+            }
+            if(!bestRD) continue;
+
+            let perpDist = Math.sqrt(bestDist);
+            if(perpDist > halfW + shoulderW) continue;
+
+            let currentH = positions[idx*3+2];
+            let targetH = bestRD.roadH;
+
+            // Track cut/fill stats
+            let delta = targetH - currentH;
+            if(delta < 0 && -delta > maxCut) maxCut = -delta;
+            if(delta > 0 && delta > maxFill) maxFill = delta;
+
+            if(perpDist <= halfW) {
+                // === INSIDE ROAD: set to road height ===
+                let crossSlope = (vx - bestRD.x) * bestRD.nx + (vz - bestRD.z) * bestRD.nz;
+                let crossH = crossSlope * 0.015; // 1.5% cross-slope
+                positions[idx*3+2] = targetH + crossH;
+                modified++;
+            } else {
+                // === SHOULDER: smoothstep blend to original terrain ===
+                let t = (perpDist - halfW) / shoulderW;
+                t = t * t * (3 - 2 * t);
+                positions[idx*3+2] = targetH + (currentH - targetH) * t;
+                modified++;
+            }
+        }
+    }
+
+    // === STEP 7: Smooth pass ===
+    for(let smPass = 0; smPass < 4; smPass++) {
+        for(let gz = Math.max(1, gzStart); gz <= Math.min(window.TERRAIN_SEGS-1, gzEnd); gz++) {
+            for(let gx = Math.max(1, gxStart); gx <= Math.min(window.TERRAIN_SEGS-1, gxEnd); gx++) {
+                let idx = gz * stride + gx;
+                let vx = positions[idx*3];
+                let vz = -positions[idx*3+1];
+
+                let nearRoad = false;
+                for(let r = 0; r < roadData.length; r += 5) {
+                    let dx = vx - roadData[r].x;
+                    let dz = vz - roadData[r].z;
+                    if(dx*dx + dz*dz < (halfW + shoulderW + 2) * (halfW + shoulderW + 2)) {
+                        nearRoad = true; break;
+                    }
+                }
+                if(!nearRoad) continue;
+
+                let nSum = 0, nCount = 0;
+                nSum += positions[((gz-1)*stride + gx)*3+2]; nCount++;
+                nSum += positions[((gz+1)*stride + gx)*3+2]; nCount++;
+                nSum += positions[(gz*stride + gx-1)*3+2]; nCount++;
+                nSum += positions[(gz*stride + gx+1)*3+2]; nCount++;
+                let avg = nSum / nCount;
+                positions[idx*3+2] += (avg - positions[idx*3+2]) * 0.4;
+            }
+        }
+    }
+
+    // Update geometry
+    window._arcadePlaneGeo.attributes.position.needsUpdate = true;
+    window._arcadePlaneGeo.computeVertexNormals();
+    window._arcadePlaneGeo.computeBoundingBox();
+    window._arcadePlaneGeo.computeBoundingSphere();
+    window.snapObjectsToGround();
+
+    if(window.slopeOverlayActive) window.updateSlopeOverlay();
+    if(window.contourLinesActive) window.updateContourLines();
+    if(window.elevationHeatmapActive) window.updateElevationHeatmap();
+
+    let cutFillMsg = ' | Cut: ' + maxCut.toFixed(1) + 'm, Fill: ' + maxFill.toFixed(1) + 'm';
+    window.showBuildToast('🏗️ Road: ' + Math.round(totalArc) + 'm long' + cutFillMsg, '#f59e0b');
+    clearSmartGreen();
+};
+
 })();

@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Helikopter Fysik Demo</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#000; overflow:hidden; touch-action:none; }
+canvas { display:block; }
+
+#hud {
+  position:fixed; top:16px; left:16px;
+  color:#00ff99; font-family:monospace; font-size:14px;
+  text-shadow:0 0 6px rgba(0,255,150,0.6);
+  pointer-events:none; line-height:2;
+  background:rgba(0,0,0,0.35); padding:10px 14px;
+  border-radius:8px; border:1px solid rgba(0,255,150,0.2);
+}
+#hud-title { font-size:16px; font-weight:bold; margin-bottom:4px; }
+
+#controls {
+  position:fixed; bottom:0; left:0; right:0; height:220px;
+  display:none; pointer-events:none;
+}
+.jzone {
+  position:absolute; bottom:24px;
+  width:150px; height:150px; pointer-events:all;
+}
+#jzone-left  { left:24px; }
+#jzone-right { right:24px; }
+.jbase {
+  width:100%; height:100%; border-radius:50%;
+  border:2px solid rgba(255,255,255,0.18);
+  background:rgba(255,255,255,0.04);
+  position:relative;
+}
+.jstick {
+  width:52px; height:52px; border-radius:50%;
+  background:rgba(255,255,255,0.22);
+  border:2px solid rgba(255,255,255,0.5);
+  position:absolute; top:50%; left:50%;
+  transform:translate(-50%,-50%);
+}
+.jlabel {
+  position:absolute; bottom:-22px; width:100%;
+  text-align:center; color:rgba(255,255,255,0.35);
+  font-size:10px; font-family:monospace; letter-spacing:0.05em;
+}
+
+#kb-hint {
+  position:fixed; bottom:14px; left:50%; transform:translateX(-50%);
+  color:rgba(255,255,255,0.3); font-size:12px; font-family:monospace;
+  pointer-events:none; text-align:center;
+}
+
+#crash { display:none; position:fixed; top:50%; left:50%;
+  transform:translate(-50%,-50%); color:#ff4444;
+  font-size:48px; font-family:monospace; text-align:center;
+  text-shadow:0 0 20px #ff4444; pointer-events:none; }
+</style>
+</head>
+<body>
+
+<div id="hud">
+  <div id="hud-title">🚁 HELIKOPTER FYSIK</div>
+  <div id="hud-alt">Höjd &nbsp;&nbsp;: 0.0 m</div>
+  <div id="hud-spd">Hastighet: 0 km/h</div>
+  <div id="hud-thr">Gas &nbsp;&nbsp;&nbsp;: 0%</div>
+  <div id="hud-ang">Lutning &nbsp;: 0°</div>
+  <div id="hud-state">🛬 MARK</div>
+</div>
+
+<div id="controls">
+  <div class="jzone" id="jzone-left">
+    <div class="jbase" id="jbase-left">
+      <div class="jstick" id="jstick-left"></div>
+    </div>
+    <div class="jlabel">GAS ↑↓ · SVÄNG ←→</div>
+  </div>
+  <div class="jzone" id="jzone-right">
+    <div class="jbase" id="jbase-right">
+      <div class="jstick" id="jstick-right"></div>
+    </div>
+    <div class="jlabel">FLYG RIKTNING</div>
+  </div>
+</div>
+
+<div id="kb-hint">SPACE/SHIFT = upp/ner &nbsp;·&nbsp; WASD = flyg &nbsp;·&nbsp; Q/E = sväng</div>
+<div id="crash">KRASCH!<br><span style="font-size:18px">tryck R för omstart</span></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+'use strict';
+
+// ─────────────────────────────────────────────
+//  DETECT MOBILE
+// ─────────────────────────────────────────────
+const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+  || (navigator.maxTouchPoints > 1);
+
+// ─────────────────────────────────────────────
+//  THREE.JS SETUP
+// ─────────────────────────────────────────────
+const scene    = new THREE.Scene();
+scene.background = new THREE.Color(0x6ab4d8);
+scene.fog        = new THREE.FogExp2(0x6ab4d8, 0.0018);
+
+const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 800);
+camera.position.set(0, 8, 22);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled  = true;
+renderer.shadowMap.type     = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+
+// ─────────────────────────────────────────────
+//  LJUS
+// ─────────────────────────────────────────────
+const sun = new THREE.DirectionalLight(0xfffbe8, 1.3);
+sun.position.set(60, 100, 40);
+sun.castShadow = true;
+sun.shadow.mapSize.width  = 2048;
+sun.shadow.mapSize.height = 2048;
+const sc = sun.shadow.camera;
+sc.near = 1; sc.far = 500;
+sc.left = -120; sc.right = 120; sc.top = 120; sc.bottom = -120;
+scene.add(sun);
+scene.add(new THREE.HemisphereLight(0x87ceeb, 0x3a6e1f, 0.7));
+
+// ─────────────────────────────────────────────
+//  MARK & LANDMÄRKEN
+// ─────────────────────────────────────────────
+const groundMesh = new THREE.Mesh(
+  new THREE.PlaneGeometry(600, 600, 60, 60),
+  new THREE.MeshLambertMaterial({ color: 0x4a8a3c })
+);
+groundMesh.rotation.x = -Math.PI/2;
+groundMesh.receiveShadow = true;
+scene.add(groundMesh);
+
+scene.add(new THREE.GridHelper(600, 60, 0x2d5820, 0x2d5820));
+
+function box(x, y, z, w, h, d, color) {
+  const m = new THREE.Mesh(
+    new THREE.BoxGeometry(w, h, d),
+    new THREE.MeshLambertMaterial({ color })
+  );
+  m.position.set(x, y + h/2, z);
+  m.castShadow = m.receiveShadow = true;
+  scene.add(m);
+  return m;
+}
+
+function tree(x, z) {
+  box(x, 0, z, 0.7, 4.5, 0.7, 0x5c3317);
+  const c = new THREE.Mesh(
+    new THREE.ConeGeometry(2.8, 5.5, 7),
+    new THREE.MeshLambertMaterial({ color: 0x2a6624 })
+  );
+  c.position.set(x, 7.5, z);
+  c.castShadow = true;
+  scene.add(c);
+}
+
+// Skapa landmärken
+[[-18,-25],[25,-12],[-35,15],[10,35],[-8,-45],[45,10],[-55,-10],[30,50]].forEach(([x,z]) => tree(x,z));
+box(0, 0, -55, 12, 9, 10, 0xdd9955);    // Röd lada
+box(-60, 0, 30,  7, 14, 7,  0x8899bb);  // Torn
+box(55, 0, -25, 18, 6, 14,  0xccbbaa);  // Fabrik
+box(-30, 0,-60,  5, 3, 5,   0xaa8866);  // Liten stuga
+box(70, 0, 60,   8, 5, 8,   0x998877);  // Byggnad
+
+// Helipad
+const pad = new THREE.Mesh(
+  new THREE.CircleGeometry(7, 20),
+  new THREE.MeshLambertMaterial({ color: 0xbbbbbb })
+);
+pad.rotation.x = -Math.PI/2;
+pad.position.y = 0.03;
+scene.add(pad);
+// H-markering
+box(-1.5, 0, 0, 0.5, 0.08, 3.5, 0xee3333);
+box(1.5,  0, 0, 0.5, 0.08, 3.5, 0xee3333);
+box(0,    0, 0, 3.5, 0.08, 0.5, 0xee3333);
+
+// ─────────────────────────────────────────────
+//  HELIKOPTER MODELL  (enkla geometrier)
+// ─────────────────────────────────────────────
+const heli = new THREE.Group();
+
+// Kropp
+const bodyGeo = new THREE.SphereGeometry(1.3, 12, 8);
+bodyGeo.scale(1.7, 0.85, 1.1);
+const bodyMesh = new THREE.Mesh(bodyGeo,
+  new THREE.MeshLambertMaterial({ color: 0xff5500 })
+);
+bodyMesh.castShadow = true;
+heli.add(bodyMesh);
+
+// Fönster
+const winGeo = new THREE.SphereGeometry(0.75, 10, 7);
+winGeo.scale(1.1, 0.8, 0.65);
+heli.add(Object.assign(new THREE.Mesh(winGeo,
+  new THREE.MeshLambertMaterial({ color: 0x99ddff, transparent:true, opacity:0.65 })
+), { position: new THREE.Vector3(0, 0.15, 0.92) }));
+
+// Stjärtbom
+const tailMesh = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.14, 0.32, 4.2, 8),
+  new THREE.MeshLambertMaterial({ color: 0xff5500 })
+);
+tailMesh.rotation.z = Math.PI/2;
+tailMesh.position.set(-3.1, 0.1, 0);
+tailMesh.castShadow = true;
+heli.add(tailMesh);
+
+// Landsben
+function skid(sx) {
+  const mat = new THREE.MeshLambertMaterial({ color: 0x444444 });
+  const legGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.75, 6);
+  const skidGeo = new THREE.CylinderGeometry(0.065, 0.065, 3.0, 6);
+  [[0.65],[-0.65]].forEach(([sz]) => {
+    const l = new THREE.Mesh(legGeo, mat);
+    l.position.set(sx, -0.85, sz);
+    l.rotation.z = 0.18 * Math.sign(sx);
+    heli.add(l);
+  });
+  const s = new THREE.Mesh(skidGeo, mat);
+  s.rotation.x = Math.PI/2;
+  s.position.set(sx, -1.25, 0);
+  heli.add(s);
+}
+skid(0.9); skid(-0.9);
+
+// Stjärtrotor
+const tailRotorHub = new THREE.Group();
+tailRotorHub.position.set(-5.1, 0.12, 0.1);
+for (let i = 0; i < 2; i++) {
+  const b = new THREE.Mesh(
+    new THREE.BoxGeometry(0.09, 1.0, 0.16),
+    new THREE.MeshLambertMaterial({ color: 0x222222 })
+  );
+  b.rotation.x = Math.PI/2 * i;
+  tailRotorHub.add(b);
+}
+heli.add(tailRotorHub);
+
+// Huvudrotor
+const mainRotorHub = new THREE.Group();
+mainRotorHub.position.set(0, 1.35, 0);
+mainRotorHub.add(Object.assign(new THREE.Mesh(
+  new THREE.CylinderGeometry(0.14, 0.14, 0.32, 8),
+  new THREE.MeshLambertMaterial({ color: 0x333333 })
+), {}));
+for (let i = 0; i < 3; i++) {
+  const b = new THREE.Mesh(
+    new THREE.BoxGeometry(4.2, 0.09, 0.35),
+    new THREE.MeshLambertMaterial({ color: 0x1a1a1a })
+  );
+  b.rotation.y = (Math.PI * 2 / 3) * i;
+  mainRotorHub.add(b);
+}
+heli.add(mainRotorHub);
+
+heli.position.set(0, 1.3, 0);
+scene.add(heli);
+
+// ─────────────────────────────────────────────
+//  HELIKOPTER FYSIK  (helicopter-vehicle.js)
+// ─────────────────────────────────────────────
+
+const PHYS = {
+  // Grundkrafter
+  gravity:       9.8,
+  mass:          1.0,
+  maxLift:       18.5,
+
+  // Hover-throttle = gravity / maxLift (för att hålla höjden neutralt)
+  // 9.8 / 18.5 ≈ 0.53
+  hoverThrottle: 0.53,
+
+  // Luftmotstånd (linjärt, per sekund)
+  // 0.985 = mjuk drift, 0.95 = snabb bromsning
+  linearDamping:  0.984,
+
+  // Vinkelfysik
+  pitchAccel:    1.4,   // hur snabbt man kan luta sig framåt/bakåt
+  rollAccel:     1.2,   // hur snabbt man kan luta sig åt sidan
+  yawAccel:      0.9,   // hur snabbt man svänger
+
+  angularDamping: 0.87,  // bromsning av rotationshastigheten
+
+  // Auto-stabilisering (gör spelet lättare för barn)
+  // 0 = ingen, 0.1 = märkbar, 0.3 = kraftig
+  autoLevel: 0.08,
+
+  // Max lutningsvinklar (grader)
+  maxPitch: 32,
+  maxRoll:  28,
+
+  // Markhöjd för helikopterns centrum
+  groundLevel: 1.3,
+};
+
+// ─── State ───────────────────────────────────
+let pos = new THREE.Vector3(0, 1.3, 0);
+let vel = new THREE.Vector3(0, 0, 0);
+
+let pitch = 0, roll = 0, yaw = 0;      // radianer
+let pitchVel = 0, rollVel = 0, yawVel = 0;
+
+let throttle   = 0;
+let onGround   = true;
+let crashed    = false;
+
+// ─── Input ───────────────────────────────────
+const keys = {};
+const GAME_KEYS = new Set(['Space','ShiftLeft','ShiftRight','KeyW','KeyS','KeyA','KeyD','KeyQ','KeyE','KeyR']);
+document.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code === 'KeyR') resetHelicopter();
+  if (GAME_KEYS.has(e.code)) e.preventDefault();
+});
+document.addEventListener('keyup', e => { keys[e.code] = false; });
+
+const joy = { left: {x:0, y:0}, right: {x:0, y:0} };
+
+// ─── Fysik-uppdatering ───────────────────────
+// Detta är kärnan – extrahera denna funktion till helicopter-vehicle.js
+function heliUpdate(dt) {
+  if (crashed) return;
+
+  // ── 1. Samla input ──────────────────────────
+  let throttleIn = 0, pitchIn = 0, rollIn = 0, yawIn = 0;
+
+  if (isMobile) {
+    // Vänster joystick: Y = gas, X = sväng
+    throttleIn = -joy.left.y;
+    yawIn      =  joy.left.x;
+    // Höger joystick: Y = pitch (framåt/bakåt), X = roll (sidled)
+    pitchIn    = -joy.right.y;   // push up = fly forward
+    rollIn     =  joy.right.x;
+  } else {
+    if (keys['Space'])                         throttleIn =  1;
+    if (keys['ShiftLeft']||keys['ShiftRight']) throttleIn = -1;
+    if (keys['KeyW']) pitchIn =  1;   // framåt
+    if (keys['KeyS']) pitchIn = -1;   // bakåt
+    if (keys['KeyA']) rollIn  = -1;   // vänster
+    if (keys['KeyD']) rollIn  =  1;   // höger
+    if (keys['KeyQ']) yawIn   = -1;   // sväng vänster
+    if (keys['KeyE']) yawIn   =  1;   // sväng höger
+  }
+
+  // ── 2. Gas (throttle) ───────────────────────
+  throttle += throttleIn * 1.6 * dt;
+  throttle = Math.max(0, Math.min(1, throttle));
+
+  // ── 3. Vinkel-fysik ─────────────────────────
+  const maxPR = PHYS.maxPitch * Math.PI / 180;
+  const maxRR = PHYS.maxRoll  * Math.PI / 180;
+
+  // Input → vinkelhastighet
+  pitchVel += pitchIn * PHYS.pitchAccel * dt;
+  rollVel  += rollIn  * PHYS.rollAccel  * dt;
+  yawVel   += yawIn   * PHYS.yawAccel   * dt;
+
+  // Auto-nivellering: drar tillbaka mot 0 när inget input
+  pitchVel -= pitch * PHYS.autoLevel;
+  rollVel  -= roll  * PHYS.autoLevel;
+
+  // Vinkelbromsning (luftmotstånd på rotation)
+  pitchVel *= PHYS.angularDamping;
+  rollVel  *= PHYS.angularDamping;
+  yawVel   *= PHYS.angularDamping;
+
+  // Integrera vinklar
+  pitch += pitchVel;
+  roll  += rollVel;
+  yaw   += yawVel;
+
+  // Begränsa max-lutning
+  pitch = Math.max(-maxPR, Math.min(maxPR, pitch));
+  roll  = Math.max(-maxRR, Math.min(maxRR, roll));
+
+  // ── 4. Krafter ──────────────────────────────
+  //
+  // Rotorns lyftkraft pekar längs helikopterns lokala Y-axel.
+  // När den lutar (pitch/roll), sprids kraften i världskoordinater:
+  //
+  //   local up = (0, 1, 0)
+  //   → efter pitch & roll →
+  //   world_lift = (sin(roll), cos(pitch)*cos(roll), -sin(pitch)) * liftMag
+  //   → sedan roteras X/Z-planet med yaw:
+  //   world_lx = local_lx * cos(yaw) + local_lz * sin(yaw)
+  //   world_lz =-local_lx * sin(yaw) + local_lz * cos(yaw)
+
+  const liftMag = throttle * PHYS.maxLift;
+
+  const local_lx = Math.sin(roll)  * liftMag;
+  const local_ly = Math.cos(pitch) * Math.cos(roll) * liftMag;
+  const local_lz =-Math.sin(pitch) * liftMag;
+
+  const cosY = Math.cos(yaw), sinY = Math.sin(yaw);
+  const fx = local_lx * cosY + local_lz * sinY;
+  const fy = local_ly - PHYS.gravity * PHYS.mass;   // lyft - tyngd
+  const fz =-local_lx * sinY + local_lz * cosY;
+
+  // ── 5. Hastighet & position ─────────────────
+  vel.x += fx * dt;
+  vel.y += fy * dt;
+  vel.z += fz * dt;
+
+  // Luftmotstånd
+  const d = Math.pow(PHYS.linearDamping, dt * 60);
+  vel.multiplyScalar(d);
+
+  pos.x += vel.x * dt;
+  pos.y += vel.y * dt;
+  pos.z += vel.z * dt;
+
+  // ── 6. Markgräns ────────────────────────────
+  if (pos.y <= PHYS.groundLevel) {
+    // Krascha om man landar för hårt
+    const impactSpeed = -vel.y;
+    if (impactSpeed > 12) {
+      crashed = true;
+      document.getElementById('crash').style.display = 'block';
+      return;
+    }
+    pos.y     = PHYS.groundLevel;
+    vel.y     = Math.max(0, vel.y);
+    vel.x    *= 0.90;
+    vel.z    *= 0.90;
+    pitch    *= 0.88;
+    roll     *= 0.88;
+  }
+  // onGround based on actual position, not throttle
+  onGround = (pos.y <= PHYS.groundLevel + 0.05);
+
+  // ── 7. Uppdatera mesh ───────────────────────
+  heli.position.copy(pos);
+  // YXZ: yaw → pitch → roll
+  heli.rotation.set(pitch, yaw, -roll, 'YXZ');
+
+  // Snurra rotorerna baserat på gas
+  const rSpeed = 4 + throttle * 18;
+  mainRotorHub.rotation.y += rSpeed * dt;
+  tailRotorHub.rotation.x += rSpeed * 2.5 * dt;
+
+  // ── 8. HUD ──────────────────────────────────
+  const alt  = Math.max(0, pos.y - PHYS.groundLevel);
+  const spd  = vel.length() * 3.6;
+  const tilt = Math.round(Math.max(Math.abs(pitch), Math.abs(roll)) * 180 / Math.PI);
+
+  document.getElementById('hud-alt').innerHTML   = `Höjd&nbsp;&nbsp;&nbsp;: ${alt.toFixed(1)} m`;
+  document.getElementById('hud-spd').innerHTML   = `Hastighet: ${Math.round(spd)} km/h`;
+  document.getElementById('hud-thr').innerHTML   = `Gas&nbsp;&nbsp;&nbsp;&nbsp;: ${Math.round(throttle*100)}%`;
+  document.getElementById('hud-ang').innerHTML   = `Lutning&nbsp;: ${tilt}°`;
+  document.getElementById('hud-state').innerHTML = onGround ? '🛬 MARK' : '🚁 FLYGER';
+}
+
+function resetHelicopter() {
+  pos.set(0, 1.3, 0);
+  vel.set(0, 0, 0);
+  pitch = roll = yaw = 0;
+  pitchVel = rollVel = yawVel = 0;
+  throttle  = 0;
+  onGround  = true;
+  crashed   = false;
+  document.getElementById('crash').style.display = 'none';
+}
+
+// ─────────────────────────────────────────────
+//  KAMERA
+// ─────────────────────────────────────────────
+const camOffset  = new THREE.Vector3(0, 6, 18);
+const camTarget  = new THREE.Vector3();
+const camCurrent = new THREE.Vector3();
+
+function updateCamera() {
+  // Kamera roterar med yaw men inte pitch/roll
+  const cosY = Math.cos(yaw), sinY = Math.sin(yaw);
+  const ox = camOffset.x * cosY - camOffset.z * sinY;
+  const oz = camOffset.x * sinY + camOffset.z * cosY;
+
+  camCurrent.set(pos.x + ox, pos.y + camOffset.y, pos.z + oz);
+  camera.position.lerp(camCurrent, 0.055);
+
+  camTarget.set(pos.x, pos.y + 1.2, pos.z);
+  camera.lookAt(camTarget);
+}
+
+// ─────────────────────────────────────────────
+//  TOUCH JOYSTICKS
+// ─────────────────────────────────────────────
+if (isMobile) {
+  document.getElementById('controls').style.display  = 'block';
+  document.getElementById('kb-hint').style.display   = 'none';
+
+  function makeJoystick(baseId, stickId, side) {
+    const base  = document.getElementById(baseId);
+    const stick = document.getElementById(stickId);
+    const R     = 75;   // halva joystick-bredden i px
+    const maxD  = R * 0.72;
+    let touchId = null, cx0 = 0, cy0 = 0;
+
+    function start(touch) {
+      touchId = touch.identifier;
+      const r = base.getBoundingClientRect();
+      cx0 = r.left + R; cy0 = r.top + R;
+      move(touch);
+    }
+    function findTouch(touches) {
+      for (let i = 0; i < touches.length; i++) {
+        if (touches[i].identifier === touchId) return touches[i];
+      }
+      return null;
+    }
+    function move(touch) {
+      if (touchId === null || !touch) return;
+      let dx = touch.clientX - cx0, dy = touch.clientY - cy0;
+      const d = Math.sqrt(dx*dx + dy*dy);
+      if (d > maxD) { dx *= maxD/d; dy *= maxD/d; }
+      stick.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+      joy[side].x = dx / maxD;
+      joy[side].y = dy / maxD;
+    }
+    function end() {
+      touchId = null;
+      stick.style.transform = 'translate(-50%,-50%)';
+      joy[side].x = joy[side].y = 0;
+    }
+
+    base.addEventListener('touchstart', e => { e.preventDefault(); start(e.changedTouches[0]); }, {passive:false});
+    base.addEventListener('touchmove',  e => { e.preventDefault(); const t = findTouch(e.touches); if(t) move(t); }, {passive:false});
+    base.addEventListener('touchend',   e => { e.preventDefault(); if(findTouch(e.changedTouches)) end(); }, {passive:false});
+    base.addEventListener('touchcancel', e => { e.preventDefault(); if(findTouch(e.changedTouches)) end(); }, {passive:false});
+  }
+
+  makeJoystick('jbase-left',  'jstick-left',  'left');
+  makeJoystick('jbase-right', 'jstick-right', 'right');
+}
+
+// ─────────────────────────────────────────────
+//  RESIZE
+// ─────────────────────────────────────────────
+window.addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// ─────────────────────────────────────────────
+//  GAME LOOP
+// ─────────────────────────────────────────────
+let lastT = 0;
+function animate(t) {
+  requestAnimationFrame(animate);
+  const dt = Math.min((t - lastT) / 1000, 0.05);
+  lastT = t;
+  if (dt > 0) {
+    heliUpdate(dt);
+    updateCamera();
+  }
+  renderer.render(scene, camera);
+}
+animate(0);
+
+// ─────────────────────────────────────────────
+//  KONSOL-HJÄLP
+// ─────────────────────────────────────────────
+console.log('%c🚁 Helikopter Fysik — Nyckelvariabler', 'color:#00ff99;font-size:14px;font-weight:bold');
+console.log('Ändra PHYS-objektet för att justera känslan:');
+console.log('  PHYS.maxLift      — hur stark motorn är (nu:', PHYS.maxLift, ')');
+console.log('  PHYS.linearDamping — luftmotstånd/tröghet  (nu:', PHYS.linearDamping, ')');
+console.log('  PHYS.autoLevel    — självstabilisering     (nu:', PHYS.autoLevel, ')');
+console.log('  PHYS.angularDamping — rotationsbromsning   (nu:', PHYS.angularDamping, ')');
+</script>
+</body>
+</html>

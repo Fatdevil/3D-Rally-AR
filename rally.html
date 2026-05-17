@@ -69,13 +69,19 @@
 <script src="rally-camera.js"></script>
 <script src="rally-respawn.js"></script>
 <script src="rally-vehicle.js"></script>
+<script src="terrain-shader-utils.js"></script>    <!-- PHASE 2 — procedural textures -->
+<script src="terrain-shader-material.js"></script> <!-- PHASE 2 — GLSL + ShaderMaterial -->
+<script src="terrain-shader-geo.js"></script>       <!-- PHASE 2 — splat map, vertex colors -->
+<script src="road-decal.js"></script>              <!-- Road gravel overlay meshes -->
 
 <script>
 (function() {
     'use strict';
 
     const TERRAIN_SIZE = 900;
-    const TERRAIN_SEGS = 600;
+    // FIX D6: mobile detection — match arcade.html line 2662-2663
+    const _isMobile = /iPhone|iPad|Android|Mobile/i.test(navigator.userAgent);
+    const TERRAIN_SEGS = _isMobile ? 400 : 600;
     window.TERRAIN_SIZE = TERRAIN_SIZE;
     window.TERRAIN_SEGS = TERRAIN_SEGS;
 
@@ -128,11 +134,21 @@
 
     // ── Terrain ──
     const planeGeo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, TERRAIN_SEGS, TERRAIN_SEGS);
-    const planeMat = new THREE.MeshLambertMaterial({ color: 0x4a7c2b, flatShading: false });
+    // PHASE 2 — ShaderMaterial (replaces MeshLambertMaterial)
+    // splatTex starts null — rebuilt in img.onload after biome PNG loads
+    window.terrainShaderGeo.initVertexColors(planeGeo);
+    const _rallyTextures = window.terrainShaderUtils.generatePlaceholderTextures();
+    const planeMat = window.terrainShaderMaterial.buildTerrainMaterial(_rallyTextures, {
+        fogNear: 400, fogFar: 900, terrainMaxHeight: 120,
+        fogColor: 0x87ceeb,
+    });
+    planeMat.uniforms.u_playMode.value = 1.0; // Always PLAY mode — OB hidden
     const terrainMesh = new THREE.Mesh(planeGeo, planeMat);
     terrainMesh.rotation.x = -Math.PI / 2;
     terrainMesh.receiveShadow = true;
     scene.add(terrainMesh);
+    window._terrainMat = planeMat;
+
 
     // ── Biome color → surface type classifier ──
     // Matches pixel RGB to nearest golf biome (then rally-surfaces.js maps to rally type)
@@ -190,8 +206,15 @@
             let by = Math.round((threeZ + TERRAIN_SIZE/2) / TERRAIN_SIZE * window._biomeCanvas.height);
             bx = Math.max(0, Math.min(window._biomeCanvas.width-1, bx));
             by = Math.max(0, Math.min(window._biomeCanvas.height-1, by));
-            let px = window._biomeCtx.getImageData(bx, by, 1, 1).data;
-            surfType = classifyBiomeColor(px[0], px[1], px[2]);
+            // ROAD SYSTEM — use cached pixel array instead of getImageData per call
+            if (window._biomePixels && window._biomeWidth) {
+                let idx = (by * window._biomeWidth + bx) * 4;
+                surfType = classifyBiomeColor(window._biomePixels[idx], window._biomePixels[idx+1], window._biomePixels[idx+2]);
+            } else if (window._biomeCtx) {
+                // Fallback: getImageData (slow, only before _biomePixels is ready)
+                let px = window._biomeCtx.getImageData(bx, by, 1, 1).data;
+                surfType = classifyBiomeColor(px[0], px[1], px[2]);
+            }
         }
         return {
             z: height,
@@ -408,17 +431,20 @@
         if (biomeSource && biomeSource.terrain_biomemap) {
             let img = new Image();
             img.onload = function() {
-                let tex = new THREE.Texture(img);
-                tex.needsUpdate = true;
-                planeMat.map = tex;
-                planeMat.needsUpdate = true;
-                planeMat.color.set(0xffffff);
                 let c = document.createElement('canvas');
                 c.width = img.width; c.height = img.height;
                 let ctx = c.getContext('2d');
                 ctx.drawImage(img, 0, 0);
                 window._biomeCanvas = c;
                 window._biomeCtx = ctx;
+                // ROAD SYSTEM — cache biome pixels for fast per-frame lookup
+                window._biomePixels = ctx.getImageData(0, 0, c.width, c.height).data;
+                window._biomeWidth = c.width;
+                // PHASE 2 — build splat map from biome canvas and update ShaderMaterial
+                if (window.terrainShaderGeo && window._terrainMat) {
+                    const splatTex = window.terrainShaderGeo.buildSplatMap(c, classifyBiomeColor);
+                    window._terrainMat.uniforms.u_splat.value = splatTex;
+                }
                 console.log('✅ Biome texture loaded from', window._terrainHeightSourceLabel || 'snapshot-fallback');
             };
             img.src = biomeSource.terrain_biomemap;
