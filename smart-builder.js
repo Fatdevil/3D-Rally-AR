@@ -228,7 +228,7 @@ function smartAddPoint(pt) {
     if(smartGreenPoints.length >= 3) {
         let first = smartGreenPoints[0];
         let dist = Math.sqrt((pt.x - first.x)**2 + (pt.z - first.z)**2);
-        if(dist < 5.0) {
+        if(dist < 8.0) {
             // Snap! Close the shape (don't add the point — loop back to start)
             window._smartShapeClosed = true;
             window.showBuildToast('🔒 Shape closed! Press Build', '#4ade80');
@@ -2156,8 +2156,6 @@ window.executeSplineSmartGreen = function() {
             if (window.EDITOR_MODE !== 'rally') {
                 executeSmartTee();
             }
-        } else if(window._smartBuilderType === 'PAINT') {
-            window.executeSmartPaint();
         } else if(window._smartBuilderType === 'ROAD') {
             window.executeSmartRoad();
         } else {

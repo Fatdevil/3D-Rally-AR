@@ -31,6 +31,7 @@
 <script src="rally-camera.js"></script>
 <script src="rally-respawn.js"></script>
 <script src="rally-jump-tool.js"></script>
+<script src="smart-builder.js"></script>
 <script src="terrain-auto-paint.js"></script>
 </head>
 <body>
@@ -341,6 +342,17 @@
                 if (tb) { tb.classList.add('pro-mode'); }
                 if (btn) { btn.textContent = '⚡ PRO MODE'; }
             }
+            
+            // Rename SMART builder based on context
+            let smartBtn = document.getElementById('tool-smartbuilder');
+            let smartTitle = document.getElementById('sb-panel-title');
+            if (window.EDITOR_MODE === 'rally') {
+                if (smartBtn) smartBtn.innerHTML = '<span style="font-size:16px;">🏁</span> TRACK';
+                if (smartTitle) smartTitle.innerHTML = '🏁 TRACK BUILDER';
+            } else {
+                if (smartBtn) smartBtn.innerHTML = '<span style="font-size:16px;">⛳</span> COURSE';
+                if (smartTitle) smartTitle.innerHTML = '⛳ COURSE BUILDER';
+            }
         });
     </script>
 
@@ -351,18 +363,26 @@
         <button id="tool-smooth" onclick="setTool('SMOOTH')"><span style="font-size:16px;">🧽</span> SMOOTH</button>
         <button id="tool-flatten" onclick="setTool('FLATTEN')" class="pro-tool"><span style="font-size:16px;">📐</span> FLATTEN</button>
         <button id="tool-ramp" onclick="setTool('RAMP')" class="pro-tool"><span style="font-size:16px;">📉</span> RAMP</button>
+        <button id="tool-ridge" onclick="setTool('RIDGE')" class="pro-tool"><span style="font-size:16px;">📊</span> RIDGE</button>
+        <button id="tool-mtn" onclick="setTool('MTN')"><span style="font-size:16px;">🏔️</span> MTN</button>
         <button id="tool-noise" onclick="setTool('NOISE')" class="pro-tool"><span style="font-size:16px;">🌊</span> NOISE</button>
+        
+        <div style="height:1px; background:#475569; width:100%; margin:4px 0; grid-column:1 / -1;"></div>
+        
+        <button id="tool-paint" onclick="setTool('PAINT')"><span style="font-size:16px;">🖌️</span> PAINT</button>
         <button id="tool-water" onclick="setTool('WATER')" class="pro-tool"><span style="font-size:16px;">💧</span> WATER</button>
         <button id="tool-spline" onclick="setTool('SPLINE')" class="pro-tool"><span style="font-size:16px;">〰️</span> PATH</button>
-        <div style="height:1px; background:#475569; width:100%; margin:4px 0; grid-column:1 / -1;"></div>
-        <button id="tool-paint" onclick="setTool('PAINT')"><span style="font-size:16px;">🖌️</span> PAINT</button>
-        <button id="tool-mtn" onclick="setTool('MTN')"><span style="font-size:16px;">🏔️</span> MTN</button>
         <button id="tool-smartbuilder" onclick="setTool('SMART_BUILDER')" class="pro-tool"><span style="font-size:16px;">🏗️</span> SMART</button>
-        <button id="tool-ridge" onclick="setTool('RIDGE')" class="pro-tool"><span style="font-size:16px;">📊</span> RIDGE</button>
-        <button id="tool-nature" onclick="setTool('NATURE')"><span style="font-size:16px;">🌴</span> NATURE</button>
-        <button id="tool-forest" onclick="setTool('FOREST')" class="pro-tool"><span style="font-size:16px;">🌲</span> FOREST</button>
-        <button id="tool-block" onclick="setTool('BLOCK')"><span style="font-size:16px;">🧱</span> BLOCK</button>
+        
         <div style="height:1px; background:#475569; width:100%; margin:4px 0; grid-column:1 / -1;"></div>
+        
+        <button id="tool-props" onclick="setTool('PROPS')"><span style="font-size:16px;">🌴</span> PROPS</button>
+        <button id="tool-block" onclick="setTool('BLOCK')"><span style="font-size:16px;">🧱</span> BLOCK</button>
+        <div style="visibility:hidden;"></div> <!-- Placeholder -->
+        <div style="visibility:hidden;"></div> <!-- Placeholder -->
+        
+        <div style="height:1px; background:#475569; width:100%; margin:4px 0; grid-column:1 / -1;"></div>
+        
         <button id="tool-jump" onclick="setTool('JUMP')" class="pro-tool"><span style="font-size:16px;">🚀</span> JUMP</button>
         <button id="tool-measure" onclick="setTool('MEASURE')"><span style="font-size:16px;">📏</span> MEASURE</button>
         <button id="tool-eraser" onclick="setTool('ERASER')" class="pro-tool"><span style="font-size:16px;">🗑️</span> ERASER</button>
@@ -416,6 +436,22 @@
             
             <label id="hardness-label" style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; margin-top:10px;">Brush Hardness</label>
             <input type="range" id="hardness-slider" min="0" max="100" value="100" oninput="updateBrushHardness()" style="width:140px; accent-color:#f43f5e; cursor:pointer;" title="Change hardness">
+            
+            <!-- RAMP SPECIFIC SETTINGS -->
+            <div id="ramp-settings" style="display:none; flex-direction:column; gap:5px; margin-top:10px; padding-top:10px; border-top:1px solid #334155;">
+                <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">Ramp End Height</label>
+                <label style="color:#e2e8f0; font-size:11px; display:flex; align-items:center; gap:5px; cursor:pointer;">
+                    <input type="checkbox" id="ramp-snap-cb" checked onchange="window.rampSnapToGround = this.checked; document.getElementById('ramp-offset-container').style.opacity = this.checked ? '0.3' : '1'; document.getElementById('ramp-offset-slider').disabled = this.checked;" style="accent-color:#f59e0b; cursor:pointer;">
+                    Match Target Ground
+                </label>
+                <div id="ramp-offset-container" style="display:flex; flex-direction:column; gap:5px; opacity:0.3;">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <input type="range" id="ramp-offset-slider" min="-15" max="15" step="1" value="0" disabled oninput="document.getElementById('ramp-offset-val').textContent = (this.value > 0 ? '+' : '') + this.value + 'm'; window.rampEndOffset = parseFloat(this.value);" style="width:140px; accent-color:#f59e0b; cursor:pointer;" title="Offset relative to start">
+                        <span id="ramp-offset-val" style="color:#f59e0b; font-weight:bold; font-size:12px; min-width:30px;">0m</span>
+                    </div>
+                    <div style="color:#94a3b8; font-size:10px;">Uncheck 'Match Ground' to build Jumps (+m) or flat Plateaus (0m).</div>
+                </div>
+            </div>
             
             <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; margin-top:5px; display:flex; align-items:center; gap:5px; cursor:pointer;">
                 <input type="checkbox" id="retro-filter-cb" onchange="toggleRetroFilter()" style="accent-color:#38bdf8; cursor:pointer;">
@@ -471,6 +507,144 @@
             <input type="range" id="noise-amp-slider" min="1" max="30" value="10" oninput="window.noiseAmplitude = this.value / 10; document.getElementById('noise-amp-val').textContent = (this.value/10).toFixed(1) + 'm';" style="width:100%; accent-color:#f59e0b; cursor:pointer;">
             <div style="display:flex; justify-content:space-between; color:#64748b; font-size:8px;"><span>Subtle 0.1m</span><span>Dramatic 3.0m</span></div>
         </div>
+
+        <!-- PAINT Tool Panel (Freehand & Polygon) -->
+        <div id="paint-tool-panel" class="prop-panel" style="display:none; flex-direction:column; gap:6px;">
+            <div style="display:flex; gap:4px; margin-bottom:6px;">
+                <button id="paint-mode-freehand" onclick="setPaintMode('FREEHAND')" style="flex:1; background:#4ade80; color:#0f172a; border:none; padding:6px 4px; font-size:10px; border-radius:5px; font-weight:bold; cursor:pointer;">🖌️ FRIHAND</button>
+                <button id="paint-mode-polygon" onclick="setPaintMode('POLYGON')" style="flex:1; background:#334155; color:#94a3b8; border:none; padding:6px 4px; font-size:10px; border-radius:5px; font-weight:bold; cursor:pointer;">📐 POLYGON</button>
+            </div>
+            <div id="paint-panel-content"></div>
+            
+            <div id="polygon-actions-container" style="display:none; margin-top:6px;">
+                <div style="display:flex; gap:4px; margin-bottom:4px;">
+                    <button onclick="if(window.undoPolygonPoint) window.undoPolygonPoint();" style="flex:1; background:#334155; color:#94a3b8; border:none; padding:8px 4px; border-radius:5px; font-weight:bold; font-size:10px; cursor:pointer;">↩️ Ångra Punkt</button>
+                    <button onclick="if(window.clearSmartGreen) window.clearSmartGreen();" style="flex:1; background:#ef4444; color:#fff; border:none; padding:8px 4px; border-radius:5px; font-weight:bold; font-size:10px; cursor:pointer;">🗑️ Rensa</button>
+                </div>
+                <button id="btn-execute-polygon" onclick="if(window.executeSmartPaint) window.executeSmartPaint();" style="width:100%; background:linear-gradient(135deg, #8b5cf6, #6366f1); color:#fff; border:none; padding:10px 0; border-radius:6px; font-weight:bold; font-size:12px; cursor:pointer; box-shadow:0 4px 15px rgba(139,92,246,0.4);">🎨 FYLL POLYGON</button>
+            </div>
+            <script>
+                window._paintToolMode = 'FREEHAND';
+                function setPaintMode(mode) {
+                    window._paintToolMode = mode;
+                    document.getElementById('paint-mode-freehand').style.background = mode === 'FREEHAND' ? '#4ade80' : '#334155';
+                    document.getElementById('paint-mode-freehand').style.color = mode === 'FREEHAND' ? '#0f172a' : '#94a3b8';
+                    document.getElementById('paint-mode-polygon').style.background = mode === 'POLYGON' ? '#f59e0b' : '#334155';
+                    document.getElementById('paint-mode-polygon').style.color = mode === 'POLYGON' ? '#0f172a' : '#94a3b8';
+                    
+                    let pnl = document.getElementById('sb-paint-controls');
+                    if(pnl) {
+                        pnl.style.display = 'block';
+                        document.getElementById('paint-panel-content').appendChild(pnl);
+                    }
+                    
+                    document.getElementById('polygon-actions-container').style.display = (mode === 'POLYGON') ? 'block' : 'none';
+                    
+                    // Sync color
+                    if (mode === 'FREEHAND') {
+                        let hex = window._smartPaintColor || '#8bc45d';
+                        window.activeColor = hex;
+                        if (typeof sculptBrushCursor !== 'undefined' && sculptBrushCursor) {
+                            sculptBrushCursor.material.color.setHex(parseInt(hex.replace('#', '0x')));
+                            sculptBrushCursor.visible = true;
+                            sculptBrushCursor.scale.set(1, 1, 1);
+                        }
+                        if (typeof clearSmartGreen === 'function') clearSmartGreen();
+                    } else {
+                        if (typeof sculptBrushCursor !== 'undefined' && sculptBrushCursor) {
+                            sculptBrushCursor.visible = false;
+                        }
+                    }
+                    if (typeof setSmartPaintSurface === 'function') {
+                        setSmartPaintSurface(window._smartPaintSurface || 'foregreen');
+                    }
+                }
+            </script>
+        </div>
+
+        <script>
+            window.undoPolygonPoint = function() {
+                if (window._smartShapeClosed) {
+                    window._smartShapeClosed = false; // Open up the polygon again
+                    if (typeof updateSmartGreenPreview === 'function') updateSmartGreenPreview();
+                    return;
+                }
+                if (typeof smartGreenPoints !== 'undefined' && smartGreenPoints.length > 0) {
+                    smartGreenPoints.pop();
+                    if (typeof updateSmartGreenPreview === 'function') updateSmartGreenPreview();
+                }
+            };
+            
+            window.executePropsPolygon = function() {
+                if(typeof smartGreenPoints === 'undefined' || smartGreenPoints.length < 3) return;
+                if(typeof window.saveUndoState === 'function') window.saveUndoState();
+                
+                // Generate detailed boundary
+                let curve = new THREE.CatmullRomCurve3(smartGreenPoints, true);
+                let numSamples = Math.max(200, smartGreenPoints.length * 40);
+                let densePts = curve.getPoints(numSamples);
+                let shapePts = densePts.map(p => ({x: p.x, z: p.z}));
+                
+                // Bounding box
+                let minX = Infinity, maxZ = -Infinity, maxX = -Infinity, minZ = Infinity;
+                shapePts.forEach(p => {
+                    if(p.x < minX) minX = p.x;
+                    if(p.x > maxX) maxX = p.x;
+                    if(p.z < minZ) minZ = p.z;
+                    if(p.z > maxZ) maxZ = p.z;
+                });
+                
+                // Ray casting point-in-polygon test
+                function isPointInPolygon(px, pz) {
+                    let inside = false;
+                    for (let i = 0, j = shapePts.length - 1; i < shapePts.length; j = i++) {
+                        let xi = shapePts[i].x, zi = shapePts[i].z;
+                        let xj = shapePts[j].x, zj = shapePts[j].z;
+                        let intersect = ((zi > pz) !== (zj > pz)) && (px < (xj - xi) * (pz - zi) / (zj - zi) + xi);
+                        if (intersect) inside = !inside;
+                    }
+                    return inside;
+                }
+                
+                let area = (maxX - minX) * (maxZ - minZ); 
+                let numProps = Math.floor(area / 15); // Prop density
+                
+                for(let i=0; i<numProps; i++) {
+                    let px = minX + Math.random() * (maxX - minX);
+                    let pz = minZ + Math.random() * (maxZ - minZ);
+                    
+                    if (isPointInPolygon(px, pz)) {
+                        if(window.forestRespectBiomes && window.terrainBiomeData) {
+                            let pxX = Math.floor(((px + window.TERRAIN_SIZE/2) / window.TERRAIN_SIZE) * 4096);
+                            let pxZ = Math.floor(((pz + window.TERRAIN_SIZE/2) / window.TERRAIN_SIZE) * 4096);
+                            pxX = Math.max(0, Math.min(4095, pxX));
+                            pxZ = Math.max(0, Math.min(4095, pxZ));
+                            let idx4 = (pxZ * 4096 + pxX) * 4;
+                            let r = window.terrainBiomeData[idx4];
+                            let g = window.terrainBiomeData[idx4+1];
+                            if(g > 150 && r < 180) continue; 
+                            if(r > 190 && g > 180) continue; 
+                        }
+                        
+                        let type = window.currentNatureType;
+                        if (!type) {
+                            let types = Object.keys(window.ASSET_REGISTRY).filter(k => {
+                                let a = window.ASSET_REGISTRY[k];
+                                return a.cat === 'nature' && a.subcat === window.currentNatureCategory;
+                            });
+                            if (types.length === 0) continue;
+                            type = types[Math.floor(Math.random() * types.length)];
+                        }
+                        
+                        let y = typeof getTerrainHeight === 'function' ? getTerrainHeight(px, -pz) : 0;
+                        if(typeof placeNature === 'function') placeNature(px, y, pz, type);
+                    }
+                }
+                
+                if (window.showBuildToast) window.showBuildToast('🌲 Props scattered in polygon', '#10b981');
+                if (typeof clearSmartGreen === 'function') clearSmartGreen();
+            };
+        </script>
 
         <!-- Färg för block / Målning -->
         <div id="color-picker-group" class="prop-panel">
@@ -581,8 +755,51 @@
             </script>
         </div>
 
-        <!-- Naturväljare -->
+        <!-- Naturväljare (Numera PROPS) -->
         <div id="nature-picker-group" class="prop-panel">
+            <div style="display:flex; gap:4px; margin-bottom:10px;">
+                <button id="props-mode-single" onclick="setPropsMode('SINGLE')" style="flex:1; background:#4ade80; color:#0f172a; border:none; padding:6px 4px; font-size:10px; border-radius:5px; font-weight:bold; cursor:pointer;">🎯 SINGLE</button>
+                <button id="props-mode-brush" onclick="setPropsMode('BRUSH')" style="flex:1; background:#334155; color:#94a3b8; border:none; padding:6px 4px; font-size:10px; border-radius:5px; font-weight:bold; cursor:pointer;">🖌️ BRUSH</button>
+                <button id="props-mode-polygon" onclick="setPropsMode('POLYGON')" style="flex:1; background:#334155; color:#94a3b8; border:none; padding:6px 4px; font-size:10px; border-radius:5px; font-weight:bold; cursor:pointer;">📐 POLYGON</button>
+            </div>
+            
+            <div id="props-polygon-actions" style="display:none; margin-bottom:10px;">
+                <div style="display:flex; gap:4px; margin-bottom:4px;">
+                    <button onclick="if(window.undoPolygonPoint) window.undoPolygonPoint();" style="flex:1; background:#334155; color:#94a3b8; border:none; padding:8px 4px; border-radius:5px; font-weight:bold; font-size:10px; cursor:pointer;">↩️ Ångra Punkt</button>
+                    <button onclick="if(window.clearSmartGreen) window.clearSmartGreen();" style="flex:1; background:#ef4444; color:#fff; border:none; padding:8px 4px; border-radius:5px; font-weight:bold; font-size:10px; cursor:pointer;">🗑️ Rensa</button>
+                </div>
+                <button onclick="if(window.executePropsPolygon) window.executePropsPolygon();" style="width:100%; background:linear-gradient(135deg, #10b981, #059669); color:#fff; border:none; padding:10px 0; border-radius:6px; font-weight:bold; font-size:12px; cursor:pointer; box-shadow:0 4px 15px rgba(16,185,129,0.4);">🌴 FYLL MED OBJEKT</button>
+            </div>
+
+            <script>
+                window._propsToolMode = 'SINGLE';
+                function setPropsMode(mode) {
+                    window._propsToolMode = mode;
+                    document.getElementById('props-mode-single').style.background = mode === 'SINGLE' ? '#4ade80' : '#334155';
+                    document.getElementById('props-mode-single').style.color = mode === 'SINGLE' ? '#0f172a' : '#94a3b8';
+                    document.getElementById('props-mode-brush').style.background = mode === 'BRUSH' ? '#4ade80' : '#334155';
+                    document.getElementById('props-mode-brush').style.color = mode === 'BRUSH' ? '#0f172a' : '#94a3b8';
+                    document.getElementById('props-mode-polygon').style.background = mode === 'POLYGON' ? '#f59e0b' : '#334155';
+                    document.getElementById('props-mode-polygon').style.color = mode === 'POLYGON' ? '#0f172a' : '#94a3b8';
+                    
+                    document.getElementById('props-polygon-actions').style.display = (mode === 'POLYGON') ? 'block' : 'none';
+                    
+                    // Same pointer/cursor logic as Paint tool
+                    if (typeof setPaintMode === 'function') {
+                        setPaintMode(mode === 'POLYGON' ? 'POLYGON' : 'FREEHAND'); 
+                    }
+                    if (mode === 'SINGLE' || mode === 'POLYGON') {
+                        if (typeof sculptBrushCursor !== 'undefined' && sculptBrushCursor) {
+                            sculptBrushCursor.visible = false;
+                        }
+                    } else if (mode === 'BRUSH') {
+                        if (typeof sculptBrushCursor !== 'undefined' && sculptBrushCursor) {
+                            sculptBrushCursor.visible = true;
+                        }
+                    }
+                }
+            </script>
+
             <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">Category</label>
             <div style="display:flex; gap:5px; margin-bottom:10px;">
                 <button id="cat-btn-TREES" class="sys-btn active" onclick="setNatureCategory('TREES')" style="flex:1; padding:6px 0; font-size:12px;">🌲 Trees</button>
@@ -7912,7 +8129,7 @@
                 updateSplinePreview();
             }
             controls.enabled = false;
-        } else if(currentTool === 'SMART_BUILDER') {
+        } else if(currentTool === 'SMART_BUILDER' || (currentTool === 'PAINT' && window._paintToolMode === 'POLYGON') || (currentTool === 'PROPS' && window._propsToolMode === 'POLYGON')) {
             if(window._smartBuildCooldown) { controls.enabled = false; return; }
             // AIM mode: single click places/moves aim point (golf) or checkpoint (rally)
             if(window._smartBuilderType === 'AIM' && e.button === 0 && lastHitPoint) {
@@ -7967,7 +8184,7 @@
             }
             if(e.button === 0 && lastHitPoint) {
                 // --- SMART_BUILDER: Rally Gate Placement ---
-                if (window.EDITOR_MODE === 'rally' && (window._smartBuilderType === 'TEE' || window._smartBuilderType === 'GREEN')) {
+                if (currentTool === 'SMART_BUILDER' && window.EDITOR_MODE === 'rally' && (window._smartBuilderType === 'TEE' || window._smartBuilderType === 'GREEN')) {
                     if (window._smartBuilderType === 'TEE') {
                         if (typeof window.executeSmartStartClick === 'function') window.executeSmartStartClick(lastHitPoint.x, lastHitPoint.y, lastHitPoint.z, window._rallyGateRotation || 0);
                     } else {
@@ -7977,8 +8194,17 @@
                     return;
                 }
 
-                // Try drag-start on existing point first (within 3m)
-                if (smartGreenPoints.length > 0 && window.smartStartDrag && window.smartStartDrag(lastHitPoint.clone())) {
+                let distToFirst = 999;
+                if (smartGreenPoints.length >= 3 && !window._smartShapeClosed) {
+                    let dx = lastHitPoint.x - smartGreenPoints[0].x;
+                    let dz = lastHitPoint.z - smartGreenPoints[0].z;
+                    distToFirst = Math.sqrt(dx*dx + dz*dz);
+                }
+
+                // Try drag-start on existing point first (within 3m), UNLESS we are closing the shape
+                if (distToFirst < 8.0) {
+                    smartAddPoint(lastHitPoint.clone());
+                } else if (smartGreenPoints.length > 0 && window.smartStartDrag && window.smartStartDrag(lastHitPoint.clone())) {
                     // Dragging mode — don't add new point
                 } else {
                     if(!smartAddPoint(lastHitPoint.clone())) {
@@ -7993,7 +8219,7 @@
             controls.enabled = false;
         } else if(currentTool === 'TEST_PUTT') {
             // Legacy handler — no longer reachable from UI
-        } else if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'FOREST' || currentTool === 'RAMP') {
+        } else if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || (currentTool === 'PAINT' && window._paintToolMode !== 'POLYGON') || currentTool === 'WATER' || currentTool === 'RIDGE' || currentTool === 'NOISE' || (currentTool === 'PROPS' && window._propsToolMode === 'BRUSH') || currentTool === 'RAMP') {
             isSculpting = true;
             controls.enabled = false; 
             let isTouch = (e.pointerType === 'touch');
@@ -8037,7 +8263,7 @@
             saveLevel();
             return;
         }
-        if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'FOREST' || currentTool === 'RAMP' || currentTool === 'SPLINE' || currentTool === 'SMART_BUILDER' || currentTool === 'COLORIZE') {
+        if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'RAMP' || currentTool === 'SPLINE' || currentTool === 'SMART_BUILDER' || currentTool === 'COLORIZE' || currentTool === 'PROPS') {
             // ── SMART_BUILDER: End drag if in progress ──
             if (currentTool === 'SMART_BUILDER' && window.smartEndDrag && window.smartEndDrag()) {
                 controls.enabled = true;
@@ -8410,7 +8636,7 @@
         
         currentTool = toolName;
         
-        let tools = ['inspect', 'sculpt', 'smooth', 'flatten', 'ramp', 'noise', 'water', 'spline', 'paint', 'mtn', 'smartbuilder', 'testputt', 'ridge', 'nature', 'forest', 'block', 'jump', 'measure', 'eraser', 'colorize'];
+        let tools = ['inspect', 'sculpt', 'smooth', 'flatten', 'ramp', 'noise', 'water', 'spline', 'paint', 'mtn', 'smartbuilder', 'testputt', 'ridge', 'props', 'block', 'jump', 'measure', 'eraser', 'colorize'];
         
         tools.forEach(t => {
             let btn = document.getElementById('tool-' + t);
@@ -8433,19 +8659,30 @@
             else activeBtn.className = base + 'active';
         }
         
-        document.getElementById('color-picker-group').style.display = (toolName === 'BLOCK' || toolName === 'PAINT') ? 'flex' : 'none';
+        document.getElementById('color-picker-group').style.display = (toolName === 'BLOCK') ? 'flex' : 'none';
+        document.getElementById('paint-tool-panel').style.display = (toolName === 'PAINT') ? 'flex' : 'none';
+        
+        if (toolName === 'PAINT') {
+            setPaintMode(window._paintToolMode || 'FREEHAND');
+        }
         document.getElementById('terrain-paint-group').style.display = (toolName === 'MTN') ? 'flex' : 'none';
         if (toolName === 'MTN') {
             if (typeof setMtnMode === 'function') setMtnMode(window._mtnToolMode || 'PAINT');
         }
-        document.getElementById('nature-picker-group').style.display = (toolName === 'NATURE') ? 'flex' : 'none';
+        document.getElementById('nature-picker-group').style.display = (toolName === 'PROPS') ? 'flex' : 'none';
+        if (toolName === 'PROPS') {
+            if (typeof setPropsMode === 'function') setPropsMode(window._propsToolMode || 'SINGLE');
+        }
         document.getElementById('hole-picker-group').style.display = (toolName === 'HOLE') ? 'flex' : 'none';
         // Jump tool activation/deactivation
         if (toolName === 'JUMP' && window.activateJumpTool) window.activateJumpTool();
         else if (window.deactivateJumpTool) window.deactivateJumpTool();
         document.getElementById('colorize-picker-group').style.display = (toolName === 'COLORIZE') ? 'flex' : 'none';
         document.getElementById('putt-settings-group').style.display = (toolName === 'TEST_PUTT') ? 'flex' : 'none';
-        document.getElementById('sculpt-settings-group').style.display = (toolName === 'SCULPT' || toolName === 'SMOOTH' || toolName === 'FLATTEN' || toolName === 'PAINT' || toolName === 'WATER' || toolName === 'RIDGE' || toolName === 'NOISE') ? 'flex' : 'none';
+        document.getElementById('sculpt-settings-group').style.display = (toolName === 'SCULPT' || toolName === 'SMOOTH' || toolName === 'FLATTEN' || toolName === 'PAINT' || toolName === 'WATER' || toolName === 'RIDGE' || toolName === 'NOISE' || toolName === 'RAMP') ? 'flex' : 'none';
+        
+        let rampSettings = document.getElementById('ramp-settings');
+        if (rampSettings) rampSettings.style.display = (toolName === 'RAMP') ? 'flex' : 'none';
         document.getElementById('noise-pattern-group').style.display = (toolName === 'NOISE') ? 'flex' : 'none';
         document.getElementById('water-settings-group').style.display = (toolName === 'WATER') ? 'flex' : 'none';
         
@@ -8493,7 +8730,9 @@
         }
         if (toolName === 'INSPECT') hintHtml = "<b>Safe Mode</b>: Look around without modifying terrain";
         else if (toolName === 'BLOCK') hintHtml = "Left Click: <b>Build Block</b><br>Right Click: <b>Remove</b>";
-        else if (toolName === 'NATURE') hintHtml = "Left Click: <b>Plant Nature</b><br>Right Click: <b>Remove Tree</b>";
+        else if (toolName === 'PROPS' && window._propsToolMode === 'SINGLE') hintHtml = "Left Click: <b>Plant Prop</b><br>Right Click: <b>Remove Prop</b>";
+        else if (toolName === 'PROPS' && window._propsToolMode === 'BRUSH') hintHtml = "Hold Mouse: <b>Scatter props</b> (respects biome toggle)";
+        else if (toolName === 'PROPS' && window._propsToolMode === 'POLYGON') hintHtml = "Left Click: <b>Draw Polygon</b><br>Snap near start to close.";
         else if (toolName === 'SCULPT') hintHtml = "Hold Left: <b>Raise Ground</b><br>Hold Right: <b>Lower Ground</b>";
         else if (toolName === 'SMOOTH') hintHtml = "Hold Mouse: <b>Smooth Terrain</b>";
         else if (toolName === 'FLATTEN') hintHtml = "Hold Mouse: <b>Flatten Surface</b>";
@@ -8570,6 +8809,13 @@
         setBlockColor(hexCol, btnEl);
     };
 
+    window.setCurrentBuildColor = function(hexCol) {
+        currentBuildColor = hexCol;
+        if(currentTool === 'PAINT' && typeof sculptBrushCursor !== 'undefined') {
+            sculptBrushCursor.material.color.setHex(hexCol);
+        }
+    };
+
     function setBlockColor(hexCol, btnEl) {
         currentBuildColor = hexCol;
         ghostBlock.material.color.setHex(hexCol);
@@ -8619,6 +8865,23 @@
             h.tees = { red: null, yellow: null, white: null, black: null, range: null };
             h.flag = null;
         }
+
+        // Fix: Clear rally race config properly
+        if (window.EDITOR_MODE === 'rally' && window.raceConfig) {
+            if (window.raceConfig.startMesh) { scene.remove(window.raceConfig.startMesh); window.raceConfig.startMesh = null; }
+            if (window.raceConfig.finishMesh) { scene.remove(window.raceConfig.finishMesh); window.raceConfig.finishMesh = null; }
+            if (window.raceConfig.checkpointMeshes) {
+                window.raceConfig.checkpointMeshes.forEach(m => {
+                    if (m.ring) scene.remove(m.ring);
+                    if (m.label) scene.remove(m.label);
+                });
+            }
+            window.raceConfig.start = null;
+            window.raceConfig.finish = null;
+            window.raceConfig.checkpoints = [];
+            window.raceConfig.checkpointMeshes = [];
+        }
+
         
         let pos = planeGeo.attributes.position;
         for(let i=0; i<pos.count; i++) { pos.setZ(i, 0); }
@@ -8754,7 +9017,7 @@
             } else {
                 ghostBlock.visible = false;
             }
-        } else if (currentTool === 'NATURE') {
+        } else if (currentTool === 'PROPS' && (window._propsToolMode === 'SINGLE' || !window._propsToolMode)) {
             ghostBlock.visible = false;
             sculptBrushCursor.visible = false;
             raycaster.setFromCamera(mouse, camera);
@@ -8771,7 +9034,7 @@
                 ghostTree.visible = false;
                 lastHitPoint = null;
             }
-        } else if (currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'MEASURE' || currentTool === 'HOLE' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'FOREST' || currentTool === 'RAMP' || currentTool === 'SPLINE' || currentTool === 'COLORIZE' || currentTool === 'ERASER' || currentTool === 'SMART_BUILDER' || currentTool === 'MTN') {
+        } else if (currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'MEASURE' || currentTool === 'HOLE' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'RAMP' || currentTool === 'SPLINE' || currentTool === 'COLORIZE' || currentTool === 'ERASER' || currentTool === 'SMART_BUILDER' || currentTool === 'MTN' || currentTool === 'PROPS') {
             ghostBlock.visible = false;
             ghostTree.visible = false;
             if (window._ghostRallyStart) window._ghostRallyStart.visible = false;
@@ -8801,7 +9064,7 @@
                     }
                 }
                 
-                if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'FOREST' || currentTool === 'RAMP' || currentTool === 'SPLINE' || currentTool === 'COLORIZE') {
+                if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'RAMP' || currentTool === 'SPLINE' || currentTool === 'COLORIZE' || currentTool === 'PROPS') {
                     sculptBrushCursor.visible = true;
                     sculptBrushCursor.position.copy(lastHitPoint);
                     sculptBrushCursor.position.y += 0.5;
@@ -9001,7 +9264,7 @@
             return;
         }
         
-        if (currentTool === 'NATURE' && lastHitPoint) {
+        if (currentTool === 'PROPS' && (window._propsToolMode === 'SINGLE' || !window._propsToolMode) && lastHitPoint) {
             if (!currentNatureType) return; // No asset selected
             let selectedType = currentNatureType;
             let s = 1.0 + (Math.random() * 0.4 - 0.2); // 0.8 to 1.2 x base size
@@ -9019,7 +9282,7 @@
         if(appMode !== 'BUILD') return;
         event.preventDefault(); // Stoppa webbläsarens högerklicksmeny!
         
-        if (currentTool === 'NATURE' && lastHitPoint) {
+        if (currentTool === 'PROPS' && (window._propsToolMode === 'SINGLE' || !window._propsToolMode) && lastHitPoint) {
             let closest = null; let minDist = 10; 
             for(let i=0; i<window.placedTrees.length; i++) {
                 let t = window.placedTrees[i];
@@ -9265,8 +9528,18 @@
         // -------------------------------------------------------------
         if (currentTool === 'RAMP') {
             if (!window.rampStartPt || !window.rampSnapshotHeights) return;
+            
+            // 1. Återställ terrängen till hur den såg ut när man klickade (förhindrar gropiga spår när man drar runt musen)
+            planeGeo.attributes.position.array.set(window.rampSnapshotHeights);
+            
             let A = window.rampStartPt;
-            let B = p2;
+            let B = p2.clone(); // Clone to avoid modifying raycast result
+            
+            // Apply Manual Target Height if "Match Ground" is unchecked
+            if (window.rampSnapToGround === false) {
+                B.y = A.y + (window.rampEndOffset || 0);
+            }
+            
             let R = currentBrushSize;
             
             // Beräkna en rimlig Bounding Box för att spara FPS
@@ -9287,7 +9560,7 @@
                 for (let x = gxMin; x <= gxMax; x++) {
                     let idx = z * (TERRAIN_SEGS+1) + x;
                     let wX = positions[idx*3];
-                    let wZ = -positions[idx*3+1]; // Local Y → World Z (plane rotated -PI/2 on X)
+                    let wZ = -positions[idx*3+1]; // Local Y → World Z
                     
                     let t = 0;
                     if (l2 !== 0) {
@@ -9303,14 +9576,25 @@
                     if (dist < R) {
                         let targetY = A.y + t * (B.y - A.y);
                         
-                        // Smoothstep falloff för runda kanter mot originalterrängen
-                        let norm = dist / R;
-                        let falloff = 1.0 - norm;
-                        falloff = Math.max(0, falloff * falloff * (3 - 2 * falloff)); // Smoothstep
+                        // Gör mitten av rampen helt plan, så bilar/bollar kan köra på den
+                        let coreR = R * 0.5; // Innersta 50% är helt plan
+                        let falloff = 1.0;
+                        if (dist > coreR) {
+                            let norm = (dist - coreR) / (R - coreR);
+                            falloff = 1.0 - norm;
+                            falloff = Math.max(0, falloff * falloff * (3 - 2 * falloff)); // Smoothstep vid kanten
+                        }
                         
-                        let origY = window.rampSnapshotHeights[idx*3+2]; // Original World Y is in local Z position (idx*3+2)
+                        let origY = window.rampSnapshotHeights[idx*3+2]; 
+                        let newY = origY + (targetY - origY) * falloff;
                         
-                        positions[idx*3+2] = origY + (targetY - origY) * falloff;
+                        // Respektera Floor Lock för att undvika "vatten-klippning" (samma som andra verktyg)
+                        if (window.terrainFloorEnabled !== false) {
+                            let floorH = (window.terrainFloorLevel != null) ? window.terrainFloorLevel : -2.0;
+                            if (newY < floorH) newY = floorH;
+                        }
+                        
+                        positions[idx*3+2] = newY;
                         updatePos = true;
                     }
                 }
@@ -9467,7 +9751,7 @@
                     if (positions[i*3 + 2] < floorH) positions[i*3 + 2] = floorH;
                 }
 
-                if (currentTool === 'FOREST') {
+                if (currentTool === 'PROPS' && window._propsToolMode === 'BRUSH') {
                     if (!window.lastForestDropTime) window.lastForestDropTime = 0;
                     let now = performance.now();
                     let dropRate = 80; 
@@ -10978,7 +11262,7 @@ window.triggerExplosion = function(x, y, z) {
 
 <!-- Smart Builder Action Panel -->
 <div id="smart-green-action-panel" style="display:none; position:absolute; bottom:60px; right:10px; background:#0f172a; border:2px solid #4ade80; border-radius:12px; padding:12px 14px; z-index:500; box-shadow: 0 10px 25px rgba(0,0,0,0.5); text-align:center; width:210px;">
-    <h3 style="margin:0 0 8px 0; color:#fff; font-size:12px; text-transform:uppercase; letter-spacing:1px;">🏗️ Track Builder</h3>
+    <h3 id="sb-panel-title" style="margin:0 0 8px 0; color:#fff; font-size:12px; text-transform:uppercase; letter-spacing:1px;">🏗️ TRACK BUILDER</h3>
     
     <!-- Hole Selector (hidden in rally mode) -->
     <div id="sb-hole-nav" style="display:flex; justify-content:space-between; align-items:center; background:#1e293b; border-radius:6px; padding:4px 6px; margin-bottom:8px;">
@@ -11002,7 +11286,7 @@ window.triggerExplosion = function(x, y, z) {
         <button id="sb-type-fairway" onclick="setSmartBuilderType('FAIRWAY')" style="background:#334155; color:#94a3b8; border:none; padding:7px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer;">🛣️ TRACK</button>
         <button id="sb-type-tee" onclick="setSmartBuilderType('TEE')" style="background:#334155; color:#94a3b8; border:none; padding:7px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer;">🟩 START</button>
         <button id="sb-type-aim" onclick="setSmartBuilderType('AIM')" style="background:#334155; color:#94a3b8; border:none; padding:7px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer; ">📍 CP</button>
-        <button id="sb-type-paint" onclick="setSmartBuilderType('PAINT')" style="background:#334155; color:#94a3b8; border:none; padding:7px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer;">🎨 PAINT</button>
+
         <button id="sb-type-road" onclick="setSmartBuilderType('ROAD')" style="background:#334155; color:#94a3b8; border:none; padding:7px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer;">🛣️ ROAD</button>
     </div>
     
@@ -11122,14 +11406,14 @@ window.triggerExplosion = function(x, y, z) {
     <div id="sb-paint-controls" style="display:none;">
         <div style="color:#64748b; font-size:9px; font-weight:bold; text-transform:uppercase; margin-bottom:4px; text-align:left;">Surface Type</div>
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:3px; margin-bottom:6px;">
-            <button id="sp-foregreen" onclick="setSmartPaintSurface('foregreen')" class="sp-btn" style="background:#4ade80; color:#0f172a; border:none; padding:5px 3px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer;">Foregreen</button>
-            <button id="sp-fairway" onclick="setSmartPaintSurface('fairway')" class="sp-btn" style="background:#334155; color:#94a3b8; border:none; padding:5px 3px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer;">Fairway</button>
-            <button id="sp-semi" onclick="setSmartPaintSurface('semi')" class="sp-btn" style="background:#334155; color:#94a3b8; border:none; padding:5px 3px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer;">Semi-rough</button>
-            <button id="sp-rough" onclick="setSmartPaintSurface('rough')" class="sp-btn" style="background:#334155; color:#94a3b8; border:none; padding:5px 3px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer;">Rough</button>
-            <button id="sp-fescue" onclick="setSmartPaintSurface('fescue')" class="sp-btn" style="background:#334155; color:#94a3b8; border:none; padding:5px 3px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer;">Deep Rough</button>
-            <button id="sp-bunker" onclick="setSmartPaintSurface('bunker')" class="sp-btn" style="background:#334155; color:#94a3b8; border:none; padding:5px 3px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer;">Sand</button>
-            <button id="sp-waste" onclick="setSmartPaintSurface('waste')" class="sp-btn" style="background:#334155; color:#94a3b8; border:none; padding:5px 3px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer;">Waste</button>
-            <button id="sp-ob" onclick="setSmartPaintSurface('ob')" class="sp-btn" style="background:#334155; color:#94a3b8; border:none; padding:5px 3px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer;">OB</button>
+            <button id="sp-foregreen" onclick="setSmartPaintSurface('foregreen')" class="sp-btn" style="border:2px solid transparent; padding:5px 3px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer; color:#fff; text-shadow:1px 1px 2px rgba(0,0,0,0.8);">Foregreen</button>
+            <button id="sp-fairway" onclick="setSmartPaintSurface('fairway')" class="sp-btn" style="border:2px solid transparent; padding:5px 3px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer; color:#fff; text-shadow:1px 1px 2px rgba(0,0,0,0.8);">Fairway</button>
+            <button id="sp-semi" onclick="setSmartPaintSurface('semi')" class="sp-btn" style="border:2px solid transparent; padding:5px 3px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer; color:#fff; text-shadow:1px 1px 2px rgba(0,0,0,0.8);">Semi-rough</button>
+            <button id="sp-rough" onclick="setSmartPaintSurface('rough')" class="sp-btn" style="border:2px solid transparent; padding:5px 3px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer; color:#fff; text-shadow:1px 1px 2px rgba(0,0,0,0.8);">Rough</button>
+            <button id="sp-fescue" onclick="setSmartPaintSurface('fescue')" class="sp-btn" style="border:2px solid transparent; padding:5px 3px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer; color:#fff; text-shadow:1px 1px 2px rgba(0,0,0,0.8);">Deep Rough</button>
+            <button id="sp-bunker" onclick="setSmartPaintSurface('bunker')" class="sp-btn" style="border:2px solid transparent; padding:5px 3px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer; color:#fff; text-shadow:1px 1px 2px rgba(0,0,0,0.8);">Sand</button>
+            <button id="sp-waste" onclick="setSmartPaintSurface('waste')" class="sp-btn" style="border:2px solid transparent; padding:5px 3px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer; color:#fff; text-shadow:1px 1px 2px rgba(0,0,0,0.8);">Waste</button>
+            <button id="sp-ob" onclick="setSmartPaintSurface('ob')" class="sp-btn" style="border:2px solid transparent; padding:5px 3px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer; color:#fff; text-shadow:1px 1px 2px rgba(0,0,0,0.8);">OB</button>
         </div>
         <div style="background:#1e293b; padding:5px 8px; border-radius:6px; margin-bottom:4px;">
             <div style="display:flex; align-items:center; gap:6px;">
@@ -11309,6 +11593,10 @@ window.triggerExplosion = function(x, y, z) {
             var nameMap = {foregreen:'Foregreen', fairway:'Fairway', semi:'Semi-rough', rough:'Rough', fescue:'Deep Rough', green:'Green', bunker:'Sand', waste:'Waste', water:'Water', ob:'OB', custom:'Custom'};
             var color = colorMap[surface] || '#7db952';
             window._smartPaintColor = color;
+            window.activeColor = color;
+            if (typeof sculptBrushCursor !== 'undefined' && sculptBrushCursor && window.currentTool === 'PAINT' && window._paintToolMode === 'FREEHAND') {
+                sculptBrushCursor.material.color.setHex(parseInt(color.replace('#', '0x')));
+            }
             // Update preview
             var swatch = document.getElementById('sp-preview-swatch');
             var label = document.getElementById('sp-preview-name');
@@ -11319,10 +11607,20 @@ window.triggerExplosion = function(x, y, z) {
             surfaces.forEach(function(s) {
                 var btn = document.getElementById('sp-' + s);
                 if (btn) {
-                    btn.style.background = (s === surface) ? '#a78bfa' : '#334155';
-                    btn.style.color = (s === surface) ? '#0f172a' : '#94a3b8';
+                    btn.style.background = colorMap[s] || '#334155';
+                    if (s === surface) {
+                        btn.style.border = '2px solid #ffffff';
+                        btn.style.boxShadow = '0 0 8px ' + (colorMap[s] || '#ffffff');
+                    } else {
+                        btn.style.border = '2px solid transparent';
+                        btn.style.boxShadow = 'none';
+                    }
                 }
             });
+            // Fix: Actually update the internal brush color for freehand painting
+            if (typeof window.setCurrentBuildColor === 'function') {
+                window.setCurrentBuildColor(parseInt(color.replace('#', '0x')));
+            }
         }
         window._raisedGreenActive = false;
 
@@ -11388,7 +11686,7 @@ window.triggerExplosion = function(x, y, z) {
         function setSmartBuilderType(type) {
             window._rallyGateManualRotation = false;
             window._smartBuilderType = type;
-            ['GREEN','BUNKER','FAIRWAY','TEE','AIM','PAINT','ROAD'].forEach(t => {
+            ['GREEN','BUNKER','FAIRWAY','TEE','AIM','ROAD'].forEach(t => {
                 let btn = document.getElementById('sb-type-' + t.toLowerCase());
                 if(btn) {
                     btn.style.background = (t === type) ? '#4ade80' : '#334155';
@@ -11400,7 +11698,7 @@ window.triggerExplosion = function(x, y, z) {
             document.getElementById('sb-fairway-controls').style.display = (type === 'FAIRWAY') ? 'block' : 'none';
             document.getElementById('sb-tee-controls').style.display = (type === 'TEE') ? 'block' : 'none';
             document.getElementById('sb-aim-controls').style.display = (type === 'AIM') ? 'block' : 'none';
-            document.getElementById('sb-paint-controls').style.display = (type === 'PAINT') ? 'block' : 'none';
+
             document.getElementById('sb-road-controls').style.display = (type === 'ROAD') ? 'block' : 'none';
             document.getElementById('sb-mow-controls').style.display = (type === 'GREEN' || type === 'FAIRWAY' || type === 'TEE') ? 'block' : 'none';
             // Reset mowing pattern when leaving GREEN/FAIRWAY/TEE to prevent pattern leaking
@@ -11411,7 +11709,7 @@ window.triggerExplosion = function(x, y, z) {
             }
             // Update panel border color
             let panel = document.getElementById('smart-green-action-panel');
-            let colors = {GREEN: '#4ade80', BUNKER: '#f59e0b', FAIRWAY: '#7db952', TEE: '#38bdf8', AIM: '#f59e0b', PAINT: '#a78bfa', ROAD: '#f59e0b'};
+            let colors = {GREEN: '#4ade80', BUNKER: '#f59e0b', FAIRWAY: '#7db952', TEE: '#38bdf8', AIM: '#f59e0b', ROAD: '#f59e0b'};
             panel.style.borderColor = colors[type] || '#4ade80';
             // Update build button
             let buildBtn = document.getElementById('sb-build-btn');
@@ -11541,7 +11839,6 @@ window.triggerExplosion = function(x, y, z) {
     <div id="sb-hint-text" style="color:#64748b; font-size:8px; margin-top:4px;">Click to place points. Loop closes auto.</div>
 </div>
 
-<script src="smart-builder.js"></script>
 <script src="arcade-lm-bridge.js"></script>
 
 <script>
