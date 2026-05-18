@@ -69,6 +69,7 @@
 <script src="rally-camera.js"></script>
 <script src="rally-respawn.js"></script>
 <script src="rally-vehicle.js"></script>
+<script src="helicopter-vehicle.js"></script>  <!-- Helicopter physics -->
 <script src="terrain-shader-utils.js"></script>    <!-- PHASE 2 — procedural textures -->
 <script src="terrain-shader-material.js"></script> <!-- PHASE 2 — GLSL + ShaderMaterial -->
 <script src="terrain-shader-geo.js"></script>       <!-- PHASE 2 — splat map, vertex colors -->
@@ -455,23 +456,27 @@
 
 
     // ── Resolve spawn position from saved level data ──
-    // Holes/tees live in arcade_custom_level (saved by saveLevel()).
-    // The terrain snapshot only has heightmap+biome — never any holes data.
-    // Do NOT load snapshot here: it would silently return null because snap has no holes.
+    // Rally mode: reads raceConfig.start
+    // Golf fallback: reads holes[0].tees.yellow
     function resolveSpawnPosition() {
-        // saveLevel() always writes holes to arcade_custom_level (via saveCustomLevel).
-        // arcade_custom_level_z is only written on URL-share import — may be stale.
-        // Read custom level first so newest holes/tees always win.
         let level = ArcadeStorage.loadCustomLevel() || ArcadeStorage.loadCompressedLevel();
         if (!level) return null;
+        
+        // RALLY: read start position + load full race config
+        if (level.rally && level.rally.start) {
+            window.raceConfig = level.rally;
+            let s = level.rally.start;
+            console.log('🏎️ Spawn from RALLY START:', s);
+            return new THREE.Vector3(s.x || 0, (s.y || 2) + 0.5, s.z || 0);
+        }
+        
+        // GOLF fallback (backward compatibility)
         let holes = level.holes || level.h;
         if (!holes || !holes.length) return null;
         let tees = holes[0].tees || holes[0].t;
         if (!tees) return null;
-        // Prefer yellow (amateur default), fall back through red/white/black
         let t = tees.yellow || tees.red || tees.white || tees.black;
         if (!t) return null;
-        // Tees store {x, y, z} in world space matching arcade.html planeGeo coords
         console.log('🏎️ Spawn from tee:', t);
         return new THREE.Vector3(t.x || 0, (t.y || 2) + 0.5, t.z || 0);
     }
@@ -510,20 +515,292 @@
         }, 500);
     }
 
+    // ── Race Logic ──
+    let raceState = {
+        started: false,
+        timer: 0,
+        penalty: 0,
+        nextCheckpoint: 0,
+        checkpointsHit: [],
+        finished: false,
+        finalTime: 0,
+        dnf: false,
+        checkpointMeshes: [],
+        gateMeshes: [],
+    };
+
+    function initRaceVisuals() {
+        let rc = window.raceConfig;
+        if (!rc) return;
+        
+        // Create start gate
+        if (rc.start) {
+            let g = createRaceGate(rc.start, 'start');
+            scene.add(g);
+            raceState.gateMeshes.push(g);
+        }
+        // Create finish gate
+        if (rc.finish) {
+            let g = createRaceGate(rc.finish, 'finish');
+            scene.add(g);
+            raceState.gateMeshes.push(g);
+        }
+        // Create checkpoint rings
+        if (rc.checkpoints) {
+            rc.checkpoints.forEach(function(cp, i) {
+                let ring = new THREE.Mesh(
+                    new THREE.TorusGeometry((cp.radius || 10) * 0.5, 0.3, 8, 24),
+                    new THREE.MeshLambertMaterial({ color: 0xfacc15, transparent: true, opacity: 0.7 })
+                );
+                ring.rotation.x = Math.PI / 2;
+                let groundY = 0;
+                if (typeof window.localGetTerrainAt === 'function') {
+                    groundY = window.localGetTerrainAt(cp.x, -cp.z).z;
+                }
+                ring.position.set(cp.x, groundY + 3, cp.z);
+                scene.add(ring);
+                raceState.checkpointMeshes.push(ring);
+            });
+        }
+    }
+    
+    function createRaceGate(pos, type) {
+        let gate = new THREE.Group();
+        let roadW = (window.raceConfig && window.raceConfig.roadWidth) || 10;
+        let halfW = roadW / 2, poleH = 5;
+        let poleColor = type === 'start' ? 0x22cc44 : 0xeeeeee;
+        let poleMat = new THREE.MeshLambertMaterial({ color: poleColor });
+        let poleGeo = new THREE.CylinderGeometry(0.15, 0.15, poleH, 8);
+        let left = new THREE.Mesh(poleGeo, poleMat);
+        left.position.set(-halfW, poleH/2, 0);
+        gate.add(left);
+        let right = new THREE.Mesh(poleGeo, poleMat);
+        right.position.set(halfW, poleH/2, 0);
+        gate.add(right);
+        let beamColor = type === 'start' ? 0x22cc44 : 0x111111;
+        let beam = new THREE.Mesh(
+            new THREE.BoxGeometry(roadW+0.3, 0.5, 0.5),
+            new THREE.MeshLambertMaterial({ color: beamColor })
+        );
+        beam.position.set(0, poleH, 0);
+        gate.add(beam);
+        
+        // Banner (START=green text, FINISH=checkered pattern)
+        let bannerCanvas = document.createElement('canvas');
+        bannerCanvas.width = 256; bannerCanvas.height = 64;
+        let bCtx = bannerCanvas.getContext('2d');
+        if (type === 'start') {
+            bCtx.fillStyle = '#22cc44';
+            bCtx.fillRect(0, 0, 256, 64);
+            bCtx.fillStyle = '#fff';
+            bCtx.font = 'bold 40px Arial';
+            bCtx.textAlign = 'center';
+            bCtx.fillText('START', 128, 46);
+        } else {
+            let sq = 16;
+            for (let row = 0; row < 64/sq; row++) {
+                for (let col = 0; col < 256/sq; col++) {
+                    bCtx.fillStyle = (row + col) % 2 === 0 ? '#fff' : '#111';
+                    bCtx.fillRect(col * sq, row * sq, sq, sq);
+                }
+            }
+            bCtx.fillStyle = '#111';
+            bCtx.font = 'bold 32px Arial';
+            bCtx.textAlign = 'center';
+            bCtx.fillText('FINISH', 128, 44);
+        }
+        let bannerTex = new THREE.CanvasTexture(bannerCanvas);
+        let banner = new THREE.Mesh(
+            new THREE.PlaneGeometry(roadW * 0.8, 1.2),
+            new THREE.MeshBasicMaterial({ map: bannerTex, side: THREE.DoubleSide })
+        );
+        banner.position.set(0, poleH - 1.0, 0.3);
+        gate.add(banner);
+        
+        let groundY = 0;
+        if (typeof window.localGetTerrainAt === 'function') {
+            groundY = window.localGetTerrainAt(pos.x, -pos.z).z;
+        }
+        gate.position.set(pos.x, groundY, pos.z);
+        // Apply saved rotation
+        if (pos.rotation) gate.rotation.y = pos.rotation;
+        return gate;
+    }
+
+    function createRaceHUD() {
+        let ex = document.getElementById('race-hud');
+        if (ex) ex.remove();
+        let h = document.createElement('div');
+        h.id = 'race-hud';
+        h.innerHTML =
+        '<div style="position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:9999;pointer-events:none;font-family:\'Inter\',\'Segoe UI\',sans-serif">' +
+        '<div style="background:rgba(15,23,42,0.92);border:1px solid #334155;border-radius:14px;padding:10px 24px;backdrop-filter:blur(12px);text-align:center;min-width:220px">' +
+        '<div id="race-timer" style="font-size:40px;font-weight:900;color:#4ade80;letter-spacing:-1px;line-height:1">0:00.0</div>' +
+        '<div style="display:flex;justify-content:center;gap:16px;margin-top:4px">' +
+        '<div><span style="font-size:9px;color:#64748b;text-transform:uppercase;font-weight:bold">Checkpoint</span>' +
+        '<div id="race-cp" style="font-size:14px;color:#fbbf24;font-weight:bold">0/0</div></div>' +
+        '<div><span style="font-size:9px;color:#64748b;text-transform:uppercase;font-weight:bold">Penalty</span>' +
+        '<div id="race-penalty" style="font-size:14px;color:#ef4444;font-weight:bold">+0s</div></div>' +
+        '</div></div></div>' +
+        '<div id="race-start-msg" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10000;pointer-events:none;' +
+        'color:#4ade80;font-size:28px;font-weight:900;font-family:\'Inter\',sans-serif;text-shadow:0 0 30px rgba(74,222,128,0.4);text-align:center">' +
+        'GAS FÖR ATT STARTA 🏁</div>';
+        document.body.appendChild(h);
+    }
+
+    function updateRaceLogic(dt) {
+        let rc = window.raceConfig;
+        if (!rc || !rc.start || !rc.finish) return;
+        
+        let carPos = null;
+        if (window.rallyVehicle && window.rallyVehicle.isActive() && window.rallyVehicle.getCar) {
+            carPos = window.rallyVehicle.getCar().position;
+        }
+        if (!carPos) return;
+        
+        if (raceState.finished || raceState.dnf) return;
+        
+        // Detect throttle to start
+        if (!raceState.started) {
+            // Check if car is moving (any velocity)
+            let car = window.rallyVehicle.getCar();
+            if (car && car._speed && Math.abs(car._speed) > 0.5) {
+                raceState.started = true;
+                let msg = document.getElementById('race-start-msg');
+                if (msg) { msg.style.opacity = '0'; setTimeout(function() { msg.remove(); }, 500); }
+            }
+            return;
+        }
+        
+        raceState.timer += dt;
+        
+        // Check checkpoints in order
+        if (rc.checkpoints && raceState.nextCheckpoint < rc.checkpoints.length) {
+            let cp = rc.checkpoints[raceState.nextCheckpoint];
+            let dx = carPos.x - cp.x, dz = carPos.z - cp.z;
+            let dist = Math.sqrt(dx*dx + dz*dz);
+            if (dist < (cp.radius || 10)) {
+                raceState.checkpointsHit.push(raceState.nextCheckpoint);
+                // Flash checkpoint ring green
+                let ring = raceState.checkpointMeshes[raceState.nextCheckpoint];
+                if (ring) {
+                    ring.material.color.setHex(0x4ade80);
+                    ring.material.opacity = 1.0;
+                    setTimeout(function() { ring.material.opacity = 0.3; }, 1000);
+                }
+                raceState.nextCheckpoint++;
+                console.log('📍 Checkpoint ' + raceState.checkpointsHit.length + '/' + rc.checkpoints.length);
+            }
+        }
+        
+        // Check finish
+        let allCPDone = !rc.checkpoints || raceState.nextCheckpoint >= rc.checkpoints.length;
+        let dxF = carPos.x - rc.finish.x, dzF = carPos.z - rc.finish.z;
+        let distFinish = Math.sqrt(dxF*dxF + dzF*dzF);
+        
+        if (distFinish < 15) {
+            // Check missed checkpoints
+            if (!allCPDone) {
+                let missed = rc.checkpoints.length - raceState.checkpointsHit.length;
+                let rule = rc.missedCheckpointRule || 'PENALTY_5S';
+                if (rule === 'FAIL') {
+                    raceState.dnf = true;
+                    showRaceResult();
+                    return;
+                } else if (rule === 'PENALTY_2S') raceState.penalty += missed * 2;
+                else if (rule === 'PENALTY_5S') raceState.penalty += missed * 5;
+                else if (rule === 'PENALTY_10S') raceState.penalty += missed * 10;
+            }
+            raceState.finished = true;
+            raceState.finalTime = raceState.timer + raceState.penalty;
+            showRaceResult();
+            return;
+        }
+        
+        // Update HUD
+        updateRaceHUD();
+    }
+
+    function updateRaceHUD() {
+        let te = document.getElementById('race-timer');
+        if (te) {
+            let t = raceState.timer;
+            let min = Math.floor(t / 60);
+            let sec = Math.floor(t % 60);
+            let dec = Math.floor((t % 1) * 10);
+            te.textContent = min + ':' + String(sec).padStart(2, '0') + '.' + dec;
+            te.style.color = raceState.started ? '#4ade80' : '#94a3b8';
+        }
+        let cp = document.getElementById('race-cp');
+        let rc = window.raceConfig;
+        if (cp && rc) {
+            let total = rc.checkpoints ? rc.checkpoints.length : 0;
+            cp.textContent = raceState.checkpointsHit.length + '/' + total;
+        }
+        let pe = document.getElementById('race-penalty');
+        if (pe) {
+            pe.textContent = '+' + raceState.penalty + 's';
+            pe.style.color = raceState.penalty > 0 ? '#ef4444' : '#64748b';
+        }
+    }
+
+    function showRaceResult() {
+        let ex = document.getElementById('race-result');
+        if (ex) ex.remove();
+        let d = document.createElement('div');
+        d.id = 'race-result';
+        d.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10001;' +
+            'background:rgba(15,23,42,0.96);border:2px solid #4ade80;border-radius:20px;padding:30px 40px;' +
+            'text-align:center;font-family:\'Inter\',\'Segoe UI\',sans-serif;backdrop-filter:blur(16px);min-width:280px;';
+        
+        if (raceState.dnf) {
+            d.innerHTML = '<div style="font-size:48px;font-weight:900;color:#ef4444">DNF</div>' +
+                '<div style="color:#94a3b8;font-size:14px;margin-top:8px">Missade checkpoints — diskvalificerad</div>' +
+                '<button onclick="location.reload()" style="margin-top:16px;background:#ef4444;color:#fff;border:none;padding:12px 28px;border-radius:10px;font-weight:800;font-size:14px;cursor:pointer">↻ Försök igen</button>';
+        } else {
+            let t = raceState.finalTime;
+            let min = Math.floor(t / 60);
+            let sec = Math.floor(t % 60);
+            let dec = Math.floor((t % 1) * 10);
+            let timeStr = min + ':' + String(sec).padStart(2, '0') + '.' + dec;
+            let penStr = raceState.penalty > 0 ? '<div style="color:#ef4444;font-size:14px;margin-top:4px">Penalty: +' + raceState.penalty + 's</div>' : '';
+            d.innerHTML = '<div style="font-size:22px;font-weight:700;color:#4ade80;text-transform:uppercase;letter-spacing:2px">🏁 FINISHED</div>' +
+                '<div style="font-size:56px;font-weight:900;color:#fff;letter-spacing:-2px;margin:8px 0;line-height:1">' + timeStr + '</div>' +
+                penStr +
+                '<button onclick="location.reload()" style="margin-top:16px;background:#4ade80;color:#0f172a;border:none;padding:12px 28px;border-radius:10px;font-weight:800;font-size:14px;cursor:pointer">↻ Kör igen</button>';
+        }
+        document.body.appendChild(d);
+    }
+
+    // Init race visuals if raceConfig loaded
+    if (window.raceConfig && window.raceConfig.start) {
+        initRaceVisuals();
+        createRaceHUD();
+    }
 
     // ── Animate Loop ──
-    function animate() {
+    let lastAnimTime = 0;
+    function animate(now) {
         requestAnimationFrame(animate);
+        let dt = lastAnimTime ? (now - lastAnimTime) / 1000 : 0.016;
+        lastAnimTime = now;
+        dt = Math.min(dt, 0.05);
 
-        if (window.rallyVehicle && window.rallyVehicle.isActive()) {
+        if (window.rallyHelicopter && window.rallyHelicopter.isActive()) {
+            window.rallyHelicopter.update(camera);
+        } else if (window.rallyVehicle && window.rallyVehicle.isActive()) {
             window.rallyVehicle.update(camera, controls);
+            // Race logic runs alongside car physics
+            if (window.raceConfig && window.raceConfig.start) {
+                updateRaceLogic(dt);
+            }
         } else {
             controls.update();
         }
 
         renderer.render(scene, camera);
     }
-    animate();
+    animate(0);
 
     // ── Resize ──
     window.addEventListener('resize', () => {
@@ -532,10 +809,47 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    // ── ESC to return to hub ──
+    // ── Vehicle Switch (H key) + ESC to hub ──
     window.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
             window.location.href = 'rally_hub.html';
+        }
+        if (e.key === 'h' || e.key === 'H') {
+            if (window.rallyVehicle && window.rallyVehicle.isActive()) {
+                // Switch: Car → Helicopter
+                let carPos = window.rallyVehicle.getCar().position.clone();
+                window.rallyVehicle.deactivate(scene);
+                // Hide car HUD
+                let rh = document.getElementById('rally-hud'); if (rh) rh.style.display = 'none';
+                window.rallyHelicopter.activate(scene, camera);
+                // Spawn heli at car position
+                let heliObj = window.rallyHelicopter.getHeli();
+                if (heliObj && heliObj.position) {
+                    let groundY = 0;
+                    if (typeof window.localGetTerrainAt === 'function') {
+                        groundY = window.localGetTerrainAt(carPos.x, -carPos.z).z;
+                    }
+                    heliObj.position.set(carPos.x, groundY + 1.3, carPos.z);
+                }
+            } else if (window.rallyHelicopter && window.rallyHelicopter.isActive()) {
+                // Switch: Helicopter → Car
+                let heliPos = window.rallyHelicopter.getPosition().clone();
+                window.rallyHelicopter.deactivate(scene);
+                controls.enabled = false;
+                window.rallyVehicle.activate(scene, camera, controls);
+                // Spawn car at heli position (on ground)
+                let car = window.rallyVehicle.getCar();
+                if (car) {
+                    let groundY = 0;
+                    if (typeof window.localGetTerrainAt === 'function') {
+                        groundY = window.localGetTerrainAt(heliPos.x, -heliPos.z).z;
+                    }
+                    car.position.set(heliPos.x, groundY + 0.35 + 1.5, heliPos.z);
+                    car._spawnPosition = car.position.clone();
+                    if (car.mesh) car.mesh.position.copy(car.position);
+                    if (window.rallyRespawn) window.rallyRespawn.init(car);
+                }
+            }
         }
     });
 

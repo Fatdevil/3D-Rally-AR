@@ -1468,7 +1468,7 @@
         });
 
         // === AUDIO: Sync UI from saved state ===
-        if (window.AudioEngine) {
+        if (window.AudioEngine && typeof window.AudioEngine.isEnabled === 'function') {
             let audioEnabled = window.AudioEngine.isEnabled();
             let audioVol = window.AudioEngine.getVolume();
             ['set-sound-enabled', 'ir-sound-enabled', 'hb-toggle-sound'].forEach(id => {
@@ -4297,6 +4297,23 @@
     let currentHoleIndex = 0;
     let currentHoleAction = 'TEE_YELLOW';
     
+    // ── EDITOR MODE: golf | rally ──
+    // Rally mode reuses the spline/builder tools but swaps Tee→Start, Green→Finish
+    // courseHoles[] is preserved (not deleted) so golf code doesn't break
+    window.EDITOR_MODE = 'rally';
+    
+    let raceConfig = {
+        start: null,            // {x, y, z} — car spawn / start line
+        startMesh: null,        // 3D start gate
+        finish: null,           // {x, y, z} — finish line
+        finishMesh: null,       // 3D finish gate
+        checkpoints: [],        // [{x, y, z, radius}, ...]
+        checkpointMeshes: [],   // 3D checkpoint rings
+        bestTime: null,         // Best lap time (seconds)
+        missedCheckpointRule: 'PENALTY_5S',  // NONE | PENALTY_2S | PENALTY_5S | PENALTY_10S | FAIL
+    };
+    window.raceConfig = raceConfig;
+    
     // Hole number label (floating sprite, BUILD mode only)
     function createHoleLabel(number) {
         let canvas = document.createElement('canvas');
@@ -4667,7 +4684,7 @@
         if(typeof window.restorePanorama === 'function') window.restorePanorama();
         if(typeof window.restoreSurrounding === 'function') window.restoreSurrounding();
         // Refresh Smart Builder state for new hole
-        if(window._smartBuilderType) setSmartBuilderType(window._smartBuilderType);
+        setSmartBuilderType(window._smartBuilderType || null);
     };
     
     window.changeHolePar = function(dir) {
@@ -4797,7 +4814,19 @@
             surroundConfig: h.surroundConfig || null
         }));
         
-        ArcadeStorage.saveCustomLevel({ targets: dumpTargets, holes: dumpHoles });
+        // Rally mode: save raceConfig alongside holes (holes kept for backward compat)
+        if (window.EDITOR_MODE === 'rally') {
+            let rallyData = {
+                start: raceConfig.start,
+                finish: raceConfig.finish,
+                checkpoints: raceConfig.checkpoints.map(cp => ({x: cp.x, y: cp.y, z: cp.z, radius: cp.radius || 10})),
+                bestTime: raceConfig.bestTime,
+                missedCheckpointRule: raceConfig.missedCheckpointRule,
+            };
+            ArcadeStorage.saveCustomLevel({ targets: dumpTargets, holes: dumpHoles, rally: rallyData });
+        } else {
+            ArcadeStorage.saveCustomLevel({ targets: dumpTargets, holes: dumpHoles });
+        }
 
         // ── Terrain snapshot for rally.html ──────────────────────────────
         // Saves H16 heightmap + biome PNG so rally.html can drive sculpted terrain.
@@ -5507,6 +5536,74 @@
                     if(document.getElementById('hole-ui-par')) { document.getElementById('hole-ui-par').innerText = "Par " + courseHoles[currentHoleIndex].par; }
                 }
 
+                // ── Rally raceConfig restoration ──
+                if (arr.rally && window.EDITOR_MODE === 'rally') {
+                    let rd = arr.rally;
+                    raceConfig.start = rd.start || null;
+                    raceConfig.finish = rd.finish || null;
+                    raceConfig.checkpoints = rd.checkpoints || [];
+                    raceConfig.bestTime = rd.bestTime || null;
+                    raceConfig.missedCheckpointRule = rd.missedCheckpointRule || 'PENALTY_5S';
+                    
+                    // Recreate start gate mesh
+                    if (raceConfig.startMesh) { scene.remove(raceConfig.startMesh); raceConfig.startMesh = null; }
+                    if (raceConfig.start && typeof createRallyGate === 'function') {
+                        let sg = createRallyGate(raceConfig.start.x, raceConfig.start.y, raceConfig.start.z, 'start');
+                        if (raceConfig.start.rotation) sg.rotation.y = raceConfig.start.rotation;
+                        scene.add(sg);
+                        raceConfig.startMesh = sg;
+                    }
+                    // Recreate finish gate mesh
+                    if (raceConfig.finishMesh) { scene.remove(raceConfig.finishMesh); raceConfig.finishMesh = null; }
+                    if (raceConfig.finish && typeof createRallyGate === 'function') {
+                        let fg = createRallyGate(raceConfig.finish.x, raceConfig.finish.y, raceConfig.finish.z, 'finish');
+                        if (raceConfig.finish.rotation) fg.rotation.y = raceConfig.finish.rotation;
+                        scene.add(fg);
+                        raceConfig.finishMesh = fg;
+                    }
+                    // Recreate checkpoint meshes
+                    if (raceConfig.checkpointMeshes) {
+                        raceConfig.checkpointMeshes.forEach(function(m) {
+                            if (m.ring) { scene.remove(m.ring); m.ring.geometry.dispose(); m.ring.material.dispose(); }
+                            if (m.label) { scene.remove(m.label); m.label.material.map.dispose(); m.label.material.dispose(); }
+                        });
+                    }
+                    raceConfig.checkpointMeshes = [];
+                    raceConfig.checkpoints.forEach(function(cp, i) {
+                        if (typeof window.placeCheckpoint === 'function') {
+                            // Don't re-place (would duplicate), just build visuals
+                            let ring = new THREE.Mesh(
+                                new THREE.TorusGeometry((cp.radius || 10) * 0.5, 0.25, 8, 24),
+                                new THREE.MeshLambertMaterial({ color: 0xfacc15, transparent: true, opacity: 0.7 })
+                            );
+                            ring.rotation.x = Math.PI / 2;
+                            let gy = cp.y || 0;
+                            if (typeof localGetTerrainAt === 'function') { let t = localGetTerrainAt(cp.x, -cp.z); if(t) gy = t.z; }
+                            ring.position.set(cp.x, gy + 3, cp.z);
+                            scene.add(ring);
+                            // Label
+                            let lc = document.createElement('canvas');
+                            lc.width = 64; lc.height = 64;
+                            let lx = lc.getContext('2d');
+                            lx.fillStyle = '#facc15'; lx.beginPath(); lx.arc(32, 32, 28, 0, Math.PI * 2); lx.fill();
+                            lx.fillStyle = '#111'; lx.font = 'bold 36px Arial'; lx.textAlign = 'center';
+                            lx.fillText(String(i + 1), 32, 44);
+                            let lt = new THREE.CanvasTexture(lc);
+                            let lbl = new THREE.Sprite(new THREE.SpriteMaterial({ map: lt }));
+                            lbl.scale.set(3, 3, 1);
+                            lbl.position.set(cp.x, gy + 7, cp.z);
+                            scene.add(lbl);
+                            raceConfig.checkpointMeshes.push({ ring: ring, label: lbl });
+                        }
+                    });
+                    
+                    // Sync rule dropdown
+                    let ruleEl = document.getElementById('sb-cp-rule');
+                    if (ruleEl) ruleEl.value = raceConfig.missedCheckpointRule;
+                    
+                    console.log('🏁 Rally config restored: start=' + !!raceConfig.start + ' finish=' + !!raceConfig.finish + ' CPs=' + raceConfig.checkpoints.length);
+                    if (typeof updateSBHoleDisplay === 'function') updateSBHoleDisplay();
+                }
                 if (isCloud && arr.terrain_heightmap) {
                     let mapData = (typeof arr.terrain_heightmap === 'string') ? JSON.parse(arr.terrain_heightmap) : arr.terrain_heightmap;
                     let pos = planeGeo.attributes.position;
@@ -7097,17 +7194,21 @@
                 
                 let cfg = window.CURRENT_BIOME_CONFIG || {};
                 let surfaceMap = {
-                    ob:        { name: 'OB',         hex: cfg.obColor       || '#ef4444' },
-                    bunker:    { name: 'SAND',       hex: cfg.bunkerColor   || '#e0d8a4' },
-                    waste:     { name: 'WASTE',      hex: cfg.wasteColor    || '#c2af7c' },
-                    tee:       { name: 'TEE',        hex: cfg.teeColor      || '#7cb54c' },
-                    green:     { name: 'GREEN',      hex: cfg.greenColor    || '#98ce68' },
-                    foregreen: { name: 'FOREGREEN',  hex: cfg.foregreenColor|| '#8bc45d' },
-                    fairway:   { name: 'FAIRWAY',    hex: cfg.fairwayColor  || '#7db952' },
-                    semi:      { name: 'SEMI-ROUGH', hex: cfg.semiColor     || '#6b9e3d' },
-                    rough:     { name: 'ROUGH',      hex: cfg.roughColor    || '#4a782b' },
-                    fescue:    { name: 'DEEP ROUGH', hex: cfg.fescueColor   || '#2d4c1a' },
-                    water:     { name: 'WATER',      hex: cfg.waterColor    || '#38bdf8' }
+                    ob:        { name: 'WALL',         hex: cfg.obColor       || '#ef4444' },
+                    bunker:    { name: 'SAND',         hex: cfg.bunkerColor   || '#e0d8a4' },
+                    waste:     { name: 'GRAVEL',       hex: cfg.wasteColor    || '#c2af7c' },
+                    tee:       { name: 'START',        hex: cfg.teeColor      || '#7cb54c' },
+                    green:     { name: 'FINISH',       hex: cfg.greenColor    || '#98ce68' },
+                    foregreen: { name: 'FIRM GRASS',   hex: cfg.foregreenColor|| '#8bc45d' },
+                    fairway:   { name: 'GRASS',        hex: cfg.fairwayColor  || '#7db952' },
+                    semi:      { name: 'TALL GRASS',   hex: cfg.semiColor     || '#6b9e3d' },
+                    rough:     { name: 'OFF-ROAD',     hex: cfg.roughColor    || '#4a782b' },
+                    fescue:    { name: 'DEEP OFF-ROAD',hex: cfg.fescueColor   || '#2d4c1a' },
+                    water:     { name: 'WATER',        hex: cfg.waterColor    || '#38bdf8' },
+                    // Rally specifika vägar (matchar smart-builder färger exakt)
+                    rallyGravel:  { name: 'GRAVEL',    hex: '#B8A88A' },
+                    rallyAsphalt: { name: 'ASPHALT',   hex: '#555555' },
+                    rallyDirt:    { name: 'DIRT ROAD', hex: '#8B7355' }
                 };
                 
                 let bestDist = Infinity;
@@ -7443,6 +7544,68 @@
                 h.envObjects.forEach(obj => { if(obj.mesh) scene.add(obj.mesh); });
             }
         }
+        
+        // --- Restore rally data ---
+        if (state.rally && window.EDITOR_MODE === 'rally') {
+            let rd = state.rally;
+            raceConfig.start = rd.start || null;
+            raceConfig.finish = rd.finish || null;
+            raceConfig.checkpoints = rd.checkpoints || [];
+            raceConfig.missedCheckpointRule = rd.missedCheckpointRule || 'PENALTY_5S';
+            
+            // Rebuild meshes
+            if (raceConfig.startMesh) { scene.remove(raceConfig.startMesh); raceConfig.startMesh = null; }
+            if (raceConfig.start && typeof createRallyGate === 'function') {
+                let sg = createRallyGate(raceConfig.start.x, raceConfig.start.y, raceConfig.start.z, 'start');
+                if (raceConfig.start.rotation) sg.rotation.y = raceConfig.start.rotation;
+                scene.add(sg);
+                raceConfig.startMesh = sg;
+            }
+            
+            if (raceConfig.finishMesh) { scene.remove(raceConfig.finishMesh); raceConfig.finishMesh = null; }
+            if (raceConfig.finish && typeof createRallyGate === 'function') {
+                let fg = createRallyGate(raceConfig.finish.x, raceConfig.finish.y, raceConfig.finish.z, 'finish');
+                if (raceConfig.finish.rotation) fg.rotation.y = raceConfig.finish.rotation;
+                scene.add(fg);
+                raceConfig.finishMesh = fg;
+            }
+            
+            if (raceConfig.checkpointMeshes) {
+                raceConfig.checkpointMeshes.forEach(function(m) {
+                    if (m.ring) { scene.remove(m.ring); m.ring.geometry.dispose(); m.ring.material.dispose(); }
+                    if (m.label) { scene.remove(m.label); m.label.material.map.dispose(); m.label.material.dispose(); }
+                });
+            }
+            raceConfig.checkpointMeshes = [];
+            raceConfig.checkpoints.forEach(function(cp, i) {
+                let ring = new THREE.Mesh(
+                    new THREE.TorusGeometry((cp.radius || 10) * 0.5, 0.25, 8, 24),
+                    new THREE.MeshLambertMaterial({ color: 0xfacc15, transparent: true, opacity: 0.7 })
+                );
+                ring.rotation.x = Math.PI / 2;
+                let gy = cp.y || 0;
+                if (typeof localGetTerrainAt === 'function') { let t = localGetTerrainAt(cp.x, -cp.z); if(t) gy = t.z; }
+                ring.position.set(cp.x, gy + 3, cp.z);
+                scene.add(ring);
+                
+                let lc = document.createElement('canvas');
+                lc.width = 64; lc.height = 64;
+                let lx = lc.getContext('2d');
+                lx.fillStyle = '#facc15'; lx.beginPath(); lx.arc(32, 32, 28, 0, Math.PI * 2); lx.fill();
+                lx.fillStyle = '#111'; lx.font = 'bold 36px Arial'; lx.textAlign = 'center';
+                lx.fillText(String(i + 1), 32, 44);
+                let lt = new THREE.CanvasTexture(lc);
+                let lbl = new THREE.Sprite(new THREE.SpriteMaterial({ map: lt }));
+                lbl.scale.set(3, 3, 1);
+                lbl.position.set(cp.x, gy + 7, cp.z);
+                scene.add(lbl);
+                raceConfig.checkpointMeshes.push({ ring: ring, label: lbl });
+            });
+            
+            let ruleEl = document.getElementById('sb-cp-rule');
+            if (ruleEl) ruleEl.value = raceConfig.missedCheckpointRule;
+            if (typeof updateSBHoleDisplay === 'function') updateSBHoleDisplay();
+        }
     };
     
     function saveUndoState() {
@@ -7467,6 +7630,16 @@
             envObjects: h.envObjects ? h.envObjects.slice() : []
         }));
         
+        let rallyCopy = null;
+        if (window.EDITOR_MODE === 'rally' && window.raceConfig) {
+            rallyCopy = {
+                start: window.raceConfig.start ? JSON.parse(JSON.stringify(window.raceConfig.start)) : null,
+                finish: window.raceConfig.finish ? JSON.parse(JSON.stringify(window.raceConfig.finish)) : null,
+                checkpoints: window.raceConfig.checkpoints.map(cp => ({x: cp.x, y: cp.y, z: cp.z, radius: cp.radius || 10})),
+                missedCheckpointRule: window.raceConfig.missedCheckpointRule
+            };
+        }
+        
         undoStack.push({ 
             heights: posCopy, 
             wHeights: wPosCopy, 
@@ -7474,7 +7647,8 @@
             waterColorCanvas: wCanvasCopy, 
             blocks: blocksCopy, 
             trees: treesCopy,
-            holes: holesCopy
+            holes: holesCopy,
+            rally: rallyCopy
         });
     }
 
@@ -7606,6 +7780,24 @@
                 }
                 // 3. Try removing a block
                 if (hit.object !== plane) {
+                    // Check if it's a Rally gate first
+                    if (window.EDITOR_MODE === 'rally' && window.raceConfig) {
+                        if (window.raceConfig.startMesh && (window.raceConfig.startMesh === hit.object || window.raceConfig.startMesh.children.includes(hit.object))) {
+                            scene.remove(window.raceConfig.startMesh);
+                            window.raceConfig.startMesh = null;
+                            window.raceConfig.start = null;
+                            saveLevel();
+                            return;
+                        }
+                        if (window.raceConfig.finishMesh && (window.raceConfig.finishMesh === hit.object || window.raceConfig.finishMesh.children.includes(hit.object))) {
+                            scene.remove(window.raceConfig.finishMesh);
+                            window.raceConfig.finishMesh = null;
+                            window.raceConfig.finish = null;
+                            saveLevel();
+                            return;
+                        }
+                    }
+                    
                     scene.remove(hit.object);
                     let idx = targets.findIndex(t => t.mesh === hit.object);
                     if (idx !== -1) targets.splice(idx, 1);
@@ -7688,8 +7880,15 @@
             controls.enabled = false;
         } else if(currentTool === 'SMART_BUILDER') {
             if(window._smartBuildCooldown) { controls.enabled = false; return; }
-            // AIM mode: single click places/moves aim point
+            // AIM mode: single click places/moves aim point (golf) or checkpoint (rally)
             if(window._smartBuilderType === 'AIM' && e.button === 0 && lastHitPoint) {
+                // RALLY MODE: AIM → CHECKPOINT
+                if (window.EDITOR_MODE === 'rally') {
+                    window.placeCheckpoint(lastHitPoint.clone());
+                    controls.enabled = false;
+                    return;
+                }
+                // GOLF MODE: set aim point
                 let hole = courseHoles[currentHoleIndex];
                 let pt = lastHitPoint.clone();
                 let surf = localGetTerrainAt(pt.x, -pt.z);
@@ -7706,7 +7905,7 @@
                 showBuildToast('\ud83c\udfaf Aim point set for Hole ' + (currentHoleIndex+1), '#4ade80');
                 updateSBHoleDisplay();
                 // Refresh Build button state (enables TEE build now that aimPoint exists)
-                if(window._smartBuilderType) setSmartBuilderType(window._smartBuilderType);
+                setSmartBuilderType(window._smartBuilderType || null);
                 controls.enabled = false;
                 return;
             }
@@ -7733,13 +7932,29 @@
                 return;
             }
             if(e.button === 0 && lastHitPoint) {
-                if(!smartAddPoint(lastHitPoint.clone())) {
-                    showBuildToast('\u26a0\ufe0f Shape cannot cross itself!', '#ef4444');
+                // --- SMART_BUILDER: Rally Gate Placement ---
+                if (window.EDITOR_MODE === 'rally' && (window._smartBuilderType === 'TEE' || window._smartBuilderType === 'GREEN')) {
+                    if (window._smartBuilderType === 'TEE') {
+                        if (typeof window.executeSmartStartClick === 'function') window.executeSmartStartClick(lastHitPoint.x, lastHitPoint.y, lastHitPoint.z, window._rallyGateRotation || 0);
+                    } else {
+                        if (typeof window.executeSmartFinishClick === 'function') window.executeSmartFinishClick(lastHitPoint.x, lastHitPoint.y, lastHitPoint.z, window._rallyGateRotation || 0);
+                    }
+                    controls.enabled = false;
+                    return;
+                }
+
+                // Try drag-start on existing point first (within 3m)
+                if (smartGreenPoints.length > 0 && window.smartStartDrag && window.smartStartDrag(lastHitPoint.clone())) {
+                    // Dragging mode — don't add new point
+                } else {
+                    if(!smartAddPoint(lastHitPoint.clone())) {
+                        // smartAddPoint shows its own toast for distance/angle issues
+                    }
                 }
                 updateSmartGreenPreview();
-            } else if (e.button === 2 && smartGreenPoints.length > 0) {
-                smartGreenPoints.pop();
-                updateSmartGreenPreview();
+            } else if (e.button === 2) {
+                if (window.smartRemoveLastPoint) window.smartRemoveLastPoint();
+                else if (smartGreenPoints.length > 0) { smartGreenPoints.pop(); updateSmartGreenPreview(); }
             }
             controls.enabled = false;
         } else if(currentTool === 'TEST_PUTT') {
@@ -7789,6 +8004,12 @@
             return;
         }
         if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'FOREST' || currentTool === 'RAMP' || currentTool === 'SPLINE' || currentTool === 'SMART_BUILDER' || currentTool === 'COLORIZE') {
+            // ── SMART_BUILDER: End drag if in progress ──
+            if (currentTool === 'SMART_BUILDER' && window.smartEndDrag && window.smartEndDrag()) {
+                controls.enabled = true;
+                if (window.showBuildToast) window.showBuildToast('✋ Point moved', '#4ade80');
+                return;
+            }
             isSculpting = false;
             controls.enabled = true;
             window._colorizeUndoSaved = false; // Reset colorize undo debounce
@@ -8079,6 +8300,47 @@
                         if (newMesh.userData.collisionPts) obj.collisionData = newMesh.userData.collisionPts;
                         scene.add(newMesh);
                     }
+                    
+                    // Smart Road barriers: re-sample terrain height per child mesh
+                    if (obj.type === 'fences' && obj.mesh && obj.mesh.children) {
+                        let children = obj.mesh.children;
+                        // First pass: update Y positions
+                        for (let ci = 0; ci < children.length; ci++) {
+                            let child = children[ci];
+                            let newY = getH(child.position.x, child.position.z);
+                            let bt = child.userData && child.userData.barrierType;
+                            if (bt === 'STAKES') {
+                                // Stakes: check if this is a tip (white, higher offset) or pole
+                                // Tips are placed at h+1.55, poles at h+0.7
+                                let isTip = child.material && child.material.color && child.material.color.r > 0.9 && child.material.color.g > 0.9;
+                                child.position.y = newY + (isTip ? 1.55 : 0.7);
+                            } else {
+                                let halfH = bt === 'WOOD' ? 0.6 : 0.4;
+                                child.position.y = newY + halfH;
+                            }
+                        }
+                        // Second pass: re-orient WOOD/STEEL segments (skip STAKES - they're vertical)
+                        for (let ci = 0; ci < children.length - 1; ci++) {
+                            let curr = children[ci];
+                            let next = children[ci + 1];
+                            let bt = curr.userData && curr.userData.barrierType;
+                            if (bt === 'STAKES') continue; // Stakes are vertical, no orientation needed
+                            curr.lookAt(next.position.x, next.position.y, next.position.z);
+                        }
+                        // Last WOOD/STEEL segment: look back toward previous
+                        if (children.length >= 2) {
+                            let last = children[children.length - 1];
+                            let bt = last.userData && last.userData.barrierType;
+                            if (bt !== 'STAKES') {
+                                let prev = children[children.length - 2];
+                                last.lookAt(
+                                    last.position.x + (last.position.x - prev.position.x),
+                                    last.position.y + (last.position.y - prev.position.y),
+                                    last.position.z + (last.position.z - prev.position.z)
+                                );
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -8200,7 +8462,7 @@
         else if (toolName === 'FLATTEN') hintHtml = "Hold Mouse: <b>Flatten Surface</b>";
         else if (toolName === 'PAINT') hintHtml = "Hold Mouse: <b>Paint Biome</b>";
         else if (toolName === 'WATER') hintHtml = "Hold Left: <b>Dig Water</b><br>Hold Right: <b>Drain Water</b>";
-        else if (toolName === 'SMART_BUILDER') hintHtml = "Left Click: <b>Place Point</b><br>Right Click: <b>Remove Last Point</b><br>Define shape, then Build";
+        else if (toolName === 'SMART_BUILDER') hintHtml = "Left Click: <b>Place Point</b> · Drag near point: <b>Move it</b><br>Right Click: <b>Undo Last Point</b> · Define shape, then Build";
         else if (toolName === 'TEST_PUTT') hintHtml = "Left Click: <b>Drop Ball & Test Putt</b>";
         else if (toolName === 'RIDGE') hintHtml = "Hold Mouse: <b>Draw a Tier/Ridge line across the green</b>";
         else if (toolName === 'MEASURE') hintHtml = "Click: <b>Place Line</b> (1st = start, 2nd = end) max 20<br>Right Click: <b>Cancel / Remove Nearest</b>";
@@ -8249,6 +8511,7 @@
             // Hide right toolbar (Brush/ENV not needed)
             let rt = document.getElementById('right-toolbar');
             if(rt) rt.style.display = 'none';
+            if (typeof setSmartBuilderType === 'function') setSmartBuilderType(window._smartBuilderType || null);
         }
     }
 
@@ -8368,6 +8631,38 @@
         }
     }
     
+    function autoAlignToRoad(x, z) {
+        if (typeof window.localGetTerrainAt !== 'function') return null;
+        let centerType = window.localGetTerrainAt(x, -z).type;
+        let sumX2 = 0, sumZ2 = 0, sumXZ = 0, count = 0;
+        let r = 8.0;
+        for (let dz = -r; dz <= r; dz += 1.5) {
+            for (let dx = -r; dx <= r; dx += 1.5) {
+                if (dx*dx + dz*dz > r*r) continue;
+                let t = window.localGetTerrainAt(x + dx, -(z + dz));
+                if (t && t.type === centerType) {
+                    sumX2 += dx*dx;
+                    sumZ2 += dz*dz;
+                    sumXZ += dx*dz;
+                    count++;
+                }
+            }
+        }
+        if (count < 10) return null;
+        
+        let T = sumX2 + sumZ2;
+        let D = sumX2 * sumZ2 - sumXZ * sumXZ;
+        let L1 = T/2 + Math.sqrt(Math.max(0, T*T/4 - D));
+        
+        let vx = sumXZ;
+        let vz = L1 - sumX2;
+        if (Math.abs(vx) < 0.001 && Math.abs(vz) < 0.001) {
+            vx = (sumX2 > sumZ2) ? 1 : 0;
+            vz = (sumZ2 > sumX2) ? 1 : 0;
+        }
+        return Math.atan2(vx, vz) + Math.PI/2;
+    }
+
     let lastHitPoint = null;
     let activeRotatingTee = null;
     function onMouseMove(event) {
@@ -8442,6 +8737,8 @@
         } else if (currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'MEASURE' || currentTool === 'HOLE' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'FOREST' || currentTool === 'RAMP' || currentTool === 'SPLINE' || currentTool === 'COLORIZE' || currentTool === 'ERASER' || currentTool === 'SMART_BUILDER' || currentTool === 'MTN') {
             ghostBlock.visible = false;
             ghostTree.visible = false;
+            if (window._ghostRallyStart) window._ghostRallyStart.visible = false;
+            if (window._ghostRallyFinish) window._ghostRallyFinish.visible = false;
             raycaster.setFromCamera(mouse, camera);
             let intersects = raycaster.intersectObject(plane);
             if(intersects.length > 0) {
@@ -8491,9 +8788,50 @@
                         sculptBrushCursor.geometry = new THREE.RingGeometry(stampRadius - 0.8, stampRadius, 64);
                         currentBrushSize = stampRadius; // Prevent re-creating every frame
                     }
+                } else if(currentTool === 'SMART_BUILDER' && window.EDITOR_MODE === 'rally' && (window._smartBuilderType === 'TEE' || window._smartBuilderType === 'GREEN')) {
+                    sculptBrushCursor.visible = false;
+                    
+                    if (!window._rallyGateManualRotation) {
+                        let autoRot = autoAlignToRoad(lastHitPoint.x, lastHitPoint.z);
+                        if (autoRot !== null) window._rallyGateRotation = autoRot;
+                    }
+                    
+                    let isStart = window._smartBuilderType === 'TEE';
+                    
+                    if (isStart) {
+                        if (!window._ghostRallyStart) {
+                            if (typeof createRallyGate === 'function') {
+                                window._ghostRallyStart = createRallyGate(0, 0, 0, 'start');
+                                window._ghostRallyStart.traverse(c => { if(c.material) { c.material.transparent=true; c.material.opacity=0.6; } });
+                                scene.add(window._ghostRallyStart);
+                            }
+                        }
+                        if (window._ghostRallyStart) {
+                            window._ghostRallyStart.position.copy(lastHitPoint);
+                            window._ghostRallyStart.rotation.y = window._rallyGateRotation || 0;
+                            window._ghostRallyStart.visible = true;
+                        }
+                    } else {
+                        if (!window._ghostRallyFinish) {
+                            if (typeof createRallyGate === 'function') {
+                                window._ghostRallyFinish = createRallyGate(0, 0, 0, 'finish');
+                                window._ghostRallyFinish.traverse(c => { if(c.material) { c.material.transparent=true; c.material.opacity=0.6; } });
+                                scene.add(window._ghostRallyFinish);
+                            }
+                        }
+                        if (window._ghostRallyFinish) {
+                            window._ghostRallyFinish.position.copy(lastHitPoint);
+                            window._ghostRallyFinish.rotation.y = window._rallyGateRotation || 0;
+                            window._ghostRallyFinish.visible = true;
+                        }
+                    }
                 } else {
                     sculptBrushCursor.visible = false;
                     
+                    // ── SMART_BUILDER: Drag waypoint in real-time ──
+                    if (currentTool === 'SMART_BUILDER' && window._smartDraggingIdx >= 0 && window.smartMoveDrag) {
+                        window.smartMoveDrag(lastHitPoint.clone());
+                    }
                     if(currentTool === 'MEASURE' && isMeasuring && measureStartPoint) {
                         let p1 = measureStartPoint;
                         let p2 = lastHitPoint;
@@ -8674,6 +9012,18 @@
     // Scroll near a placed nature object to rotate it by 15° per scroll step
     renderer.domElement.addEventListener('wheel', function(e) {
         if (appMode !== 'BUILD') return;
+        
+        // --- SMART_BUILDER: Rally Gate Rotation ---
+        if (currentTool === 'SMART_BUILDER' && window.EDITOR_MODE === 'rally' && (window._smartBuilderType === 'TEE' || window._smartBuilderType === 'GREEN')) {
+            e.preventDefault();
+            e.stopPropagation();
+            window._rallyGateManualRotation = true;
+            window._rallyGateRotation = (window._rallyGateRotation || 0) + (Math.PI / 12) * (e.deltaY > 0 ? 1 : -1);
+            if (window._ghostRallyStart && window._ghostRallyStart.visible) window._ghostRallyStart.rotation.y = window._rallyGateRotation;
+            if (window._ghostRallyFinish && window._ghostRallyFinish.visible) window._ghostRallyFinish.rotation.y = window._rallyGateRotation;
+            return;
+        }
+
         if (currentTool !== 'NATURE' && currentTool !== 'ERASER' && currentTool !== 'COLORIZE') return;
         if (!lastHitPoint) return;
         let closest = null;
@@ -10593,23 +10943,48 @@ window.triggerExplosion = function(x, y, z) {
 <div id="smart-green-action-panel" style="display:none; position:absolute; bottom:60px; right:10px; background:#0f172a; border:2px solid #4ade80; border-radius:12px; padding:12px 14px; z-index:500; box-shadow: 0 10px 25px rgba(0,0,0,0.5); text-align:center; width:210px;">
     <h3 style="margin:0 0 8px 0; color:#fff; font-size:12px; text-transform:uppercase; letter-spacing:1px;">🏗️ Track Builder</h3>
     
-    <!-- Hole Selector -->
-    <div style="display:flex; justify-content:space-between; align-items:center; background:#1e293b; border-radius:6px; padding:4px 6px; margin-bottom:8px;">
+    <!-- Hole Selector (hidden in rally mode) -->
+    <div id="sb-hole-nav" style="display:flex; justify-content:space-between; align-items:center; background:#1e293b; border-radius:6px; padding:4px 6px; margin-bottom:8px;">
         <button onclick="changeHole(-1); updateSBHoleDisplay()" style="background:transparent; color:#94a3b8; border:none; font-weight:bold; cursor:pointer; padding:4px 8px; font-size:16px;">&lt;</button>
         <div id="sb-hole-display" style="color:#4ade80; font-weight:bold; font-size:11px;">Track 1</div>
         <button onclick="changeHole(1); updateSBHoleDisplay()" style="background:transparent; color:#94a3b8; border:none; font-weight:bold; cursor:pointer; padding:4px 8px; font-size:16px;">&gt;</button>
     </div>
     
+    <!-- Race Status (rally mode only) -->
+    <div id="sb-race-status" style="display:none; background:#1e293b; border-radius:6px; padding:6px 10px; margin-bottom:8px;">
+        <div style="color:#94a3b8; font-size:9px; font-weight:bold; text-transform:uppercase; margin-bottom:4px;">Race Status</div>
+        <div id="sb-race-status-text" style="color:#4ade80; font-size:11px; font-weight:bold;">
+            ✗ Start &nbsp; ✗ Finish &nbsp; 0 CP
+        </div>
+    </div>
+    
     <!-- Type Selector - 2 column grid -->
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; margin-bottom:4px;">
-        <button id="sb-type-green" onclick="setSmartBuilderType('GREEN')" style="background:#4ade80; color:#0f172a; border:none; padding:7px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer;">🏁 PADDOCK</button>
+        <button id="sb-type-green" onclick="setSmartBuilderType('GREEN')" style="background:#334155; color:#94a3b8; border:none; padding:7px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer;">🏁 FINISH</button>
         <button id="sb-type-bunker" onclick="setSmartBuilderType('BUNKER')" style="background:#334155; color:#94a3b8; border:none; padding:7px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer;">🏜️ GRAVEL</button>
         <button id="sb-type-fairway" onclick="setSmartBuilderType('FAIRWAY')" style="background:#334155; color:#94a3b8; border:none; padding:7px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer;">🛣️ TRACK</button>
         <button id="sb-type-tee" onclick="setSmartBuilderType('TEE')" style="background:#334155; color:#94a3b8; border:none; padding:7px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer;">🟩 START</button>
-        <button id="sb-type-aim" onclick="setSmartBuilderType('AIM')" style="background:#334155; color:#94a3b8; border:none; padding:7px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer; ">🎯 CP</button>
+        <button id="sb-type-aim" onclick="setSmartBuilderType('AIM')" style="background:#334155; color:#94a3b8; border:none; padding:7px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer; ">📍 CP</button>
         <button id="sb-type-paint" onclick="setSmartBuilderType('PAINT')" style="background:#334155; color:#94a3b8; border:none; padding:7px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer;">🎨 PAINT</button>
         <button id="sb-type-stamp" onclick="setSmartBuilderType('STAMP')" style="background:#334155; color:#94a3b8; border:none; padding:7px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer;">🔨 STAMP</button>
         <button id="sb-type-road" onclick="setSmartBuilderType('ROAD')" style="background:#334155; color:#94a3b8; border:none; padding:7px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer;">🛣️ ROAD</button>
+    </div>
+    
+    <!-- Rally: Remove Last Checkpoint button -->
+    <div id="sb-cp-controls" style="display:none; margin-bottom:4px;">
+        <button onclick="window.removeLastCheckpoint()" style="background:#ef4444; color:#fff; border:none; padding:6px 10px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer; width:100%;">❌ Ångra Sista CP</button>
+    </div>
+    
+    <!-- Rally: Checkpoint Rule -->
+    <div id="sb-rally-rules" style="display:none; margin-bottom:4px;">
+        <div style="color:#64748b; font-size:9px; font-weight:bold; text-transform:uppercase; margin-bottom:4px; text-align:left;">Missad Checkpoint</div>
+        <select id="sb-cp-rule" onchange="if(window.raceConfig) { window.raceConfig.missedCheckpointRule = this.value; if(window.saveLevel) window.saveLevel(); }" style="width:100%; background:#1e293b; color:#e2e8f0; border:1px solid #334155; border-radius:5px; padding:5px; font-size:11px; font-weight:bold;">
+            <option value="NONE">Ingen straff</option>
+            <option value="PENALTY_2S">+2 sek</option>
+            <option value="PENALTY_5S" selected>+5 sek</option>
+            <option value="PENALTY_10S">+10 sek</option>
+            <option value="FAIL">DNF (Diskvalificerad)</option>
+        </select>
     </div>
 
     <!-- Separator between type selector and controls -->
@@ -10779,15 +11154,62 @@ window.triggerExplosion = function(x, y, z) {
 
     <!-- ROAD controls -->
     <div id="sb-road-controls" style="display:none;">
-        <div style="color:#64748b; font-size:9px; font-weight:bold; text-transform:uppercase; margin-bottom:4px; text-align:left;">Road Foundation</div>
-        <label style="color:#94a3b8; font-size:9px; font-weight:bold; text-transform:uppercase;">Width <span id="sr-width-val" style="color:#f59e0b;">10m</span></label>
+        <!-- Road Width — always controls painting + barrier offset -->
+        <label style="color:#94a3b8; font-size:9px; font-weight:bold; text-transform:uppercase;">Road Width <span id="sr-width-val" style="color:#f59e0b;">10m</span></label>
         <input type="range" id="sr-road-width" min="4" max="24" value="10" step="1" oninput="window._smartRoadWidth = parseInt(this.value); document.getElementById('sr-width-val').textContent = this.value + 'm';" style="width:100%; accent-color:#f59e0b; cursor:pointer;">
         <div style="display:flex; justify-content:space-between; color:#475569; font-size:8px; margin-bottom:6px;"><span>4m Stig</span><span>24m Motorväg</span></div>
-        <label style="color:#94a3b8; font-size:9px; font-weight:bold; text-transform:uppercase;">Shoulder <span id="sr-shoulder-val" style="color:#38bdf8;">4m</span></label>
-        <input type="range" id="sr-road-shoulder" min="1" max="12" value="4" step="1" oninput="window._smartRoadShoulder = parseInt(this.value); document.getElementById('sr-shoulder-val').textContent = this.value + 'm';" style="width:100%; accent-color:#38bdf8; cursor:pointer;">
-        <div style="display:flex; justify-content:space-between; color:#475569; font-size:8px; margin-bottom:6px;"><span>1m Brant</span><span>12m Mjuk</span></div>
+
+        <div style="height:1px; background:#334155; margin:6px 0;"></div>
+
+        <!-- Foundation — optional terrain sculpting -->
+        <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px;">
+            <input type="checkbox" id="sr-foundation-cb" checked onchange="window._smartRoadFoundation = this.checked; document.getElementById('sr-foundation-opts').style.opacity = this.checked ? 1 : 0.35; document.getElementById('sr-foundation-opts').style.pointerEvents = this.checked ? 'auto' : 'none';" style="accent-color:#f59e0b; cursor:pointer;">
+            <label for="sr-foundation-cb" style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; cursor:pointer;">Foundation <span style="color:#475569; font-size:8px; font-weight:normal;">(terrängskulptering)</span></label>
+        </div>
+        <div id="sr-foundation-opts">
+            <label style="color:#94a3b8; font-size:9px; font-weight:bold; text-transform:uppercase;">Shoulder <span id="sr-shoulder-val" style="color:#38bdf8;">4m</span></label>
+            <input type="range" id="sr-road-shoulder" min="1" max="12" value="4" step="1" oninput="window._smartRoadShoulder = parseInt(this.value); document.getElementById('sr-shoulder-val').textContent = this.value + 'm';" style="width:100%; accent-color:#38bdf8; cursor:pointer;">
+            <div style="display:flex; justify-content:space-between; color:#475569; font-size:8px; margin-bottom:6px;"><span>1m Brant</span><span>12m Mjuk</span></div>
+        </div>
+
+        <div style="height:1px; background:#334155; margin:8px 0;"></div>
+        <div style="color:#64748b; font-size:9px; font-weight:bold; text-transform:uppercase; margin-bottom:4px;">Surface</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:3px; margin-bottom:6px;">
+            <button id="sr-surf-none" onclick="window._smartRoadSurface='NONE'; setRoadSurface('NONE')" style="background:#4ade80; color:#0f172a; border:none; padding:5px 4px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer;">⬜ Ingen</button>
+            <button id="sr-surf-gravel" onclick="window._smartRoadSurface='GRAVEL'; setRoadSurface('GRAVEL')" style="background:#334155; color:#94a3b8; border:none; padding:5px 4px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer;">🪨 Grus</button>
+            <button id="sr-surf-asphalt" onclick="window._smartRoadSurface='ASPHALT'; setRoadSurface('ASPHALT')" style="background:#334155; color:#94a3b8; border:none; padding:5px 4px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer;">⬛ Asfalt</button>
+            <button id="sr-surf-dirt" onclick="window._smartRoadSurface='DIRT'; setRoadSurface('DIRT')" style="background:#334155; color:#94a3b8; border:none; padding:5px 4px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer;">🟫 Jord</button>
+        </div>
+        <div id="sr-gravel-opts" style="display:none;">
+            <label style="color:#94a3b8; font-size:9px; font-weight:bold; text-transform:uppercase;">Stones <span id="sr-stone-val" style="color:#a78bfa;">50%</span></label>
+            <input type="range" id="sr-stone-density" min="10" max="90" value="50" step="5" oninput="window._smartRoadStoneDensity = parseInt(this.value); document.getElementById('sr-stone-val').textContent = this.value + '%';" style="width:100%; accent-color:#a78bfa; cursor:pointer;">
+            <div style="display:flex; justify-content:space-between; color:#475569; font-size:8px; margin-bottom:4px;"><span>Fin grus</span><span>Stenig</span></div>
+        </div>
+        <div style="height:1px; background:#334155; margin:8px 0;"></div>
+        <div style="color:#64748b; font-size:9px; font-weight:bold; text-transform:uppercase; margin-bottom:4px;">Barriers (Staket/Räcken)</div>
+        
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:3px;">
+            <span style="color:#94a3b8; font-size:9px; font-weight:bold;">LEFT</span>
+            <select id="sr-barrier-left" onchange="window._smartRoadBarrierL = this.value;" style="background:#1e293b; color:#f8fafc; border:1px solid #334155; border-radius:4px; font-size:10px; padding:2px;">
+                <option value="NONE">Ingen</option>
+                <option value="WOOD">Trästaket (Krossbar)</option>
+                <option value="STEEL">Stålräcke (Stabil)</option>
+                <option value="STAKES">Rallypinnar (Flexibla)</option>
+                <option value="STONE">Stenmur (Solid)</option>
+            </select>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span style="color:#94a3b8; font-size:9px; font-weight:bold;">RIGHT</span>
+            <select id="sr-barrier-right" onchange="window._smartRoadBarrierR = this.value;" style="background:#1e293b; color:#f8fafc; border:1px solid #334155; border-radius:4px; font-size:10px; padding:2px;">
+                <option value="NONE">Ingen</option>
+                <option value="WOOD">Trästaket (Krossbar)</option>
+                <option value="STEEL">Stålräcke (Stabil)</option>
+                <option value="STAKES">Rallypinnar (Flexibla)</option>
+                <option value="STONE">Stenmur (Solid)</option>
+            </select>
+        </div>
+
         <div style="color:#475569; font-size:8px; margin-top:4px;">Click terrain to place waypoints. Min 2 points.</div>
-        <div style="color:#475569; font-size:8px;">Height interpolates between waypoints automatically.</div>
     </div>
 
     <!-- Mowing Pattern Selector (shared by GREEN + FAIRWAY) -->
@@ -10808,11 +11230,29 @@ window.triggerExplosion = function(x, y, z) {
         <input type="range" id="sg-edge-sharpness" min="0" max="100" value="100" step="5" style="width:100%; accent-color:#f59e0b; cursor:pointer;">
     </div>
     <script>
-        window._smartBuilderType = 'GREEN';
+        window._smartBuilderType = null;
         window._smartBunkerShape = 'BOWL';
         window._fairwayDifficulty = 'FLAT';
         window._smartMowPattern = 'SOLID';
         window._smartPaintSurface = 'foregreen';
+        window._smartRoadSurface = 'NONE';
+        window._smartRoadStoneDensity = 50;
+        window._smartRoadFoundation = true;
+        window._smartRoadEdgeL = 'NONE';
+        window._smartRoadEdgeR = 'NONE';
+
+        function setRoadSurface(type) {
+            window._smartRoadSurface = type;
+            ['none','gravel','asphalt','dirt'].forEach(function(s) {
+                var btn = document.getElementById('sr-surf-' + s);
+                if(btn) {
+                    btn.style.background = (s === type.toLowerCase()) ? '#f59e0b' : '#334155';
+                    btn.style.color = (s === type.toLowerCase()) ? '#0f172a' : '#94a3b8';
+                }
+            });
+            var gravelOpts = document.getElementById('sr-gravel-opts');
+            if(gravelOpts) gravelOpts.style.display = (type === 'GRAVEL') ? 'block' : 'none';
+        }
 
         function setSmartPaintSurface(surface) {
             window._smartPaintSurface = surface;
@@ -10910,6 +11350,7 @@ window.triggerExplosion = function(x, y, z) {
         }
         
         function setSmartBuilderType(type) {
+            window._rallyGateManualRotation = false;
             // Reset brush cursor size if leaving STAMP mode
             if (window._smartBuilderType === 'STAMP' && type !== 'STAMP') {
                 if (typeof updateBrushSize === 'function') updateBrushSize();
@@ -10953,13 +11394,17 @@ window.triggerExplosion = function(x, y, z) {
                     buildBtn.textContent = '🏌️ Build Fairway';
                     buildBtn.style.background = 'linear-gradient(135deg, #7db952, #6b9e3d)';
                 } else if(type === 'TEE') {
-                    let hasAim = courseHoles[currentHoleIndex] && courseHoles[currentHoleIndex].aimPoint;
-                    if(!hasAim) {
-                        buildBtn.textContent = '⚠️ Set Aim Point First';
-                        buildBtn.style.background = 'linear-gradient(135deg, #64748b, #475569)';
+                    if (window.EDITOR_MODE === 'rally') {
+                        buildBtn.style.display = 'none'; // Click to place directly
                     } else {
-                        buildBtn.textContent = '🟦 Build Tee Box';
-                        buildBtn.style.background = 'linear-gradient(135deg, #38bdf8, #0ea5e9)';
+                        let hasAim = courseHoles[currentHoleIndex] && courseHoles[currentHoleIndex].aimPoint;
+                        if(!hasAim) {
+                            buildBtn.textContent = '⚠️ Set Aim Point First';
+                            buildBtn.style.background = 'linear-gradient(135deg, #64748b, #475569)';
+                        } else {
+                            buildBtn.textContent = '🟦 Build Tee Box';
+                            buildBtn.style.background = 'linear-gradient(135deg, #38bdf8, #0ea5e9)';
+                        }
                     }
                 } else if(type === 'AIM') {
                     buildBtn.style.display = 'none'; // No build button for AIM
@@ -10979,8 +11424,12 @@ window.triggerExplosion = function(x, y, z) {
                     buildBtn.textContent = '🏗️ Build Foundation';
                     buildBtn.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
                 } else {
-                    buildBtn.textContent = '⛳ Build Green';
-                    buildBtn.style.background = 'linear-gradient(135deg, #4ade80, #22c55e)';
+                    if (window.EDITOR_MODE === 'rally') {
+                        buildBtn.style.display = 'none'; // Click to place directly
+                    } else {
+                        buildBtn.textContent = '⛳ Build Green';
+                        buildBtn.style.background = 'linear-gradient(135deg, #4ade80, #22c55e)';
+                    }
                 }
             }
             // Show panel immediately for AIM and STAMP (no polygon needed)
@@ -11053,10 +11502,13 @@ window.triggerExplosion = function(x, y, z) {
 
     </script>
     
-    <!-- Build + Clear -->
+    <!-- Build + Undo + Clear -->
     <div style="display:flex; flex-direction:column; gap:4px;">
         <button onclick="executeSmartBuilder()" id="sb-build-btn" style="background:linear-gradient(135deg, #4ade80, #22c55e); color:#0f172a; font-weight:bold; padding:8px 10px; border-radius:6px; border:none; cursor:pointer; font-size:11px; letter-spacing:0.5px;">⛳ Build Green</button>
-        <button onclick="clearSmartGreen()" style="background:#ef4444; color:#fff; font-weight:bold; padding:6px 10px; border-radius:6px; border:none; cursor:pointer; font-size:10px;">❌ Clear</button>
+        <div style="display:flex; gap:4px;">
+            <button onclick="if(window.smartRemoveLastPoint) window.smartRemoveLastPoint()" style="background:#f59e0b; color:#0f172a; font-weight:bold; padding:6px 10px; border-radius:6px; border:none; cursor:pointer; font-size:10px; flex:1;">↩ Undo Point</button>
+            <button onclick="clearSmartGreen()" style="background:#ef4444; color:#fff; font-weight:bold; padding:6px 10px; border-radius:6px; border:none; cursor:pointer; font-size:10px; flex:1;">❌ Clear All</button>
+        </div>
     </div>
     
     <!-- Live Measurements -->
