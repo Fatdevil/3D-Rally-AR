@@ -21,6 +21,7 @@ let distSinceCheckpoint = 0;
 let offTrackDist = 0;
 let stuckTimer = 0;
 let _rKeyWasDown = false; // BUG-07 fix: edge-detection for R key
+let _bsKeyWasDown = false; // Edge detection for Backspace key
 
 // ─── UI Elements ───
 let overlayDiv = null;
@@ -244,6 +245,13 @@ function update(dt) {
         triggerRespawn();
     }
     _rKeyWasDown = rDown;
+
+    // Manual checkpoint respawn (Backspace key)
+    let bsDown = !!keys['Backspace'];
+    if (bsDown && !_bsKeyWasDown) {
+        window.rallyRespawn.triggerCheckpointRespawn();
+    }
+    _bsKeyWasDown = bsDown;
 }
 
 function cleanup() {
@@ -256,7 +264,53 @@ window.rallyRespawn = {
     init: init,
     update: update,
     triggerRespawn: triggerRespawn,
-    cleanup: cleanup
+    cleanup: cleanup,
+    triggerCheckpointRespawn: function() {
+        let pos = null;
+        let heading = 0;
+        let groundY = undefined;
+        let rc = window.raceConfig;
+        
+        if (rc) {
+            let rs = window.raceState;
+            if (rs) {
+                // If we have passed some checkpoints this lap
+                if (rs.nextCheckpoint > 0 && rc.checkpoints && rc.checkpoints[rs.nextCheckpoint - 1]) {
+                    let cp = rc.checkpoints[rs.nextCheckpoint - 1];
+                    pos = new THREE.Vector3(cp.x, cp.y, cp.z);
+                    groundY = cp.y;
+                    if (cp.roadId && cp.splineIndex !== undefined) {
+                        let road = rc.roads.find(r => r.id === cp.roadId);
+                        if (road && road.sampledPoints) {
+                            let idx = cp.splineIndex;
+                            let p = road.sampledPoints[idx];
+                            let pNext = idx < road.sampledPoints.length - 1 ? road.sampledPoints[idx+1] : p;
+                            heading = Math.atan2(pNext.x - p.x, pNext.z - p.z);
+                        }
+                    }
+                } else if (rc.start) {
+                    // Otherwise spawn at start gate
+                    pos = new THREE.Vector3(rc.start.x, rc.start.y, rc.start.z);
+                    groundY = rc.start.y;
+                    heading = rc.start.rotation || 0;
+                }
+            }
+        }
+        
+        if (pos) {
+            let car = window.rallyVehicle ? window.rallyVehicle.getCar() : null;
+            if (car) {
+                // Set lastCheckpoint to this position and trigger normal respawn
+                lastCheckpoint = {
+                    position: pos.clone(),
+                    groundY: groundY,
+                    heading: heading
+                };
+                triggerRespawn();
+                console.log('🔄 Respawned at last passed checkpoint / start gate');
+            }
+        }
+    }
 };
 
 console.log('🔄 Rally Respawn system loaded');

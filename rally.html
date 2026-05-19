@@ -664,7 +664,7 @@
     }
 
     // ── Race Logic ──
-    let raceState = {
+    let raceState = window.raceState = {
         started: false,
         timer: 0,
         penalty: 0,
@@ -912,15 +912,16 @@
                     let allCPDone = !rc.checkpoints || raceState.nextCheckpoint >= rc.checkpoints.length;
                     
                     if (!allCPDone) {
-                        let missed = rc.checkpoints.length - raceState.checkpointsHit.length;
-                        let rule = rc.missedCheckpointRule || 'PENALTY_5S';
-                        if (rule === 'FAIL') {
-                            raceState.dnf = true;
-                            showRaceResult();
-                            return;
-                        } else if (rule === 'PENALTY_2S') raceState.penalty += missed * 2;
-                        else if (rule === 'PENALTY_5S') raceState.penalty += missed * 5;
-                        else if (rule === 'PENALTY_10S') raceState.penalty += missed * 10;
+                        let msg = document.getElementById('race-missed-msg');
+                        if (msg) msg.remove();
+                        msg = document.createElement('div');
+                        msg.id = 'race-missed-msg';
+                        msg.innerHTML = '⚠️ MISSADE CHECKPOINTS!<br><span style="font-size:16px;color:#fff">Kör tillbaka och passera alla markörer. Tryck Backspace för att starta om vid förra CP.</span>';
+                        msg.style.cssText = 'position:fixed;top:40%;left:50%;transform:translate(-50%,-50%);z-index:10000;pointer-events:none;' +
+                        'color:#ef4444;font-size:28px;font-weight:900;font-family:\'Inter\',sans-serif;text-shadow:0 0 30px rgba(239,68,68,0.5);text-align:center;transition:opacity 1.5s ease;';
+                        document.body.appendChild(msg);
+                        setTimeout(() => { if (msg) msg.style.opacity = '0'; setTimeout(() => { if (msg) msg.remove(); }, 1500); }, 2000);
+                        return; // Block lap completion or race finish
                     }
 
                     let currentTotalTime = raceState.timer + raceState.penalty;

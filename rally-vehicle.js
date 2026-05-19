@@ -5,6 +5,10 @@
 function lerp(a,b,t){ return a+(b-a)*Math.max(0,Math.min(1,t)); }
 function clamp(v,lo,hi){ return Math.max(lo,Math.min(hi,v)); }
 
+const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1) || window.location.search.includes('forceTouch=true');
+let touchInput = { throttle: 0, brake: 0, steer: 0, handbrake: false };
+let touchControlsEl = null;
+
 const CFG = {
     MASS: 1100, 
     ENGINE_FORCE: 55000, 
@@ -102,6 +106,15 @@ function readInput() {
     if(keys['KeyA'] || keys['ArrowLeft']) input.steer = 1;
     if(keys['KeyD'] || keys['ArrowRight']) input.steer = -1;
     if(keys['Space']) input.handbrake = true;
+    
+    // Merge mobile touch inputs
+    if (isMobile) {
+        if (touchInput.throttle) input.throttle = touchInput.throttle;
+        if (touchInput.brake) input.brake = touchInput.brake;
+        if (touchInput.steer) input.steer = touchInput.steer;
+        if (touchInput.handbrake) input.handbrake = touchInput.handbrake;
+    }
+    
     let gps=navigator.getGamepads?navigator.getGamepads():[];
     for(let gp of gps){ if(!gp||!gp.connected)continue;
         let sx=gp.axes[0]||0; if(Math.abs(sx)<0.12)sx=0;
@@ -403,32 +416,65 @@ function updateVehicle(dt) {
 function createHUD() {
     let ex=document.getElementById('rally-hud'); if(ex) ex.remove();
     let h=document.createElement('div'); h.id='rally-hud';
-    h.innerHTML=`<div style="position:fixed;bottom:30px;right:30px;z-index:9999;pointer-events:none;font-family:'Inter','Segoe UI',sans-serif">
-<div style="background:rgba(15,23,42,0.92);border:1px solid #334155;border-radius:16px;padding:16px 24px;backdrop-filter:blur(12px);min-width:180px;text-align:center">
-<div id="rally-speed" style="font-size:52px;font-weight:900;color:#38bdf8;letter-spacing:-2px;line-height:1">0</div>
-<div style="font-size:11px;color:#64748b;font-weight:bold;text-transform:uppercase;letter-spacing:2px;margin-top:2px">km/h</div>
-<div style="height:1px;background:#334155;margin:10px 0"></div>
-<div style="display:flex;justify-content:space-between;align-items:center">
-<div><div style="font-size:8px;color:#64748b;text-transform:uppercase;font-weight:bold">Surface</div>
-<div id="rally-surface" style="font-size:12px;color:#4ade80;font-weight:bold">DIRT</div></div>
-<div><div style="font-size:8px;color:#64748b;text-transform:uppercase;font-weight:bold">Grip</div>
-<div id="rally-grip" style="font-size:12px;color:#fbbf24;font-weight:bold">50%</div></div></div>
-<div id="rally-drift-badge" style="font-size:14px;font-weight:900;color:#f97316;margin-top:6px;opacity:0;transition:opacity 0.2s">🔥 DRIFT</div>
-<div style="font-size:9px;color:#475569;margin-top:4px">Slip: <span id="rally-slip">0</span>°</div>
-<div style="height:1px;background:#334155;margin:10px 0"></div>
-<div style="font-size:8px;color:#64748b;text-transform:uppercase;font-weight:bold;margin-bottom:4px">Car Damage</div>
-<div style="background:#1e293b;border-radius:4px;height:6px;overflow:hidden">
-  <div id="rally-damage-bar" style="height:100%;width:0%;background:#4ade80;border-radius:4px;transition:width 0.2s,background 0.4s"></div>
-</div>
-<div id="rally-damage-text" style="font-size:10px;color:#4ade80;font-weight:bold;margin-top:3px">0%</div>
-</div></div>
+    let hudStyle = isMobile 
+        ? "position:fixed;top:16px;right:16px;z-index:9999;pointer-events:none;font-family:'Inter','Segoe UI',sans-serif"
+        : "position:fixed;bottom:30px;right:30px;z-index:9999;pointer-events:none;font-family:'Inter','Segoe UI',sans-serif";
+    
+    let innerHTML = '';
+    if (isMobile) {
+        innerHTML = `
+        <div style="background:rgba(15,23,42,0.92);border:1px solid #334155;border-radius:16px;padding:10px 18px;backdrop-filter:blur(12px);display:flex;align-items:center;gap:14px;pointer-events:none;box-shadow:0 8px 32px rgba(0,0,0,0.3)">
+            <div style="text-align:center;min-width:55px;">
+                <div id="rally-speed" style="font-size:32px;font-weight:900;color:#4ade80;letter-spacing:-1px;line-height:1">0</div>
+                <div style="font-size:9px;color:#64748b;font-weight:bold;text-transform:uppercase;letter-spacing:1px;margin-top:1px">km/h</div>
+            </div>
+            <div style="width:1px;height:30px;background:#334155"></div>
+            <div style="display:flex;flex-direction:column;gap:1px;font-size:10px;font-weight:bold">
+                <div style="display:flex;justify-content:space-between;gap:6px;"><span style="color:#64748b">SURF:</span><span id="rally-surface" style="color:#4ade80">DIRT</span></div>
+                <div style="display:flex;justify-content:space-between;gap:6px;"><span style="color:#64748b">GRIP:</span><span id="rally-grip" style="color:#fbbf24">50%</span></div>
+                <div style="font-size:8px;color:#475569">Slip: <span id="rally-slip">0</span>°</div>
+            </div>
+            <div style="width:1px;height:30px;background:#334155"></div>
+            <div style="min-width:70px">
+                <div style="font-size:8px;color:#64748b;text-transform:uppercase;font-weight:bold;margin-bottom:2px">Damage</div>
+                <div style="background:#1e293b;border-radius:3px;height:5px;overflow:hidden">
+                    <div id="rally-damage-bar" style="height:100%;width:0%;background:#4ade80;border-radius:3px;transition:width 0.2s,background 0.4s"></div>
+                </div>
+                <div id="rally-damage-text" style="font-size:9px;color:#4ade80;font-weight:bold;margin-top:2px;text-align:right">0%</div>
+            </div>
+            <div id="rally-drift-badge" style="font-size:10px;font-weight:900;color:#f97316;opacity:0;transition:opacity 0.2s;position:absolute;bottom:-18px;left:50%;transform:translateX(-50%)">🔥 DRIFT</div>
+        </div>`;
+    } else {
+        innerHTML = `
+        <div style="background:rgba(15,23,42,0.92);border:1px solid #334155;border-radius:16px;padding:16px 24px;backdrop-filter:blur(12px);min-width:180px;text-align:center">
+        <div id="rally-speed" style="font-size:52px;font-weight:900;color:#38bdf8;letter-spacing:-2px;line-height:1">0</div>
+        <div style="font-size:11px;color:#64748b;font-weight:bold;text-transform:uppercase;letter-spacing:2px;margin-top:2px">km/h</div>
+        <div style="height:1px;background:#334155;margin:10px 0"></div>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+        <div><div style="font-size:8px;color:#64748b;text-transform:uppercase;font-weight:bold">Surface</div>
+        <div id="rally-surface" style="font-size:12px;color:#4ade80;font-weight:bold">DIRT</div></div>
+        <div><div style="font-size:8px;color:#64748b;text-transform:uppercase;font-weight:bold">Grip</div>
+        <div id="rally-grip" style="font-size:12px;color:#fbbf24;font-weight:bold">50%</div></div></div>
+        <div id="rally-drift-badge" style="font-size:14px;font-weight:900;color:#f97316;margin-top:6px;opacity:0;transition:opacity 0.2s">🔥 DRIFT</div>
+        <div style="font-size:9px;color:#475569;margin-top:4px">Slip: <span id="rally-slip">0</span>°</div>
+        <div style="height:1px;background:#334155;margin:10px 0"></div>
+        <div style="font-size:8px;color:#64748b;text-transform:uppercase;font-weight:bold;margin-bottom:4px">Car Damage</div>
+        <div style="background:#1e293b;border-radius:4px;height:6px;overflow:hidden">
+          <div id="rally-damage-bar" style="height:100%;width:0%;background:#4ade80;border-radius:4px;transition:width 0.2s,background 0.4s"></div>
+        </div>
+        <div id="rally-damage-text" style="font-size:10px;color:#4ade80;font-weight:bold;margin-top:3px">0%</div>
+        </div>`;
+    }
+
+    h.innerHTML=`<div style="${hudStyle}">${innerHTML}</div>
 <div id="rally-controls-hint" style="position:fixed;top:80px;left:50%;transform:translateX(-50%);z-index:9999;pointer-events:none;
 background:rgba(15,23,42,0.9);border:1px solid #334155;border-radius:12px;padding:12px 24px;backdrop-filter:blur(8px);
 font-family:'Inter',sans-serif;transition:opacity 2s ease">
 <div style="color:#e2e8f0;font-size:13px;font-weight:bold;text-align:center">🏎️ RALLY MODE</div>
 <div style="color:#94a3b8;font-size:11px;margin-top:4px;text-align:center">
-<b>W/↑</b> Gas &nbsp; <b>S/↓</b> Broms &nbsp; <b>A/D</b> Sväng &nbsp; <b>SPACE</b> Handbroms &nbsp; <b>R</b> Respawn</div>
+<b>W/↑</b> Gas &nbsp; <b>S/↓</b> Broms &nbsp; <b>A/D</b> Sväng &nbsp; <b>SPACE</b> Handbroms &nbsp; <b>R</b> Fastnat (Unstuck) &nbsp; <b>BACKSPACE</b> Backa till CP</div>
 <div style="color:#64748b;font-size:10px;margin-top:2px;text-align:center">🎮 Gamepad: Triggers=Gas/Broms, Stick=Sväng, A=Handbroms</div></div>`;
+
     document.body.appendChild(h);
     setTimeout(()=>{ let c=document.getElementById('rally-controls-hint'); if(c)c.style.opacity='0'; setTimeout(()=>{if(c)c.remove();},2000); },5000);
 }
@@ -470,6 +516,111 @@ function updateHUD() {
     }
 }
 
+function createTouchControls() {
+    if (touchControlsEl) return;
+    
+    touchControlsEl = document.createElement('div');
+    touchControlsEl.id = 'rally-touch-controls';
+    
+    // Left Steering Panel (← / →)
+    let leftPanel = document.createElement('div');
+    leftPanel.style.cssText = 'position:fixed;bottom:25px;left:25px;display:flex;gap:12px;z-index:10000;pointer-events:auto;';
+    
+    let btnLeft = document.createElement('div');
+    btnLeft.style.cssText = 'width:72px;height:72px;background:rgba(255,255,255,0.08);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.15);border-radius:50%;color:#fff;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:bold;user-select:none;-webkit-user-select:none;cursor:pointer;box-shadow:0 8px 32px rgba(0,0,0,0.2);';
+    btnLeft.innerHTML = '←';
+    
+    let btnRight = document.createElement('div');
+    btnRight.style.cssText = btnLeft.style.cssText;
+    btnRight.innerHTML = '→';
+    
+    let steerLeft = false, steerRight = false;
+    function updateSteer() {
+        touchInput.steer = (steerLeft ? 1 : 0) + (steerRight ? -1 : 0);
+    }
+    
+    btnLeft.addEventListener('touchstart', e => { e.preventDefault(); steerLeft = true; updateSteer(); btnLeft.style.background = 'rgba(255,255,255,0.25)'; });
+    btnLeft.addEventListener('touchend', e => { e.preventDefault(); steerLeft = false; updateSteer(); btnLeft.style.background = 'rgba(255,255,255,0.08)'; });
+    btnLeft.addEventListener('touchcancel', e => { e.preventDefault(); steerLeft = false; updateSteer(); btnLeft.style.background = 'rgba(255,255,255,0.08)'; });
+    
+    btnRight.addEventListener('touchstart', e => { e.preventDefault(); steerRight = true; updateSteer(); btnRight.style.background = 'rgba(255,255,255,0.25)'; });
+    btnRight.addEventListener('touchend', e => { e.preventDefault(); steerRight = false; updateSteer(); btnRight.style.background = 'rgba(255,255,255,0.08)'; });
+    btnRight.addEventListener('touchcancel', e => { e.preventDefault(); steerRight = false; updateSteer(); btnRight.style.background = 'rgba(255,255,255,0.08)'; });
+    
+    leftPanel.appendChild(btnLeft);
+    leftPanel.appendChild(btnRight);
+    touchControlsEl.appendChild(leftPanel);
+    
+    // Right Throttle/Brake/Handbrake Panel
+    let rightPanel = document.createElement('div');
+    rightPanel.style.cssText = 'position:fixed;bottom:25px;right:25px;display:flex;flex-direction:column;gap:12px;align-items:flex-end;z-index:10000;pointer-events:auto;';
+    
+    let btnDrift = document.createElement('div');
+    btnDrift.style.cssText = 'width:100px;height:42px;background:rgba(249,115,22,0.15);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid rgba(249,115,22,0.4);border-radius:21px;color:#f97316;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;letter-spacing:1px;user-select:none;-webkit-user-select:none;cursor:pointer;box-shadow:0 8px 32px rgba(249,115,22,0.1);';
+    btnDrift.innerHTML = 'DRIFT';
+    
+    btnDrift.addEventListener('touchstart', e => { e.preventDefault(); touchInput.handbrake = true; btnDrift.style.background = 'rgba(249,115,22,0.35)'; });
+    btnDrift.addEventListener('touchend', e => { e.preventDefault(); touchInput.handbrake = false; btnDrift.style.background = 'rgba(249,115,22,0.15)'; });
+    btnDrift.addEventListener('touchcancel', e => { e.preventDefault(); touchInput.handbrake = false; btnDrift.style.background = 'rgba(249,115,22,0.15)'; });
+    
+    let rowSpeed = document.createElement('div');
+    rowSpeed.style.cssText = 'display:flex;gap:12px;align-items:center;';
+    
+    let btnBrake = document.createElement('div');
+    btnBrake.style.cssText = 'width:68px;height:68px;background:rgba(239,68,68,0.12);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid rgba(239,68,68,0.4);border-radius:50%;color:#ef4444;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;user-select:none;-webkit-user-select:none;cursor:pointer;box-shadow:0 8px 32px rgba(239,68,68,0.1);';
+    btnBrake.innerHTML = 'BROM';
+    
+    btnBrake.addEventListener('touchstart', e => { e.preventDefault(); touchInput.brake = 1; btnBrake.style.background = 'rgba(239,68,68,0.3)'; });
+    btnBrake.addEventListener('touchend', e => { e.preventDefault(); touchInput.brake = 0; btnBrake.style.background = 'rgba(239,68,68,0.12)'; });
+    btnBrake.addEventListener('touchcancel', e => { e.preventDefault(); touchInput.brake = 0; btnBrake.style.background = 'rgba(239,68,68,0.12)'; });
+    
+    let btnGas = document.createElement('div');
+    btnGas.style.cssText = 'width:84px;height:84px;background:rgba(34,197,94,0.15);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid rgba(34,197,94,0.4);border-radius:50%;color:#22c55e;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;user-select:none;-webkit-user-select:none;cursor:pointer;box-shadow:0 8px 32px rgba(34,197,94,0.15);';
+    btnGas.innerHTML = 'GAS';
+    
+    btnGas.addEventListener('touchstart', e => { e.preventDefault(); touchInput.throttle = 1; btnGas.style.background = 'rgba(34,197,94,0.35)'; });
+    btnGas.addEventListener('touchend', e => { e.preventDefault(); touchInput.throttle = 0; btnGas.style.background = 'rgba(34,197,94,0.15)'; });
+    btnGas.addEventListener('touchcancel', e => { e.preventDefault(); touchInput.throttle = 0; btnGas.style.background = 'rgba(34,197,94,0.15)'; });
+    
+    rowSpeed.appendChild(btnBrake);
+    rowSpeed.appendChild(btnGas);
+    rightPanel.appendChild(btnDrift);
+    rightPanel.appendChild(rowSpeed);
+    touchControlsEl.appendChild(rightPanel);
+    
+    // Top Panel: Respawn / Checkpoint buttons
+    let topPanel = document.createElement('div');
+    topPanel.style.cssText = 'position:fixed;top:16px;left:50%;transform:translateX(-50%);display:flex;gap:8px;z-index:10000;pointer-events:auto;';
+    
+    let btnUnstuck = document.createElement('div');
+    btnUnstuck.style.cssText = 'background:rgba(15,23,42,0.85);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid #334155;color:#fbbf24;border-radius:20px;padding:8px 14px;font-size:12px;font-weight:bold;cursor:pointer;user-select:none;-webkit-user-select:none;box-shadow:0 4px 12px rgba(0,0,0,0.25);';
+    btnUnstuck.innerHTML = '🔄 Fastnat';
+    btnUnstuck.addEventListener('click', e => {
+        if (window.rallyRespawn) window.rallyRespawn.triggerRespawn();
+    });
+    
+    let btnCP = document.createElement('div');
+    btnCP.style.cssText = 'background:rgba(15,23,42,0.85);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid #334155;color:#ef4444;border-radius:20px;padding:8px 14px;font-size:12px;font-weight:bold;cursor:pointer;user-select:none;-webkit-user-select:none;box-shadow:0 4px 12px rgba(0,0,0,0.25);';
+    btnCP.innerHTML = '🚩 Backa till CP';
+    btnCP.addEventListener('click', e => {
+        if (window.rallyRespawn) window.rallyRespawn.triggerCheckpointRespawn();
+    });
+    
+    topPanel.appendChild(btnUnstuck);
+    topPanel.appendChild(btnCP);
+    touchControlsEl.appendChild(topPanel);
+    
+    document.body.appendChild(touchControlsEl);
+}
+
+function destroyTouchControls() {
+    if (touchControlsEl) {
+        touchControlsEl.remove();
+        touchControlsEl = null;
+    }
+    touchInput = { throttle: 0, brake: 0, steer: 0, handbrake: false };
+}
+
 // ─── PUBLIC API ───
 window.rallyVehicle = {
     activate: function(scene, camera, controls) {
@@ -500,6 +651,10 @@ window.rallyVehicle = {
         car._spawnPosition = car.position.clone();
         // Init respawn system
         if (window.rallyRespawn) window.rallyRespawn.init(car);
+        
+        // Touch controls setup on mobile
+        if (isMobile) createTouchControls();
+        
         console.log('🏎️ Rally Vehicle activated (drift physics v4 + damage + camera + respawn)');
     },
     deactivate: function(scene) {
@@ -507,6 +662,10 @@ window.rallyVehicle = {
         if(car.mesh){scene.remove(car.mesh); car.mesh=null;}
         let h=document.getElementById('rally-hud'); if(h)h.remove();
         if (window.rallyRespawn) window.rallyRespawn.cleanup();
+        
+        // Clean up mobile touch controls
+        destroyTouchControls();
+        
         keys={}; console.log('🏎️ Rally Vehicle deactivated');
     },
     update: function(camera) {

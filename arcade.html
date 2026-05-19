@@ -11578,7 +11578,7 @@ window.triggerExplosion = function(x, y, z) {
     <!-- Rally: Checkpoint Rule and Laps -->
     <div id="sb-rally-rules" style="display:none; margin-bottom:4px;">
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
-            <div>
+            <div style="display:none;">
                 <div style="color:#64748b; font-size:9px; font-weight:bold; text-transform:uppercase; margin-bottom:4px; text-align:left;">Missad CP</div>
                 <select id="sb-cp-rule" onchange="if(window.raceConfig) { window.raceConfig.missedCheckpointRule = this.value; if(window.saveLevel) window.saveLevel(); }" style="width:100%; background:#1e293b; color:#e2e8f0; border:1px solid #334155; border-radius:5px; padding:5px; font-size:11px; font-weight:bold;">
                     <option value="NONE">Inget straff</option>
@@ -11588,7 +11588,7 @@ window.triggerExplosion = function(x, y, z) {
                     <option value="FAIL">DNF</option>
                 </select>
             </div>
-            <div>
+            <div style="grid-column: span 2;">
                 <div style="color:#64748b; font-size:9px; font-weight:bold; text-transform:uppercase; margin-bottom:4px; text-align:left;">Antal Varv</div>
                 <select id="sb-race-laps" onchange="if(window.raceConfig) { window.raceConfig.laps = parseInt(this.value); if(window.saveLevel) window.saveLevel(); }" style="width:100%; background:#1e293b; color:#e2e8f0; border:1px solid #334155; border-radius:5px; padding:5px; font-size:11px; font-weight:bold;">
                     <option value="1" selected>1 Varv</option>

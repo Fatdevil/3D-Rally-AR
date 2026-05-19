@@ -17,6 +17,9 @@ const pool = new Pool({
        ? { rejectUnauthorized: false } 
        : false
 });
+pool.on('error', (err) => {
+  console.warn('⚠️ Postgres pool unexpected error:', err.message);
+});
 
 // --- SCHEMA INITIALIZERING (Kan köras en gång) ---
 async function initDB() {
