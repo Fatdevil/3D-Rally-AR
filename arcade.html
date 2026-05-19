@@ -429,9 +429,11 @@
             </div>
             <button id="ipad-sculpt-btn" onclick="toggleIpadSculpt()" style="background:#4ade80; color:#0f172a; border:none; padding:8px; font-size:11px; border-radius:6px; font-weight:bold; cursor:pointer; margin-top:5px; width:100%;">⬆️ RAISE</button>
             
-            <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; margin-top:10px;">Sculpt Strength</label>
-            <input type="range" id="strength-slider" min="1" max="10" value="2" oninput="window.sculptStrength = parseInt(this.value) * 0.01; document.getElementById('strength-val').textContent = this.value + 'x'" style="width:140px; accent-color:#f59e0b; cursor:pointer;" title="Change strength">
-            <span id="strength-val" style="color:#f59e0b; font-size:10px; font-weight:bold;">2x</span>
+            <div id="sculpt-strength-container" style="display:flex; flex-direction:column;">
+                <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; margin-top:10px;">Sculpt Strength</label>
+                <input type="range" id="strength-slider" min="1" max="10" value="2" oninput="window.sculptStrength = parseInt(this.value) * 0.01; document.getElementById('strength-val').textContent = this.value + 'x'" style="width:140px; accent-color:#f59e0b; cursor:pointer;" title="Change strength">
+                <span id="strength-val" style="color:#f59e0b; font-size:10px; font-weight:bold;">2x</span>
+            </div>
             <div id="flatten-hud" style="display:none; color:#38bdf8; font-size:11px; font-weight:bold; margin-top:6px; padding:6px 10px; background:#1e293b; border-radius:6px;">Flatten Target: 0.0m</div>
             
             
@@ -8902,6 +8904,11 @@
         if (rampSettings) rampSettings.style.display = (toolName === 'RAMP') ? 'flex' : 'none';
         document.getElementById('noise-pattern-group').style.display = (toolName === 'NOISE') ? 'flex' : 'none';
         document.getElementById('water-settings-group').style.display = (toolName === 'WATER') ? 'flex' : 'none';
+        
+        let strengthContainer = document.getElementById('sculpt-strength-container');
+        if (strengthContainer) {
+            strengthContainer.style.display = (toolName === 'SCULPT') ? 'flex' : 'none';
+        }
         
         let ipadBtn = document.getElementById('ipad-sculpt-btn');
         if (ipadBtn) {
