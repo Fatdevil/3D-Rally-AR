@@ -434,8 +434,6 @@
             <span id="strength-val" style="color:#f59e0b; font-size:10px; font-weight:bold;">2x</span>
             <div id="flatten-hud" style="display:none; color:#38bdf8; font-size:11px; font-weight:bold; margin-top:6px; padding:6px 10px; background:#1e293b; border-radius:6px;">Flatten Target: 0.0m</div>
             
-            <label id="hardness-label" style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; margin-top:10px;">Brush Hardness</label>
-            <input type="range" id="hardness-slider" min="0" max="100" value="100" oninput="updateBrushHardness()" style="width:140px; accent-color:#f43f5e; cursor:pointer;" title="Change hardness">
             
             <!-- RAMP SPECIFIC SETTINGS -->
             <div id="ramp-settings" style="display:none; flex-direction:column; gap:5px; margin-top:10px; padding-top:10px; border-top:1px solid #334155;">
@@ -11722,6 +11720,13 @@ window.triggerExplosion = function(x, y, z) {
             <div id="sp-preview-swatch" style="width:16px; height:16px; border-radius:3px; background:#8bc45d; border:1px solid #475569;"></div>
             <span id="sp-preview-name" style="color:#94a3b8; font-size:9px; font-weight:bold;">Foregreen</span>
         </div>
+        
+        <!-- Freehand Only Controls -->
+        <div id="freehand-specific-controls" style="margin-top:6px; border-top:1px solid #334155; padding-top:6px;">
+            <label id="hardness-label" style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">Freehand Edge Hardness</label>
+            <input type="range" id="hardness-slider" min="0" max="100" value="100" oninput="updateBrushHardness()" style="width:100%; accent-color:#f43f5e; cursor:pointer; margin-top:4px;" title="Change hardness">
+        </div>
+
     </div>
 
     <!-- STAMP controls -->
