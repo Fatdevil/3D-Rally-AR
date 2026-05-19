@@ -4703,6 +4703,11 @@
 
     function createTeeObject(x, y, z, colorHex=0xfacc15) {
         let group = new THREE.Group();
+        if (window.EDITOR_MODE === 'rally') {
+            group.position.set(x, y, z);
+            scene.add(group);
+            return group;
+        }
         let tMat = new THREE.MeshLambertMaterial({ color: colorHex });
         
         let meshLeft = new THREE.Mesh(teeGeo, tMat);
