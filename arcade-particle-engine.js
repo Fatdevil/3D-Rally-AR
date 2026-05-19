@@ -215,6 +215,24 @@
     // GENERIC: Build a particle layer from a preset
     // Returns { key, preset, mesh, positions, velocities, colors, sizes, count }
     // ---------------------------------------------------------------
+    
+    let _particleTexture = null;
+    function _getSoftParticleTexture() {
+        if (_particleTexture) return _particleTexture;
+        let canvas = document.createElement('canvas');
+        canvas.width = 64; canvas.height = 64;
+        let ctx = canvas.getContext('2d');
+        let gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+        gradient.addColorStop(0, 'rgba(255,255,255,1)');
+        gradient.addColorStop(0.2, 'rgba(255,255,255,0.8)');
+        gradient.addColorStop(0.5, 'rgba(255,255,255,0.2)');
+        gradient.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, 64, 64);
+        _particleTexture = new THREE.CanvasTexture(canvas);
+        return _particleTexture;
+    }
+    
     function _buildLayer(preset, maxCount, tag) {
         let count = Math.floor(maxCount * _intensity);
         if (count < 10) count = 10;
@@ -236,6 +254,7 @@
 
         let material = new THREE.PointsMaterial({
             size: (preset.type === 'streak' ? 1.0 : 2.0) * _sizeMultiplier,
+            map: _getSoftParticleTexture(),
             vertexColors: true,
             transparent: true,
             opacity: preset.type === 'streak' ? 0.5 : 0.8,
@@ -357,9 +376,14 @@
 
         // Build weather particles if the preset has a type
         if (weatherPreset && weatherPreset.type) {
-            _weatherLayer = _buildLayer(weatherPreset, MAX_WEATHER_PARTICLES, 'weather');
-            _weatherLayer.key = weatherKey;
-            console.log('[ParticleEngine] Weather:', weatherPreset.label, '| Count:', _weatherLayer.count);
+            // Prevent rain streaks when in Winter biome (we only want the storm's fog/darkness)
+            if (window.ACTIVE_BIOME === 'WINTER' && weatherPreset.type === 'streak') {
+                console.log('[ParticleEngine] Skipping rain particles in Winter (Blizzard mode).');
+            } else {
+                _weatherLayer = _buildLayer(weatherPreset, MAX_WEATHER_PARTICLES, 'weather');
+                _weatherLayer.key = weatherKey;
+                console.log('[ParticleEngine] Weather:', weatherPreset.label, '| Count:', _weatherLayer.count);
+            }
         } else {
             console.log('[ParticleEngine] Weather:', weatherKey, '(no particles)');
         }

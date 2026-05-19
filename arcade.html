@@ -2621,7 +2621,11 @@
         window.buildNatureUI();
 
         // === PARTICLE ENGINE: Auto-activate for biome ===
-        if (window.ParticleEngine) window.ParticleEngine.activateBiome(val);
+        if (window.ParticleEngine && val !== 'AUTUMN') {
+            window.ParticleEngine.activateBiome(val);
+        } else if (window.ParticleEngine && val === 'AUTUMN') {
+            window.ParticleEngine.activateBiome('DEFAULT'); // Turn off biome particles
+        }
         
         // === AUTUMN LEAVES: 3D falling + ground carpet ===
         if (window.AutumnLeaves) {
@@ -2672,7 +2676,17 @@
             
             // Uppdatera terrängens canvas pixlar i realtid
             if(window.recolorTerrain) {
+                // Ta bort ev. gammal snö FÖRE vi omfärgar canvasen
+                if (window._snowLayerActive && typeof window.removeSnowLayer === 'function') {
+                    window.removeSnowLayer();
+                }
+                
                 window.recolorTerrain(oldConfig, window.CURRENT_BIOME_CONFIG);
+                
+                // Lägg till snö EFTER vi har färgat om basen om temat är WINTER
+                if (val === 'WINTER' && typeof window.applySnowLayer === 'function') {
+                    window.applySnowLayer(1.0);
+                }
             }
             
             // Uppdatera vatten
@@ -10153,17 +10167,23 @@ window.triggerExplosion = function(x, y, z) {
     });
 };
 
+    let lastAnimateTime = performance.now();
     function animate() {
         requestAnimationFrame(animate);
+        let now = performance.now();
+        let dt = (now - lastAnimateTime) / 1000;
+        lastAnimateTime = now;
+        if (dt > 0.1) dt = 0.1; // Cap at 100ms to prevent massive jumps on lag spikes
+
         if (window.animateStars) window.animateStars(); // Star twinkle (external module)
-        if (window.ParticleEngine) window.ParticleEngine.update(0.016); // Particle animation (external module)
-        if (window.WindSway) window.WindSway.update(performance.now() * 0.001); // Wind sway
-        if (window.AutumnLeaves) window.AutumnLeaves.update(0.016); // 3D falling leaves
+        if (window.ParticleEngine) window.ParticleEngine.update(dt); // Particle animation (external module)
+        if (window.WindSway) window.WindSway.update(now * 0.001); // Wind sway
+        if (window.AutumnLeaves) window.AutumnLeaves.update(dt); // 3D falling leaves
         if (window.updateTracerFade) window.updateTracerFade(); // Tracer fade-out after landing
 
         // --- Process Explosions ---
         if (window.activeExplosions && window.activeExplosions.length > 0) {
-            let now = performance.now();
+            // 'now' is already defined at the start of animate()
             for(let i = window.activeExplosions.length - 1; i >= 0; i--) {
                 let exp = window.activeExplosions[i];
                 if (now - exp.lastUpdate > exp.frameDuration) {
@@ -10578,7 +10598,8 @@ window.triggerExplosion = function(x, y, z) {
         // Om bollen flyger, hämta nästa punkt i trajectory
         if (isFlying && flightData && flightData.path && flightTick < flightData.path.length) {
             
-            var now = performance.now();
+            // 'now' är redan deklarerad överst i animate()
+            now = performance.now();
             if (!window._flightStartTime) {
                 window._flightStartTime = now;
                 window._lastProcessedTick = 0;
