@@ -142,6 +142,7 @@
 
         // ── Step 1b: Aim Point → flood-fill mountain mask ─────────────────────
         // If aimPoint is given, flood-fill from click to find connected mountain
+        let mtnMaxH = 0; // Declared OUTSIDE if-block so dynamic peak height works
         let mountainMask = null;
         if (options.aimPoint) {
             const ap = options.aimPoint; // { x, z } in world coords
@@ -178,7 +179,6 @@
             }
             // Count mountain pixels & find max height for dynamic peak threshold
             let mtnPx = 0;
-            let mtnMaxH = 0;
             for (let i = 0; i < mountainMask.length; i++) {
                 if (mountainMask[i]) {
                     mtnPx++;
@@ -189,11 +189,12 @@
                         floodThresh.toFixed(1) + 'm, click height=' + startH.toFixed(1) + 'm, max=' + mtnMaxH.toFixed(1) + 'm');
         }
 
-        // ── Dynamic peak height: top ~15% of mountain gets peak color ─────────
-        // For aimPoint mode, use actual mountain max height instead of fixed 20m
+        // ── Dynamic peak height: user-controlled via Peak Coverage slider ──────
+        // _mtnPeakRatio controls how high up the peak color starts (lower = more peak)
         if (mountainMask && typeof mtnMaxH !== 'undefined' && mtnMaxH > peakHeight) {
-            peakHeight = mtnMaxH * 0.85;  // peak zone = top 15% of mountain
-            console.log('🏔️ Dynamic peakHeight: ' + peakHeight.toFixed(1) + 'm (85% of ' + mtnMaxH.toFixed(1) + 'm)');
+            const peakRatio = window._mtnPeakRatio || 0.45;
+            peakHeight = mtnMaxH * peakRatio;
+            console.log('🏔️ Dynamic peakHeight: ' + peakHeight.toFixed(1) + 'm (' + Math.round(peakRatio*100) + '% of ' + mtnMaxH.toFixed(1) + 'm)');
         }
 
         // ── Step 2: Process canvas pixels ─────────────────────────────────────
@@ -259,8 +260,13 @@
                 // ── Height-based fade: low areas keep more grass ─────────────
                 const heightFade = smoothstep(2.0, 8.0, height);
 
+                // ── Noise-modulated peak line (breaks up the straight band) ──
+                const edgeRoughness = window._mtnEdgeRoughness || 5.0;
+                const peakNoise = fbm(cx * 0.08, cy * 0.08, 3, 2.0, 0.5);
+                const localPeakHeight = peakHeight + peakNoise * edgeRoughness;
+
                 // ── Skip flat/low terrain ────────────────────────────────────
-                if (slope < localDirt && height < peakHeight) continue;
+                if (slope < localDirt && height < localPeakHeight) continue;
 
                 // ── Determine zone and blend ─────────────────────────────────
                 let zoneR, zoneG, zoneB;
@@ -268,8 +274,8 @@
                 // Read ACTUAL pixel color for edge blending (not hardcoded grass)
                 const existR = px[offset], existG = px[offset + 1], existB = px[offset + 2];
 
-                if (height >= peakHeight) {
-                    const peakBlend = smoothstep(peakHeight - 3, peakHeight + 3, height);
+                if (height >= localPeakHeight) {
+                    const peakBlend = smoothstep(localPeakHeight - 3, localPeakHeight + 3, height);
                     if (slope >= localDirt) {
                         zoneR = peakRGB[0]; zoneG = peakRGB[1]; zoneB = peakRGB[2];
                     } else {
