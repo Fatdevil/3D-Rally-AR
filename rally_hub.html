@@ -116,6 +116,32 @@
             font-weight: 600;
         }
 
+        .admin-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(30, 41, 59, 0.4);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 50px;
+            padding: 8px 16px;
+            color: #ef4444;
+            font-size: 11px;
+            font-weight: 800;
+            text-decoration: none;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            backdrop-filter: blur(8px);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+        }
+
+        .admin-badge:hover {
+            background: rgba(239, 68, 68, 0.1);
+            border-color: #ef4444;
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.25);
+            transform: translateY(-1px);
+        }
+
         /* Cards Grid */
         .cards {
             display: grid;
@@ -287,11 +313,16 @@
             <div class="breadcrumb"><a href="index.html">← RALLY AR</a></div>
             <h1>SELECT ACTIVITY</h1>
         </div>
-        <div class="user-badge">
-            <div class="user-avatar">R</div>
-            <div class="user-info">
-                <span class="user-name">Racer</span>
-                <span class="user-tier">Free Driver</span>
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <a href="admin_assets.html" class="admin-badge">
+                <span>🛠️ Admin Assets</span>
+            </a>
+            <div class="user-badge">
+                <div class="user-avatar">R</div>
+                <div class="user-info">
+                    <span class="user-name">Racer</span>
+                    <span class="user-tier">Free Driver</span>
+                </div>
             </div>
         </div>
     </div>
