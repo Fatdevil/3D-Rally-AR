@@ -63,6 +63,8 @@
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
+<script src="arcade-auth.js"></script>
+<script src="arcade-api-service.js"></script>
 <script src="arcade-storage-service.js"></script>
 <script src="rally-surfaces.js"></script>
 <script src="rally-damage.js"></script>
@@ -481,7 +483,8 @@
                         let pts3 = road.nodes.map(function(n) {
                             return new THREE.Vector3(n.worldX, n.worldY, n.worldZ);
                         });
-                        let curve = new THREE.CatmullRomCurve3(pts3, false, 'centripetal');
+                        let isClosed = !!road.closed;
+                        let curve = new THREE.CatmullRomCurve3(pts3, isClosed, 'centripetal');
                         let len = curve.getLength();
                         let sampleCount = Math.max(2, Math.ceil(len / 2.0));
                         let sampled = [];
@@ -653,12 +656,16 @@
                     car._spawnPosition = spawnPos.clone();
                     car._spawnGroundY  = spawnPos.y - 1.5;
                     if (car.mesh) car.mesh.position.copy(spawnPos);
-                    if (level.rally && level.rally.start && level.rally.start.rotation !== undefined) {
-                        car.heading = level.rally.start.rotation;
-                        if (car.mesh) car.mesh.rotation.y = car.heading;
+                    let currentLevel = ArcadeStorage.loadCustomLevel() || ArcadeStorage.loadCompressedLevel();
+                    if (currentLevel && currentLevel.rally && currentLevel.rally.start && currentLevel.rally.start.rotation !== undefined) {
+                        car.heading = currentLevel.rally.start.rotation;
+                    } else if (currentLevel && currentLevel.holes && currentLevel.holes[0] && currentLevel.holes[0].tees && currentLevel.holes[0].tees.yellow && currentLevel.holes[0].tees.yellow.rot !== undefined) {
+                        car.heading = currentLevel.holes[0].tees.yellow.rot;
                     }
+                    if (car.mesh) car.mesh.rotation.y = car.heading;
+                    if (window.rallyCamera) window.rallyCamera.init(car);
                     if (window.rallyRespawn) window.rallyRespawn.init(car);
-                    console.log('✅ Car spawned at tee:', spawnPos.x.toFixed(1), spawnPos.z.toFixed(1));
+                    console.log('✅ Car spawned at tee:', spawnPos.x.toFixed(1), spawnPos.z.toFixed(1), 'heading:', car.heading.toFixed(2));
                 }
             } else {
                 setTimeout(waitForTerrainAndStart, 100);
@@ -866,7 +873,7 @@
         // --- 3. Start Detection ---
         if (!raceState.started) {
             let car = window.rallyVehicle.getCar();
-            if (car && car._speed && Math.abs(car._speed) > 0.5) {
+            if (car && car.speed && Math.abs(car.speed) > 0.5) {
                 raceState.started = true;
                 let msg = document.getElementById('race-start-msg');
                 if (msg) { msg.style.opacity = '0'; setTimeout(function() { msg.remove(); }, 500); }
@@ -907,7 +914,8 @@
             let validFinishY = Math.abs(carPos.y - rc.finish.y) < 8.0;
             
             if (distFinish < 15 && validFinishY) {
-                let carForward = new THREE.Vector3(0,0,1).applyQuaternion(window.rallyVehicle.getCar().quaternion);
+                let carHeading = window.rallyVehicle.getCar().heading;
+                let carForward = new THREE.Vector3(Math.sin(carHeading), 0, Math.cos(carHeading));
                 let finishForward = new THREE.Vector3(Math.sin(rc.finish.rotation || 0), 0, Math.cos(rc.finish.rotation || 0));
                 
                 let dot = carForward.x * finishForward.x + carForward.z * finishForward.z;
@@ -1035,9 +1043,57 @@
                 lapsHtml += '</div>';
             }
             
+            let level = ArcadeStorage.loadCustomLevel() || ArcadeStorage.loadCompressedLevel();
+            let courseCode = (level && level.share_code) ? level.share_code : null;
+            let statusHtml = '<div id="submit-status" style="font-size:11px;color:#94a3b8;margin-top:8px">Leaderboard check...</div>';
+            
+            if (courseCode) {
+                let deciseconds = Math.round(t * 10);
+                let playerName = 'Driver';
+                if (window.GolfAuth && window.GolfAuth.displayName) playerName = window.GolfAuth.displayName;
+                else if (localStorage.getItem('golf_os_username')) playerName = localStorage.getItem('golf_os_username');
+                
+                let vehicleType = 'Rally Car';
+                if (window.rallyVehicle && typeof window.rallyVehicle.getType === 'function') {
+                    vehicleType = window.rallyVehicle.getType();
+                }
+                
+                let resultPayload = {
+                    total_score: deciseconds,
+                    score_vs_par: 0,
+                    hole_scores: raceState.lapTimes.map(lt => Math.round(lt * 10)),
+                    input_mode: 'RALLY_DRIVE',
+                    lm_device: vehicleType,
+                    stats: { finalTime: t, lapTimes: raceState.lapTimes, vehicle: vehicleType, penalty: raceState.penalty },
+                    player_name: playerName
+                };
+                
+                ArcadeAPI.submitResult(courseCode, resultPayload).then(data => {
+                    let statusEl = document.getElementById('submit-status');
+                    if (statusEl) {
+                        if (data && data.success) {
+                            statusEl.style.color = '#4ade80';
+                            statusEl.innerHTML = '🏆 Leaderboard Position: <strong>#' + data.position + '</strong>';
+                        } else {
+                            statusEl.style.color = '#eab308';
+                            statusEl.innerText = 'Time recorded';
+                        }
+                    }
+                }).catch(err => {
+                    let statusEl = document.getElementById('submit-status');
+                    if (statusEl) {
+                        statusEl.style.color = '#94a3b8';
+                        statusEl.innerText = 'Time saved locally';
+                    }
+                });
+            } else {
+                statusHtml = '<div style="font-size:11px;color:#94a3b8;margin-top:8px">Built-in Preset Raced</div>';
+            }
+
             d.innerHTML = '<div style="font-size:22px;font-weight:700;color:#4ade80;text-transform:uppercase;letter-spacing:2px">🏁 FINISHED</div>' +
                 '<div style="font-size:56px;font-weight:900;color:#fff;letter-spacing:-2px;margin:8px 0;line-height:1">' + timeStr + '</div>' +
                 penStr + lapsHtml +
+                statusHtml +
                 '<button onclick="location.reload()" style="margin-top:16px;background:#4ade80;color:#0f172a;border:none;padding:12px 28px;border-radius:10px;font-weight:800;font-size:14px;cursor:pointer">↻ Kör igen</button>';
         }
         document.body.appendChild(d);
@@ -1047,6 +1103,7 @@
     if (window.raceConfig && window.raceConfig.start) {
         initRaceVisuals();
         createRaceHUD();
+        updateRaceHUD();
     }
 
     // ── Animate Loop ──

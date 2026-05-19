@@ -5170,9 +5170,9 @@
                     };
                 }),
             };
-            ArcadeStorage.saveCustomLevel({ targets: dumpTargets, holes: dumpHoles, rally: rallyData, trees: dumpTrees, _saveId: _saveId });
+            ArcadeStorage.saveCustomLevel({ targets: dumpTargets, holes: dumpHoles, rally: rallyData, trees: dumpTrees, _saveId: _saveId, share_code: currentEditCode || window._loadedCourseShareCode || null });
         } else {
-            ArcadeStorage.saveCustomLevel({ targets: dumpTargets, holes: dumpHoles, trees: dumpTrees, _saveId: _saveId });
+            ArcadeStorage.saveCustomLevel({ targets: dumpTargets, holes: dumpHoles, trees: dumpTrees, _saveId: _saveId, share_code: currentEditCode || window._loadedCourseShareCode || null });
         }
 
         // ── Terrain snapshot for rally.html ──────────────────────────────
@@ -5231,12 +5231,69 @@
 
     
     
-    // ============================================================
-    // COURSE CAPTURE TOOL
-    // ============================================================
     window.capturedPhotos = [];
     window.coverImageIndex = 0;
     
+    window.generateAutoScreenshot = function() {
+        if (!window.renderer || !window.scene || !window.camera) return null;
+        
+        let oldGridVisible = (typeof gridPlane !== 'undefined' && gridPlane) ? gridPlane.visible : true;
+        if (typeof gridPlane !== 'undefined' && gridPlane) gridPlane.visible = false;
+        
+        let oldSpheresVisible = [];
+        if (typeof smartGreenSpheres !== 'undefined' && smartGreenSpheres) {
+            smartGreenSpheres.forEach((s, idx) => {
+                oldSpheresVisible[idx] = s.visible;
+                s.visible = false;
+            });
+        }
+        let oldLineVisible = true;
+        if (typeof smartGreenLineMesh !== 'undefined' && smartGreenLineMesh) {
+            oldLineVisible = smartGreenLineMesh.visible;
+            smartGreenLineMesh.visible = false;
+        }
+
+        let hiddenObjs = [];
+        scene.traverse(function(obj) { 
+            if(obj.name === 'holeLabel' || obj.name === 'aimPointMarker') {
+                if (obj.visible) {
+                    hiddenObjs.push(obj);
+                    obj.visible = false;
+                }
+            } 
+        });
+
+        let oldMeasureMeshVisible = [];
+        if (window.measureLineMesh) {
+            oldMeasureMeshVisible.push(window.measureLineMesh);
+            window.measureLineMesh.visible = false;
+        }
+        if (window.measurePointsSpheres) {
+            window.measurePointsSpheres.forEach(s => {
+                oldMeasureMeshVisible.push(s);
+                s.visible = false;
+            });
+        }
+
+        window.renderer.render(window.scene, window.camera);
+        let dataUrl = window.renderer.domElement.toDataURL('image/jpeg', 0.7);
+        
+        if (typeof gridPlane !== 'undefined' && gridPlane) gridPlane.visible = oldGridVisible;
+        if (typeof smartGreenSpheres !== 'undefined' && smartGreenSpheres) {
+            smartGreenSpheres.forEach((s, idx) => {
+                s.visible = oldSpheresVisible[idx] !== false;
+            });
+        }
+        if (typeof smartGreenLineMesh !== 'undefined' && smartGreenLineMesh) {
+            smartGreenLineMesh.visible = oldLineVisible;
+        }
+        hiddenObjs.forEach(obj => obj.visible = true);
+        oldMeasureMeshVisible.forEach(m => m.visible = true);
+        
+        window.renderer.render(window.scene, window.camera);
+        return dataUrl;
+    };
+
     window.startCaptureMode = function() {
         // Hide hole number labels and aim markers during photography
         scene.traverse(function(obj) { if(obj.name === 'holeLabel' || obj.name === 'aimPointMarker') obj.visible = false; });
@@ -5432,7 +5489,7 @@
         }
 
                 // === CAPTURE REQUIREMENT ===
-        if (!options.isDraft && (!window.capturedPhotos || window.capturedPhotos.length === 0) && !window._bypassCapture) {
+        if (window.EDITOR_MODE !== 'rally' && !options.isDraft && (!window.capturedPhotos || window.capturedPhotos.length === 0) && !window._bypassCapture) {
             document.getElementById('publish-modal').style.display = 'none';
             if (confirm("📸 To publish your course, you need to capture showcase photos first.\n\nEnter Camera Mode?")) {
                 startCaptureMode();
@@ -5510,6 +5567,12 @@
             let holeCount = playableHoles.length;
             let totalPar = playableHoles.reduce((sum, h) => sum + (h.par || 4), 0);
 
+            // Generate clean screenshot automatically on save
+            let autoCover = null;
+            if (typeof window.generateAutoScreenshot === 'function') {
+                autoCover = window.generateAutoScreenshot();
+            }
+
             let payload = {
                 name: name || "Draft",
                 author: author || "Builder",
@@ -5524,7 +5587,8 @@
                 is_draft: options.isDraft,
                 is_range: (new URLSearchParams(window.location.search)).get('mode') === 'range' || !!window._isRangeMode,
                 theme_data: { biomeId: window.ACTIVE_BIOME, config: window.CURRENT_BIOME_CONFIG, particleIntensity: window.ParticleEngine ? window.ParticleEngine.getIntensity() : 0.6, particleSize: window.ParticleEngine ? window.ParticleEngine.getSize() : 1.0, weatherMode: window.ParticleEngine ? window.ParticleEngine.getWeather() : 'CLEAR' },
-                owner_id: window.GolfAuth?.userId || null
+                owner_id: window.GolfAuth?.userId || null,
+                cover_image: autoCover
             };
             
             if (options.overwrite && currentEditCode) {
@@ -5771,6 +5835,259 @@
         }
     }
 
+    window.generateProceduralPreset = function(code) {
+        let name = "Preset Track";
+        let biome = "NORDIC";
+        let laps = 3;
+        let radius = 200;
+        let amp = 20;
+        let freq = 3;
+        let diff = "Medel";
+        let desc = "Procedural preset track.";
+        
+        if (code === 'preset_dirt_gp') {
+            name = "Dirt GP Circuit";
+            biome = "NORDIC";
+            laps = 3;
+            radius = 220;
+            amp = 18;
+            freq = 3;
+            diff = "Lätt";
+            desc = "Snabba grusvägar genom barrskog. Perfekt bana för att lära sig grunderna i drifting.";
+        } else if (code === 'preset_monaco') {
+            name = "Monaco Serpentines";
+            biome = "VOLCANO";
+            laps = 2;
+            radius = 160;
+            amp = 38;
+            freq = 7;
+            diff = "Svår";
+            desc = "Trånga hårnålskurvor och branta stup. Kräver precision och skarp handbromskontroll.";
+        } else if (code === 'preset_canyon') {
+            name = "Canyon Dust Sprint";
+            biome = "DESERT";
+            laps = 1;
+            radius = 190;
+            amp = 28;
+            freq = 5;
+            diff = "Medel";
+            desc = "Höghastighetsbana i en djup sandcanyon. Akta dig för klippblocken vid sidan av vägen!";
+        } else {
+            return null;
+        }
+        
+        // Generate heightmap data (257 * 257 = 66049 array points)
+        let ground = [];
+        let segs = 256;
+        for (let j = 0; j <= segs; j++) {
+            for (let i = 0; i <= segs; i++) {
+                let wx = (i / segs - 0.5) * 900;
+                let wz = (j / segs - 0.5) * 900;
+                let dist = Math.sqrt(wx*wx + wz*wz);
+                let height = 0;
+                
+                if (biome === 'VOLCANO') {
+                    if (dist > 260) {
+                        height = (dist - 260) * 0.45 + Math.sin(wx*0.06)*Math.cos(wz*0.06)*22;
+                    } else {
+                        height = Math.sin(wx*0.03)*Math.cos(wz*0.03)*4;
+                    }
+                } else if (biome === 'DESERT') {
+                    if (dist > 280) {
+                        height = (dist - 280) * 0.35 + Math.sin(wx*0.04)*Math.cos(wz*0.04)*12;
+                    } else {
+                        height = Math.sin(wx*0.015)*Math.cos(wz*0.015)*2;
+                    }
+                } else { // NORDIC
+                    if (dist > 250) {
+                        height = (dist - 250) * 0.38 + Math.sin(wx*0.05)*Math.cos(wz*0.05)*16;
+                    } else {
+                        height = Math.sin(wx*0.02)*Math.cos(wz*0.02)*3;
+                    }
+                }
+                ground.push(height);
+            }
+        }
+        
+        // Generate loop road nodes
+        let roadNodes = [];
+        let roadSampledPoints = [];
+        let nodeCount = (code === 'preset_monaco') ? 28 : 16;
+        
+        for (let i = 0; i < nodeCount; i++) {
+            let theta = (i / nodeCount) * Math.PI * 2;
+            let r = radius + amp * Math.sin(freq * theta);
+            let wx = r * Math.cos(theta);
+            let wz = r * Math.sin(theta);
+            let wy = 0.5;
+            
+            let imgX = Math.round((wx / 900 + 0.5) * segs);
+            let imgY = Math.round((wz / 900 + 0.5) * segs);
+            imgX = Math.max(0, Math.min(segs, imgX));
+            imgY = Math.max(0, Math.min(segs, imgY));
+            let h = ground[imgY * (segs + 1) + imgX] || 0;
+            wy = h;
+            
+            roadNodes.push({ worldX: wx, worldY: wy, worldZ: wz });
+        }
+        
+        let samplesPerSegment = 8;
+        for (let i = 0; i < nodeCount; i++) {
+            let n1 = roadNodes[i];
+            let n2 = roadNodes[(i + 1) % nodeCount];
+            for (let s = 0; s < samplesPerSegment; s++) {
+                let t = s / samplesPerSegment;
+                let tCos = (1 - Math.cos(t * Math.PI)) / 2;
+                let sx = n1.worldX + (n2.worldX - n1.worldX) * tCos;
+                let sz = n1.worldZ + (n2.worldZ - n1.worldZ) * tCos;
+                
+                let imgX = Math.round((sx / 900 + 0.5) * segs);
+                let imgY = Math.round((sz / 900 + 0.5) * segs);
+                imgX = Math.max(0, Math.min(segs, imgX));
+                imgY = Math.max(0, Math.min(segs, imgY));
+                let sy = ground[imgY * (segs + 1) + imgX] || 0;
+                
+                roadSampledPoints.push({ x: sx, y: sy + 0.04, z: sz });
+            }
+        }
+        
+        let n0 = roadNodes[0];
+        let n1 = roadNodes[1];
+        let startRot = Math.atan2(n1.worldX - n0.worldX, n1.worldZ - n0.worldZ);
+        let start = { x: n0.worldX, y: n0.worldY, z: n0.worldZ, rotation: startRot };
+        
+        let nLast = roadNodes[nodeCount - 1];
+        let finishRot = Math.atan2(n0.worldX - nLast.worldX, n0.worldZ - nLast.worldZ);
+        let finish = { x: nLast.worldX, y: nLast.worldY, z: nLast.worldZ, rotation: finishRot };
+        
+        let checkpoints = [];
+        let cpCount = (code === 'preset_dirt_gp') ? 4 : ((code === 'preset_canyon') ? 5 : 8);
+        for (let i = 1; i <= cpCount; i++) {
+            let idx = Math.floor((i / (cpCount + 1)) * roadSampledPoints.length);
+            idx = Math.max(0, Math.min(roadSampledPoints.length - 1, idx));
+            let pt = roadSampledPoints[idx];
+            checkpoints.push({ x: pt.x, y: pt.y, z: pt.z, radius: 12 });
+        }
+        
+        let trees = [];
+        let treeCount = (biome === 'NORDIC') ? 220 : ((biome === 'VOLCANO') ? 110 : 80);
+        let treeType = (biome === 'NORDIC') ? 'pine' : ((biome === 'VOLCANO') ? 'dead' : 'cactus');
+        
+        for (let i = 0; i < treeCount; i++) {
+            let angle = Math.random() * Math.PI * 2;
+            let r = 50 + Math.random() * 380;
+            
+            let wx = r * Math.cos(angle);
+            let wz = r * Math.sin(angle);
+            
+            let roadR = radius + amp * Math.sin(freq * angle);
+            if (Math.abs(r - roadR) < 25) {
+                r += 30;
+                wx = r * Math.cos(angle);
+                wz = r * Math.sin(angle);
+            }
+            
+            let imgX = Math.round((wx / 900 + 0.5) * segs);
+            let imgY = Math.round((wz / 900 + 0.5) * segs);
+            imgX = Math.max(0, Math.min(segs, imgX));
+            imgY = Math.max(0, Math.min(segs, imgY));
+            let wy = ground[imgY * (segs + 1) + imgX] || 0;
+            
+            trees.push({
+                t: treeType,
+                x: wx,
+                z: wz,
+                s: 0.8 + Math.random() * 0.6,
+                r: Math.random() * Math.PI * 2,
+                c: null,
+                tc: null
+            });
+        }
+        
+        let colors = {
+            NORDIC: { skyColor: '#1e293b', grassColor: '#273c24', OBColor: '#182415', bunkerColor: '#e2e8f0', wasteColor: '#c2af7c', teeColor: '#c2af7c', greenColor: '#4ade80', foregreenColor: '#34d399', fairwayColor: '#22c55e', semiColor: '#15803d', roughColor: '#166534', fescueColor: '#14532d', waterColor: '#0369a1' },
+            VOLCANO: { skyColor: '#0f172a', grassColor: '#111827', OBColor: '#030712', bunkerColor: '#374151', wasteColor: '#4b5563', teeColor: '#4b5563', greenColor: '#ef4444', foregreenColor: '#f97316', fairwayColor: '#f97316', semiColor: '#b91c1c', roughColor: '#991b1b', fescueColor: '#7f1d1d', waterColor: '#7f1d1d' },
+            DESERT: { skyColor: '#bae6fd', grassColor: '#fef08a', OBColor: '#ca8a04', bunkerColor: '#fef08a', wasteColor: '#ca8a04', teeColor: '#ca8a04', greenColor: '#ca8a04', foregreenColor: '#facc15', fairwayColor: '#ca8a04', semiColor: '#854d0e', roughColor: '#713f12', fescueColor: '#451a03', waterColor: '#0369a1' }
+        };
+        
+        let biomeColors = colors[biome] || colors.NORDIC;
+        
+        let canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 512;
+        let ctx = canvas.getContext('2d');
+        
+        ctx.fillStyle = biomeColors.OBColor;
+        ctx.fillRect(0, 0, 512, 512);
+        
+        ctx.fillStyle = biomeColors.roughColor;
+        ctx.beginPath();
+        ctx.arc(256, 256, 200, 0, Math.PI * 2);
+        ctx.fill();
+        
+        let roadMat = (biome === 'VOLCANO') ? 'ASPHALT' : ((biome === 'DESERT') ? 'DIRT' : 'GRAVEL');
+        let roadColorCode = (roadMat === 'ASPHALT') ? '#7DB952' : ((roadMat === 'DIRT') ? '#2D4C1A' : '#C2AF7C');
+        
+        ctx.strokeStyle = roadColorCode;
+        ctx.lineWidth = 10;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        
+        roadSampledPoints.forEach((pt, i) => {
+            let cx = (pt.x / 900 + 0.5) * 512;
+            let cy = (pt.z / 900 + 0.5) * 512;
+            if (i === 0) ctx.moveTo(cx, cy);
+            else ctx.lineTo(cx, cy);
+        });
+        ctx.closePath();
+        ctx.stroke();
+        
+        let biomeDataUrl = canvas.toDataURL();
+        
+        return {
+            share_code: code,
+            name: name,
+            author: "Rally OS Team",
+            hole_count: 1,
+            total_par: checkpoints.length,
+            terrain_heightmap: {
+                ground: ground,
+                segs: segs,
+                waterTableLevel: -10,
+                waterType: 'normal'
+            },
+            terrain_biomemap: biomeDataUrl,
+            terrain_watermask: null,
+            theme_data: {
+                config: biomeColors,
+                biomeId: biome,
+                particleIntensity: 1,
+                particleSize: 1,
+                weatherMode: 'clear'
+            },
+            targets: [],
+            holes: [],
+            trees: trees,
+            rally: {
+                start: start,
+                finish: finish,
+                checkpoints: checkpoints,
+                laps: laps,
+                missedCheckpointRule: 'PENALTY_5S',
+                usePbr: true,
+                roads: [
+                    {
+                        id: 'road_preset_main',
+                        nodes: roadNodes,
+                        width: 10,
+                        material: roadMat
+                    }
+                ]
+            }
+        };
+    };
+
     async function loadLevel() {
         let params = new URLSearchParams(window.location.search);
         let courseCode = params.get('course');
@@ -5817,12 +6134,22 @@
 
         if (targetCode) {
             try {
-                let data = await ArcadeAPI.loadCourse(targetCode);
-                if(data.share_code) {
+                let data = null;
+                if (targetCode.startsWith('preset_')) {
+                    if (typeof window.generateProceduralPreset === 'function') {
+                        data = window.generateProceduralPreset(targetCode);
+                    }
+                }
+                if (!data) {
+                    data = await ArcadeAPI.loadCourse(targetCode);
+                }
+                
+                if(data && data.share_code) {
                     savedStr = data;
                     isCloud = true;
                     // Store course metadata for Round Setup header
                     window._loadedCourseName = data.name || null;
+                    window._loadedCourseShareCode = data.share_code || null;
                     window._loadedCourseAuthor = data.author || null;
                     window._loadedCourseHoles = data.hole_count || null;
                     window._loadedCoursePar = data.total_par || null;
@@ -5839,6 +6166,7 @@
                     if(typeof savedStr.targets === 'string') savedStr.targets = JSON.parse(savedStr.targets);
                     if(typeof savedStr.trees === 'string') savedStr.trees = JSON.parse(savedStr.trees);
                     if(typeof savedStr.theme_data === 'string') savedStr.theme_data = JSON.parse(savedStr.theme_data);
+                    if(typeof savedStr.rally === 'string') savedStr.rally = JSON.parse(savedStr.rally);
                 } else {
                     console.error("Course not found!");
                 }
@@ -6175,7 +6503,13 @@
             }
         }
         
-        if (autoRun === 'setup') {
+        if (autoRun === 'rally') {
+            setMode('PLAY');
+            setTimeout(() => {
+                saveLevel();
+                window.location.href = 'rally.html';
+            }, 600);
+        } else if (autoRun === 'setup') {
             setMode('PLAY');
             if (typeof startRound === 'function') setTimeout(startRound, 500);
         } else if (autoRun === 'edit_build' || autoRun === 'build') {
@@ -6186,8 +6520,15 @@
                 window._isRangeMode = true;
                 setMode('TEST');
             } else {
-                setMode('PLAY');
-                if (typeof startRound === 'function') setTimeout(startRound, 500);
+                if (window.EDITOR_MODE === 'rally' && courseCode) {
+                    setTimeout(() => {
+                        saveLevel();
+                        window.location.href = 'rally.html';
+                    }, 600);
+                } else {
+                    setMode('PLAY');
+                    if (typeof startRound === 'function') setTimeout(startRound, 500);
+                }
             }
         } else if (!autoRun && !courseCode && !editCode) {
             setMode('BUILD');

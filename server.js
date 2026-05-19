@@ -101,6 +101,7 @@ async function initDB() {
             await pool.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS total_par INT;`);
             await pool.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;`);
             await pool.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS is_hidden BOOLEAN DEFAULT false;`);
+            await pool.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS cover_image TEXT;`);
         } catch(e) {}
 
         // Leaderboard table
@@ -286,7 +287,7 @@ app.get('/api/users/:id/handicap', requireDB, async (req, res) => {
 app.get('/api/courses', requireDB, async (req, res) => {
     try {
         const result = await pool.query(`
-            SELECT share_code, name, author, likes, hole_count, total_par, play_count, owner_id, version, created_at 
+            SELECT share_code, name, author, likes, hole_count, total_par, play_count, owner_id, version, created_at, cover_image 
             FROM courses 
             WHERE (is_draft = false OR is_draft IS NULL) 
               AND (is_range = false OR is_range IS NULL)
@@ -635,8 +636,8 @@ app.post('/api/courses', requireDB, optionalAuth, async (req, res) => {
 
         const result = await pool.query(
             `INSERT INTO courses 
-            (share_code, name, author, holes, targets, trees, terrain_heightmap, terrain_biomemap, is_draft, theme_data, is_range, owner_id, hole_count, total_par, course_rating, slope_rating, stroke_index) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING share_code`,
+            (share_code, name, author, holes, targets, trees, terrain_heightmap, terrain_biomemap, is_draft, theme_data, is_range, owner_id, hole_count, total_par, course_rating, slope_rating, stroke_index, cover_image) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18) RETURNING share_code`,
             [
                 share_code, c_name, c_author, 
                 JSON.stringify(holes), JSON.stringify(targets || []), JSON.stringify(trees || []), 

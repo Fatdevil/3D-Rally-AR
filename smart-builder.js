@@ -380,10 +380,8 @@ function updateSmartGreenPreview() {
     });
 
     if(smartGreenPoints.length > 1) {
-        // ROAD: always open spline. Others: closes when magnet-snapped
-        let isRoad = window._smartBuilderType === 'ROAD';
-        let shouldClose = isRoad ? false : !!window._smartShapeClosed;
-        let curve = new THREE.CatmullRomCurve3(smartGreenPoints, shouldClose);
+        let shouldClose = !!window._smartShapeClosed;
+        let curve = new THREE.CatmullRomCurve3(smartGreenPoints, shouldClose, 'centripetal');
         let curvePts = curve.getPoints(50 * smartGreenPoints.length);
         
         // ── ROAD mode: curvature-colored preview line ──
@@ -1434,6 +1432,7 @@ function createRallyGate(x, y, z, type) {
     let bannerMat = new THREE.MeshBasicMaterial({ map: bannerTex, side: THREE.DoubleSide });
     let banner = new THREE.Mesh(bannerGeo, bannerMat);
     banner.position.set(0, poleH - 1.0, 0.3);
+    banner.rotation.y = Math.PI; // Rotate 180 deg so the front text faces the oncoming driver
     gate.add(banner);
     
     gate.position.set(x, y, z);
@@ -1461,13 +1460,33 @@ window.getNearestRoadPoint = function(hitPt) {
                 cRoadId = road.id;
                 cIndex = i;
                 
-                let pPrev = i > 0 ? road.sampledPoints[i-1] : p;
-                let pNext = i < road.sampledPoints.length - 1 ? road.sampledPoints[i+1] : p;
-                if (pPrev === p && pNext !== p) {
-                    closestTangent.set(pNext.x - p.x, 0, pNext.z - p.z).normalize();
-                } else if (pNext === p && pPrev !== p) {
-                    closestTangent.set(p.x - pPrev.x, 0, p.z - pPrev.z).normalize();
-                } else if (pNext !== p && pPrev !== p) {
+                let n = road.sampledPoints.length;
+                let isClosed = !!road.closed;
+                let pPrev, pNext;
+                if (isClosed) {
+                    pPrev = road.sampledPoints[(i - 1 + n) % n];
+                    pNext = road.sampledPoints[(i + 1) % n];
+                } else {
+                    pPrev = i > 0 ? road.sampledPoints[i-1] : p;
+                    pNext = i < n - 1 ? road.sampledPoints[i+1] : p;
+                }
+                
+                // If consecutive points are too close/identical, look further to get a stable direction vector
+                let look = 1;
+                while (isClosed && Math.sqrt((pNext.x - pPrev.x)**2 + (pNext.z - pPrev.z)**2) < 0.2 && look < 15) {
+                    look++;
+                    pPrev = road.sampledPoints[(i - look + n) % n];
+                    pNext = road.sampledPoints[(i + look) % n];
+                }
+                while (!isClosed && Math.sqrt((pNext.x - pPrev.x)**2 + (pNext.z - pPrev.z)**2) < 0.2 && look < 15) {
+                    look++;
+                    pPrev = road.sampledPoints[Math.max(0, i - look)];
+                    pNext = road.sampledPoints[Math.min(n - 1, i + look)];
+                }
+
+                if (pPrev.x === pNext.x && pPrev.z === pNext.z) {
+                    closestTangent.set(0, 0, 1);
+                } else {
                     closestTangent.set(pNext.x - pPrev.x, 0, pNext.z - pPrev.z).normalize();
                 }
             }
@@ -1490,7 +1509,9 @@ window.executeSmartStartClick = function(cx, cy, cz, angle) {
         cx = snapData.point.x;
         cy = snapData.point.y;
         cz = snapData.point.z;
-        angle = Math.atan2(snapData.tangent.x, snapData.tangent.z);
+        if (!window._rallyGateManualRotation) {
+            angle = Math.atan2(snapData.tangent.x, snapData.tangent.z);
+        }
         roadId = snapData.roadId;
         splineIndex = snapData.splineIndex;
     } else {
@@ -1531,7 +1552,9 @@ window.executeSmartFinishClick = function(cx, cy, cz, angle) {
         cx = snapData.point.x;
         cy = snapData.point.y;
         cz = snapData.point.z;
-        angle = Math.atan2(snapData.tangent.x, snapData.tangent.z);
+        if (!window._rallyGateManualRotation) {
+            angle = Math.atan2(snapData.tangent.x, snapData.tangent.z);
+        }
         roadId = snapData.roadId;
         splineIndex = snapData.splineIndex;
     } else {
@@ -2607,8 +2630,8 @@ window.executeSmartRoad = function() {
         edgeL = 'NONE';
         edgeR = 'NONE';
     }
-    // Build OPEN spline through waypoints
-    let curve = new THREE.CatmullRomCurve3(smartGreenPoints, false, 'centripetal');
+    // Build spline (closed loop if shape was closed)
+    let curve = new THREE.CatmullRomCurve3(smartGreenPoints, !!window._smartShapeClosed, 'centripetal');
     let numSamples = Math.min(600, Math.max(200, smartGreenPoints.length * 50));
     let splinePts = curve.getPoints(numSamples);
 
@@ -3354,6 +3377,7 @@ window.executeSmartRoad = function() {
             nodes: smartGreenPoints.map(function(p) { return { worldX: p.x, worldY: p.y, worldZ: p.z }; }),
             width: roadWidth,
             material: rsMaterial,
+            closed: !!window._smartShapeClosed,
             sampledPoints: splinePts.map(function(p) { return { x: p.x, y: p.y || 0, z: p.z }; })
         });
     }

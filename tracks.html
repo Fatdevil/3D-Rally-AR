@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Virtual Rally OS — Banor</title>
+    <meta name="description" content="Utforska rallybanor, utmana leaderboards och starta ditt nästa race i Virtual Rally OS.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background: #0a0e1a;
+            color: #e2e8f0;
+            font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Ambient background glow */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: 
+                radial-gradient(ellipse at 10% 20%, rgba(220, 38, 38, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 90% 80%, rgba(56, 189, 248, 0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 50%, rgba(251, 146, 60, 0.04) 0%, transparent 60%);
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 30px 4% 80px;
+        }
+
+        /* Back Navigation */
+        .nav-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 40px;
+        }
+
+        .back-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(30, 41, 59, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: #94a3b8;
+            padding: 10px 18px;
+            border-radius: 30px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(10px);
+        }
+
+        .back-btn:hover {
+            color: #fff;
+            border-color: rgba(255, 255, 255, 0.2);
+            background: rgba(30, 41, 59, 0.8);
+            transform: translateX(-3px);
+        }
+
+        .logo-text {
+            font-size: 13px;
+            font-weight: 900;
+            letter-spacing: 4px;
+            color: #ef4444;
+            text-transform: uppercase;
+        }
+
+        /* Main Heading */
+        .main-title-block {
+            margin-bottom: 40px;
+        }
+
+        .main-title-block h1 {
+            font-size: clamp(32px, 5vw, 52px);
+            font-weight: 900;
+            color: #fff;
+            letter-spacing: -1.5px;
+            line-height: 1.1;
+        }
+
+        .main-title-block p {
+            color: #64748b;
+            font-size: clamp(14px, 1.8vw, 16px);
+            margin-top: 8px;
+            max-width: 600px;
+        }
+
+        /* Netflix Rows Layout */
+        .category-row {
+            margin-bottom: 48px;
+            position: relative;
+        }
+
+        .category-title {
+            font-size: clamp(18px, 2.5vw, 22px);
+            font-weight: 700;
+            color: #f8fafc;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .category-title span {
+            color: #ef4444;
+            font-size: 14px;
+            background: rgba(239, 68, 68, 0.1);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 900;
+        }
+
+        /* Scroll container with snap */
+        .track-carousel {
+            display: flex;
+            gap: 20px;
+            overflow-x: auto;
+            scroll-snap-type: x mandatory;
+            padding: 10px 0 25px;
+            scroll-behavior: smooth;
+            scrollbar-width: none; /* Firefox */
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .track-carousel::-webkit-scrollbar {
+            display: none; /* Safari/Chrome */
+        }
+
+        /* Track Card Item */
+        .track-card {
+            scroll-snap-align: start;
+            flex: 0 0 300px;
+            background: rgba(15, 23, 42, 0.55);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            backdrop-filter: blur(12px);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        @media (max-width: 480px) {
+            .track-card {
+                flex: 0 0 260px;
+            }
+        }
+
+        .track-card:hover {
+            transform: translateY(-8px) scale(1.02);
+            border-color: rgba(239, 68, 68, 0.4);
+            box-shadow: 0 12px 24px -10px rgba(239, 68, 68, 0.3);
+            background: rgba(15, 23, 42, 0.8);
+        }
+
+        /* Card Image section */
+        .card-image-wrapper {
+            position: relative;
+            width: 100%;
+            height: 160px;
+            background: #0f172a;
+            overflow: hidden;
+        }
+
+        .card-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.5s ease;
+        }
+
+        .track-card:hover .card-img {
+            transform: scale(1.08);
+        }
+
+        /* Fallback graphic styles */
+        .card-fallback {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .track-icon-overlay {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            opacity: 0.25;
+        }
+
+        .track-letters {
+            font-size: 38px;
+            font-weight: 900;
+            color: rgba(255, 255, 255, 0.2);
+            letter-spacing: -2px;
+            font-style: italic;
+        }
+
+        /* Card Badges */
+        .card-badges {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            display: flex;
+            gap: 6px;
+        }
+
+        .badge {
+            font-size: 10px;
+            font-weight: 800;
+            padding: 3px 8px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .badge-hard { background: #ef4444; color: #fff; }
+        .badge-medium { background: #f97316; color: #fff; }
+        .badge-easy { background: #10b981; color: #fff; }
+        
+        .badge-biome {
+            background: rgba(15, 23, 42, 0.75);
+            color: #cbd5e1;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(4px);
+        }
+
+        /* Card Content */
+        .card-info {
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1;
+        }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #f8fafc;
+            line-height: 1.3;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .card-author {
+            font-size: 12px;
+            color: #64748b;
+            margin-top: 3px;
+        }
+
+        .card-stats {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: auto;
+            padding-top: 14px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            font-size: 12px;
+            color: #94a3b8;
+        }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .like-btn {
+            background: none;
+            border: none;
+            color: #94a3b8;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 12px;
+            transition: color 0.2s;
+        }
+        
+        .like-btn:hover {
+            color: #ef4444;
+        }
+
+        /* Empty State */
+        .empty-state {
+            padding: 40px;
+            text-align: center;
+            background: rgba(15, 23, 42, 0.3);
+            border: 1px dashed rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            color: #64748b;
+            font-size: 14px;
+            width: 100%;
+        }
+
+        /* Details Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(7, 10, 18, 0.85);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(20px);
+            padding: 20px;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-container {
+            background: #0d1324;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            width: 100%;
+            max-width: 800px;
+            border-radius: 24px;
+            overflow: hidden;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+            transform: scale(0.9);
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .modal-overlay.active .modal-container {
+            transform: scale(1);
+        }
+
+        /* Modal Banner Hero */
+        .modal-hero {
+            position: relative;
+            height: 300px;
+            background: #070a12;
+            overflow: hidden;
+        }
+
+        @media (max-width: 600px) {
+            .modal-hero {
+                height: 180px;
+            }
+        }
+
+        .modal-hero-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .modal-hero-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(to bottom, transparent 30%, #0d1324 100%);
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #fff;
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            z-index: 10;
+        }
+
+        .modal-close:hover {
+            transform: scale(1.1);
+            background: #ef4444;
+            border-color: #ef4444;
+        }
+
+        /* Modal Content Body */
+        .modal-body {
+            padding: 30px 40px;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+
+        @media (max-width: 600px) {
+            .modal-body {
+                padding: 20px;
+            }
+        }
+
+        .modal-grid {
+            display: grid;
+            grid-template-columns: 1.2fr 0.8fr;
+            gap: 40px;
+        }
+
+        @media (max-width: 768px) {
+            .modal-grid {
+                grid-template-columns: 1fr;
+                gap: 30px;
+            }
+        }
+
+        /* Left column */
+        .modal-info-col {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .modal-title-block h2 {
+            font-size: clamp(22px, 3.5vw, 30px);
+            font-weight: 900;
+            color: #fff;
+            letter-spacing: -0.5px;
+        }
+
+        .modal-author-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #94a3b8;
+        }
+
+        .modal-author-row strong {
+            color: #fff;
+        }
+
+        .modal-desc {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #94a3b8;
+            margin-top: 10px;
+        }
+
+        .metadata-tags-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .meta-tag {
+            font-size: 11px;
+            font-weight: 600;
+            background: rgba(30, 41, 59, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: #cbd5e1;
+            padding: 4px 10px;
+            border-radius: 6px;
+        }
+
+        /* Action Buttons */
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        @media (max-width: 480px) {
+            .modal-actions {
+                flex-direction: column;
+            }
+        }
+
+        .btn-primary {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            background: #ef4444;
+            color: #fff;
+            border: none;
+            padding: 14px 28px;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+            box-shadow: 0 4px 14px rgba(239, 68, 68, 0.3);
+        }
+
+        .btn-primary:hover {
+            background: #f87171;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
+        }
+
+        .btn-secondary {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #cbd5e1;
+            padding: 14px 24px;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+
+        .btn-secondary:hover {
+            color: #fff;
+            background: rgba(30, 41, 59, 1);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Right column: Leaderboard */
+        .modal-leaderboard-col {
+            background: rgba(15, 23, 42, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .leaderboard-title {
+            font-size: 15px;
+            font-weight: 800;
+            color: #fff;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .leaderboard-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .leaderboard-table th {
+            text-align: left;
+            color: #64748b;
+            font-weight: 600;
+            padding-bottom: 8px;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+
+        .leaderboard-table td {
+            padding: 8px 0;
+            color: #cbd5e1;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+        }
+
+        .leaderboard-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .rank-num {
+            font-weight: 900;
+            color: #94a3b8;
+            width: 28px;
+        }
+
+        .rank-1 { color: #f59e0b; }
+        .rank-2 { color: #cbd5e1; }
+        .rank-3 { color: #b45309; }
+
+        .driver-name {
+            font-weight: 600;
+            color: #f1f5f9;
+        }
+
+        .driver-vehicle {
+            font-size: 10px;
+            color: #64748b;
+            display: block;
+        }
+
+        .driver-time {
+            font-family: monospace;
+            text-align: right;
+            font-weight: 700;
+            color: #38bdf8;
+        }
+
+        .no-records {
+            text-align: center;
+            color: #64748b;
+            padding: 20px 0;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- Header -->
+    <header class="nav-header">
+        <a href="rally_hub.html" class="back-btn">← Hub</a>
+        <div class="logo-text">Virtual Rally OS</div>
+    </header>
+
+    <!-- Main Title -->
+    <div class="main-title-block">
+        <h1>Välj bana</h1>
+        <p>Bläddra bland officiella mästerskapsbanor, kreationer från communityn och dina egna sparade utkast.</p>
+    </div>
+
+    <!-- Category 1: Presets -->
+    <section class="category-row">
+        <h2 class="category-title">Officiella Presets <span>OFFICIELL</span></h2>
+        <div class="track-carousel" id="presets-carousel">
+            <!-- Rendered via JS -->
+        </div>
+    </section>
+
+    <!-- Category 2: Community -->
+    <section class="category-row">
+        <h2 class="category-title">Community-banor <span>COMMUNITY</span></h2>
+        <div class="track-carousel" id="community-carousel">
+            <div class="empty-state">Laddar banor från servern...</div>
+        </div>
+    </section>
+
+    <!-- Category 3: Drafts -->
+    <section class="category-row" id="drafts-section" style="display: none;">
+        <h2 class="category-title">Mina Utkast <span>DRAFT</span></h2>
+        <div class="track-carousel" id="drafts-carousel">
+            <!-- Rendered via JS -->
+        </div>
+    </section>
+</div>
+
+<!-- Details Modal -->
+<div class="modal-overlay" id="track-modal" onclick="closeModal(event)">
+    <div class="modal-container" onclick="event.stopPropagation()">
+        <div class="modal-hero">
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+            <div class="modal-hero-overlay" id="modal-hero-gradient"></div>
+            <img class="modal-hero-img" id="modal-hero-img" src="" alt="Track screenshot">
+        </div>
+        <div class="modal-body">
+            <div class="modal-grid">
+                <!-- Left: Info -->
+                <div class="modal-info-col">
+                    <div class="modal-title-block">
+                        <h2 id="modal-title">Monaco Serpentines</h2>
+                        <div class="modal-author-row">Skapad av: <strong id="modal-author">Rally OS Team</strong></div>
+                    </div>
+                    <div class="metadata-tags-row" id="modal-tags">
+                        <!-- Badges -->
+                    </div>
+                    <div class="modal-desc" id="modal-description">
+                        En intensiv bergsväg med snäva kurvor och farliga stup. Det här spåret kräver extrem precision och kontrollerad drift.
+                    </div>
+                    <div class="modal-actions">
+                        <a href="#" class="btn-primary" id="modal-play-btn">🏎️ Starta race</a>
+                        <a href="#" class="btn-secondary" id="modal-edit-btn" style="display: none;">🛠️ Redigera bana</a>
+                    </div>
+                </div>
+
+                <!-- Right: Leaderboard -->
+                <div class="modal-leaderboard-col">
+                    <div class="leaderboard-title">
+                        <span>Highscores</span>
+                        <span style="font-size: 11px; color: #ef4444; font-weight: 800;">TOPP 5</span>
+                    </div>
+                    <div id="modal-leaderboard-content">
+                        <!-- Table rendered via JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- API Services -->
+<script src="arcade-auth.js"></script>
+<script src="arcade-api-service.js"></script>
+<script src="arcade-storage-service.js"></script>
+
+<script>
+    // Handcrafted Official Presets with their simulated highscores
+    const OFFICIAL_PRESETS = [
+        {
+            share_code: 'preset_dirt_gp',
+            name: 'Dirt GP Circuit',
+            author: 'Rally OS Team',
+            cover_image: 'rally_tracks.png',
+            likes: 42,
+            play_count: 512,
+            length: '1.2 km',
+            difficulty: 'Lätt',
+            checkpoints: 4,
+            biome: 'Skog',
+            desc: 'Snabba grusvägar genom barrskog. Perfekt bana för att lära sig grunderna i drifting och kurvtagning.',
+            leaderboard: [
+                { name: 'S. Loeb', vehicle: 'Citroën Xsara', time: '1:04.2' },
+                { name: 'C. McRae', vehicle: 'Subaru Impreza', time: '1:05.9' },
+                { name: 'W. Röhrl', vehicle: 'Audi Sport Quattro', time: '1:07.1' },
+                { name: 'S. Ogier', vehicle: 'VW Polo R', time: '1:08.5' },
+                { name: 'M. Grönholm', vehicle: 'Peugeot 206', time: '1:09.3' }
+            ]
+        },
+        {
+            share_code: 'preset_monaco',
+            name: 'Monaco Serpentines',
+            author: 'Rally OS Team',
+            cover_image: 'rally_garage.png',
+            likes: 89,
+            play_count: 1024,
+            length: '2.1 km',
+            difficulty: 'Svår',
+            checkpoints: 8,
+            biome: 'Desert',
+            desc: 'Trånga hårnålskurvor och branta stup. Kräver millimeterprecision och skarp handbromskontroll.',
+            leaderboard: [
+                { name: 'W. Röhrl', vehicle: 'Audi Sport Quattro', time: '1:52.3' },
+                { name: 'S. Ogier', vehicle: 'Ford Fiesta WRC', time: '1:53.7' },
+                { name: 'M. Alén', vehicle: 'Lancia 037', time: '1:56.0' },
+                { name: 'D. Auriol', vehicle: 'Toyota Celica', time: '1:57.4' },
+                { name: 'H. Toivonen', vehicle: 'Lancia Delta S4', time: '1:59.2' }
+            ]
+        },
+        {
+            share_code: 'preset_canyon',
+            name: 'Canyon Dust Sprint',
+            author: 'Rally OS Team',
+            cover_image: 'rally_build.png',
+            likes: 57,
+            play_count: 730,
+            length: '1.6 km',
+            difficulty: 'Medel',
+            checkpoints: 5,
+            biome: 'Canyon',
+            desc: 'Höghastighetsbana i en djup sandcanyon. Akta dig för klippblocken vid sidan av vägen!',
+            leaderboard: [
+                { name: 'C. Sainz', vehicle: 'Toyota Celica', time: '1:21.8' },
+                { name: 'J. Kankkunen', vehicle: 'Lancia Delta HF', time: '1:23.5' },
+                { name: 'S. Blomqvist', vehicle: 'Audi Quattro', time: '1:24.9' },
+                { name: 'R. Burns', vehicle: 'Subaru Impreza', time: '1:25.8' },
+                { name: 'T. Mäkinen', vehicle: 'Mitsubishi Lancer', time: '1:26.4' }
+            ]
+        }
+    ];
+
+    // Generate unique neon abstract gradients deterministically for fallbacks
+    function getFallbackGradient(code) {
+        let hash = 0;
+        let str = code || 'default';
+        for (let i = 0; i < str.length; i++) {
+            hash = str.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        let hue1 = Math.abs(hash % 360);
+        let hue2 = (hue1 + 120) % 360;
+        return `linear-gradient(135deg, hsl(${hue1}, 80%, 20%) 0%, hsl(${hue2}, 70%, 10%) 100%)`;
+    }
+
+    // Format deciseconds back to a high-resolution time format "MM:SS.d"
+    function formatTime(deciseconds) {
+        let t = deciseconds / 10;
+        let min = Math.floor(t / 60);
+        let sec = Math.floor(t % 60);
+        let dec = Math.floor((t % 1) * 10);
+        return min + ':' + String(sec).padStart(2, '0') + '.' + dec;
+    }
+
+    // Render Track rows
+    function renderPresets() {
+        const carousel = document.getElementById('presets-carousel');
+        carousel.innerHTML = OFFICIAL_PRESETS.map(t => createCardHtml(t, true)).join('');
+    }
+
+    function renderDrafts() {
+        const drafts = ArcadeStorage.getDrafts();
+        const section = document.getElementById('drafts-section');
+        const carousel = document.getElementById('drafts-carousel');
+        
+        if (drafts.length > 0) {
+            section.style.display = 'block';
+            carousel.innerHTML = drafts.map(d => {
+                const track = {
+                    share_code: d.code,
+                    name: d.name || 'Namnlöst utkast',
+                    author: 'Jag (Utkast)',
+                    likes: 0,
+                    play_count: 0,
+                    length: '—',
+                    difficulty: 'Medel',
+                    checkpoints: '—',
+                    biome: 'Draft',
+                    is_draft: true
+                };
+                return createCardHtml(track, false);
+            }).join('');
+        } else {
+            section.style.display = 'none';
+        }
+    }
+
+    async function loadCommunityTracks() {
+        const carousel = document.getElementById('community-carousel');
+        try {
+            const courses = await fetch('/api/courses').then(res => res.json());
+            if (courses && courses.length > 0) {
+                // Filter out non-rally courses if necessary (we assume all new published ones are rally courses)
+                carousel.innerHTML = courses.map(c => {
+                    const track = {
+                        share_code: c.share_code,
+                        name: c.name,
+                        author: c.author,
+                        cover_image: c.cover_image || null,
+                        likes: c.likes || 0,
+                        play_count: c.play_count || 0,
+                        // Defaults for metadata
+                        length: c.hole_count > 0 ? (c.hole_count * 0.4).toFixed(1) + ' km' : '1.0 km',
+                        difficulty: c.total_par > 5 ? 'Svår' : (c.total_par > 3 ? 'Medel' : 'Lätt'),
+                        checkpoints: c.total_par || 4,
+                        biome: 'Community'
+                    };
+                    return createCardHtml(track, false);
+                }).join('');
+            } else {
+                carousel.innerHTML = '<div class="empty-state">Inga publicerade banor hittades. Bli först med att bygga en!</div>';
+            }
+        } catch (e) {
+            console.error('Failed to load courses:', e);
+            carousel.innerHTML = '<div class="empty-state" style="color: #ef4444">Kunde inte ansluta till databasen. Visar lokala banor.</div>';
+        }
+    }
+
+    function createCardHtml(track, isPreset) {
+        let diffClass = 'badge-medium';
+        if (track.difficulty === 'Lätt' || track.difficulty === 'Easy') diffClass = 'badge-easy';
+        if (track.difficulty === 'Svår' || track.difficulty === 'Hard') diffClass = 'badge-hard';
+
+        let imageStyle = '';
+        let fallbackOverlay = '';
+        
+        if (track.cover_image) {
+            // Check if it's base64 or static asset path
+            const src = track.cover_image.startsWith('data:') ? track.cover_image : track.cover_image;
+            imageStyle = `<img class="card-img" src="${src}" alt="${track.name}">`;
+        } else {
+            const grad = getFallbackGradient(track.share_code);
+            imageStyle = `<div class="card-fallback" style="background: ${grad}">
+                <svg class="track-icon-overlay" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M20,80 Q40,20 60,70 T100,30" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="8" stroke-linecap="round"/>
+                    <path d="M20,80 Q40,20 60,70 T100,30" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-dasharray="6,6" stroke-linecap="round"/>
+                </svg>
+                <span class="track-letters">${track.name.substring(0, 2).toUpperCase()}</span>
+            </div>`;
+        }
+
+        const dataPayload = encodeURIComponent(JSON.stringify(track));
+
+        return `
+            <div class="track-card" onclick="openTrackDetails('${dataPayload}', ${isPreset})">
+                <div class="card-image-wrapper">
+                    ${imageStyle}
+                    <div class="card-badges">
+                        <span class="badge ${diffClass}">${track.difficulty}</span>
+                        <span class="badge badge-biome">${track.biome || 'Rally'}</span>
+                    </div>
+                </div>
+                <div class="card-info">
+                    <div class="card-title">${track.name}</div>
+                    <div class="card-author">av ${track.author}</div>
+                    <div class="card-stats">
+                        <span class="stat-item">🏁 ${track.checkpoints} CPs</span>
+                        <span class="stat-item">📏 ${track.length}</span>
+                        <span class="stat-item">👍 ${track.likes}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Modal Control
+    function openTrackDetails(encodedTrack, isPreset) {
+        const track = JSON.parse(decodeURIComponent(encodedTrack));
+        const modal = document.getElementById('track-modal');
+        
+        // Populate static details
+        document.getElementById('modal-title').textContent = track.name;
+        document.getElementById('modal-author').textContent = track.author;
+        document.getElementById('modal-description').textContent = track.desc || `En spännande rallybana med tema ${track.biome || 'Standard'}. Ta kurvorna snävt och samla alla checkpoints i tid!`;
+        
+        const heroImg = document.getElementById('modal-hero-img');
+        const heroGrad = document.getElementById('modal-hero-gradient');
+        
+        if (track.cover_image) {
+            heroImg.src = track.cover_image;
+            heroImg.style.display = 'block';
+            heroGrad.style.background = 'linear-gradient(to bottom, transparent 30%, #0d1324 100%)';
+        } else {
+            heroImg.style.display = 'none';
+            heroGrad.style.background = getFallbackGradient(track.share_code) + ', linear-gradient(to bottom, transparent 30%, #0d1324 100%)';
+        }
+
+        // Tags
+        const tags = document.getElementById('modal-tags');
+        tags.innerHTML = `
+            <span class="meta-tag" style="color: #ef4444; border-color: rgba(239, 68, 68, 0.2);">${track.difficulty.toUpperCase()}</span>
+            <span class="meta-tag">📏 ${track.length}</span>
+            <span class="meta-tag">🏁 ${track.checkpoints} CHECKPOINTS</span>
+            <span class="meta-tag">🌍 BIOM: ${track.biome.toUpperCase()}</span>
+        `;
+
+        // Buttons
+        const playBtn = document.getElementById('modal-play-btn');
+        const editBtn = document.getElementById('modal-edit-btn');
+        
+        if (track.is_draft) {
+            playBtn.href = `arcade.html?edit=${track.share_code}&autorun=rally`;
+            editBtn.href = `arcade.html?edit=${track.share_code}&autorun=build`;
+            editBtn.style.display = 'flex';
+        } else {
+            playBtn.href = `arcade.html?course=${track.share_code}&autorun=rally`;
+            // Can edit if user is author
+            const currentUserId = window.GolfAuth ? window.GolfAuth.userId : null;
+            if (track.owner_id && track.owner_id === currentUserId) {
+                editBtn.href = `arcade.html?edit=${track.share_code}&autorun=build`;
+                editBtn.style.display = 'flex';
+            } else {
+                editBtn.style.display = 'none';
+            }
+        }
+
+        // Leaderboard rendering
+        const lbContent = document.getElementById('modal-leaderboard-content');
+        lbContent.innerHTML = '<div style="color: #64748b; font-size:12px; text-align:center; padding: 20px;">Hämtar tider...</div>';
+
+        if (isPreset && track.leaderboard) {
+            // Load static preset times
+            renderLeaderboardTable(track.leaderboard);
+        } else {
+            // Fetch live times from DB
+            fetch(`/api/courses/${track.share_code}/leaderboard`)
+                .then(res => res.json())
+                .then(records => {
+                    if (records && records.length > 0) {
+                        const formatted = records.slice(0, 5).map(r => ({
+                            name: r.player_name || 'Okänd förare',
+                            vehicle: r.lm_device || 'Rallybil',
+                            time: formatTime(r.total_score)
+                        }));
+                        renderLeaderboardTable(formatted);
+                    } else {
+                        lbContent.innerHTML = '<div class="no-records">Inga tider registrerade än.<br>Bli först med att sätta en tid!</div>';
+                    }
+                })
+                .catch(err => {
+                    console.error('Failed to fetch leaderboard:', err);
+                    lbContent.innerHTML = '<div class="no-records">Kunde inte hämta tider från servern.</div>';
+                });
+        }
+
+        modal.classList.add('active');
+    }
+
+    function renderLeaderboardTable(records) {
+        const lbContent = document.getElementById('modal-leaderboard-content');
+        
+        let html = `<table class="leaderboard-table">
+            <thead>
+                <tr>
+                    <th style="width: 10%">#</th>
+                    <th style="width: 60%">Förare</th>
+                    <th style="width: 30%; text-align: right">Tid</th>
+                </tr>
+            </thead>
+            <tbody>`;
+            
+        records.forEach((r, idx) => {
+            const rank = idx + 1;
+            let rankClass = `rank-num`;
+            if (rank <= 3) rankClass += ` rank-${rank}`;
+            
+            html += `
+                <tr>
+                    <td class="${rankClass}">${rank}</td>
+                    <td>
+                        <span class="driver-name">${r.name}</span>
+                        <span class="driver-vehicle">${r.vehicle}</span>
+                    </td>
+                    <td class="driver-time">${r.time}</td>
+                </tr>
+            `;
+        });
+        
+        html += `</tbody></table>`;
+        lbContent.innerHTML = html;
+    }
+
+    function closeModal(event) {
+        const modal = document.getElementById('track-modal');
+        modal.classList.remove('active');
+    }
+
+    // Startup
+    window.addEventListener('DOMContentLoaded', () => {
+        renderPresets();
+        renderDrafts();
+        loadCommunityTracks();
+    });
+</script>
+</body>
+</html>
