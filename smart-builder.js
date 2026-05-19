@@ -1511,8 +1511,11 @@ window.executeSmartStartClick = function(cx, cy, cz, angle) {
     window.raceConfig.start = { x: cx, y: cy, z: cz, rotation: angle || 0, roadId: roadId, splineIndex: splineIndex };
     window.raceConfig.startMesh = gate;
     
-    let hole = window.courseHoles[window.currentHoleIndex];
-    if (hole) hole.tees.yellow = { x: cx, y: cy, z: cz };
+    let hole = window.courseHoles[0];
+    if (hole) {
+        hole.tees.yellow = { x: cx, y: cy, z: cz };
+        if (angle) hole.tees.yellow.rot = angle;
+    }
     
     window.saveLevel();
     if (window.showBuildToast) window.showBuildToast('🏁 START placed!', '#22cc44');
@@ -1548,6 +1551,11 @@ window.executeSmartFinishClick = function(cx, cy, cz, angle) {
     
     window.raceConfig.finish = { x: cx, y: cy, z: cz, rotation: angle || 0, roadId: roadId, splineIndex: splineIndex };
     window.raceConfig.finishMesh = gate;
+    
+    let hole = window.courseHoles[0];
+    if (hole) {
+        hole.flag = { x: cx, y: cy, z: cz };
+    }
     
     window.saveLevel();
     if (window.showBuildToast) window.showBuildToast('🏁 FINISH placed!', '#111111');

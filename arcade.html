@@ -11,18 +11,13 @@
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
 
-<!-- GOLF MODULES DISABLED — replaced by rally-vehicle.js + rally-surfaces.js -->
-<!-- <script src="physics.js?v=4"></script> -->
 <script src="arcade-auth.js"></script>
 <script src="arcade-feature-flags.js"></script>
 <script src="arcade-api-service.js"></script>
 <script src="arcade-storage-service.js"></script>
-<!-- <script src="arcade-swing-engine.js"></script> -->
 <script src="arcade-perlin.js"></script>
 <script src="arcade-terrain-overlays.js"></script>
 <script src="arcade-scene-engine.js"></script>
-<!-- <script src="arcade-tracer-engine.js"></script> -->
-<!-- <script src="arcade-audio-engine.js"></script> -->
 <script src="golf-stubs.js"></script> <!-- Stubs for disabled golf modules -->
 <script src="arcade-particle-engine.js"></script>
 <script src="arcade-wind-sway.js"></script>
@@ -5983,15 +5978,21 @@
                                 if(hSync.tees[tType]) h.tees[tType] = hSync.tees[tType];
                             }
                         }
-                        if(h.tees.red) { h.teeMeshes.red = createTeeObject(h.tees.red.x, h.tees.red.y, h.tees.red.z, 0xef4444); if(h.tees.red.rot) h.teeMeshes.red.rotation.y = h.tees.red.rot; }
-                        if(h.tees.yellow) { h.teeMeshes.yellow = createTeeObject(h.tees.yellow.x, h.tees.yellow.y, h.tees.yellow.z, 0xfacc15); if(h.tees.yellow.rot) h.teeMeshes.yellow.rotation.y = h.tees.yellow.rot; }
-                        if(h.tees.white) { h.teeMeshes.white = createTeeObject(h.tees.white.x, h.tees.white.y, h.tees.white.z, 0xffffff); if(h.tees.white.rot) h.teeMeshes.white.rotation.y = h.tees.white.rot; }
-                        if(h.tees.black) { h.teeMeshes.black = createTeeObject(h.tees.black.x, h.tees.black.y, h.tees.black.z, 0x111111); if(h.tees.black.rot) h.teeMeshes.black.rotation.y = h.tees.black.rot; }
-                        if(h.tees.range) { h.teeMeshes.range = createRangeTeeObject(h.tees.range.x, h.tees.range.y, h.tees.range.z); if(h.tees.range.rot) h.teeMeshes.range.rotation.y = h.tees.range.rot; }
-                        
-                        if(hSync.flag) {
-                            h.flag = hSync.flag;
-                            h.flagMesh = createFlagObject(h.flag.x, h.flag.y, h.flag.z);
+                        if (window.EDITOR_MODE !== 'rally') {
+                            if(h.tees.red) { h.teeMeshes.red = createTeeObject(h.tees.red.x, h.tees.red.y, h.tees.red.z, 0xef4444); if(h.tees.red.rot) h.teeMeshes.red.rotation.y = h.tees.red.rot; }
+                            if(h.tees.yellow) { h.teeMeshes.yellow = createTeeObject(h.tees.yellow.x, h.tees.yellow.y, h.tees.yellow.z, 0xfacc15); if(h.tees.yellow.rot) h.teeMeshes.yellow.rotation.y = h.tees.yellow.rot; }
+                            if(h.tees.white) { h.teeMeshes.white = createTeeObject(h.tees.white.x, h.tees.white.y, h.tees.white.z, 0xffffff); if(h.tees.white.rot) h.teeMeshes.white.rotation.y = h.tees.white.rot; }
+                            if(h.tees.black) { h.teeMeshes.black = createTeeObject(h.tees.black.x, h.tees.black.y, h.tees.black.z, 0x111111); if(h.tees.black.rot) h.teeMeshes.black.rotation.y = h.tees.black.rot; }
+                            if(h.tees.range) { h.teeMeshes.range = createRangeTeeObject(h.tees.range.x, h.tees.range.y, h.tees.range.z); if(h.tees.range.rot) h.teeMeshes.range.rotation.y = h.tees.range.rot; }
+                            
+                            if(hSync.flag) {
+                                h.flag = hSync.flag;
+                                h.flagMesh = createFlagObject(h.flag.x, h.flag.y, h.flag.z);
+                            }
+                        } else {
+                            if(hSync.flag) {
+                                h.flag = hSync.flag;
+                            }
                         }
                     }
                     if(document.getElementById('hole-ui-par')) { document.getElementById('hole-ui-par').innerText = "Par " + courseHoles[currentHoleIndex].par; }
@@ -7987,24 +7988,29 @@
                 
                 h.tees = JSON.parse(JSON.stringify(hState.tees));
                 h.teeMeshes = {};
-                for(let key in h.tees) {
-                    if(!h.tees[key]) continue;
-                    if(key === 'range') {
-                        h.teeMeshes[key] = createRangeTeeObject(h.tees[key].x, h.tees[key].y, h.tees[key].z);
-                    } else {
-                        let col = 0xffffff;
-                        if(key === 'red') col = 0xef4444;
-                        if(key === 'yellow') col = 0xfacc15;
-                        if(key === 'black') col = 0x111111;
-                        h.teeMeshes[key] = createTeeObject(h.tees[key].x, h.tees[key].y, h.tees[key].z, col);
+                if (window.EDITOR_MODE !== 'rally') {
+                    for(let key in h.tees) {
+                        if(!h.tees[key]) continue;
+                        if(key === 'range') {
+                            h.teeMeshes[key] = createRangeTeeObject(h.tees[key].x, h.tees[key].y, h.tees[key].z);
+                        } else {
+                            let col = 0xffffff;
+                            if(key === 'red') col = 0xef4444;
+                            if(key === 'yellow') col = 0xfacc15;
+                            if(key === 'black') col = 0x111111;
+                            h.teeMeshes[key] = createTeeObject(h.tees[key].x, h.tees[key].y, h.tees[key].z, col);
+                        }
+                        if(h.tees[key].rot) h.teeMeshes[key].rotation.y = h.tees[key].rot;
                     }
-                    if(h.tees[key].rot) h.teeMeshes[key].rotation.y = h.tees[key].rot;
-                }
-                
-                h.flag = hState.flag ? JSON.parse(JSON.stringify(hState.flag)) : null;
-                if(h.flag) {
-                    h.flagMesh = createFlagObject(h.flag.x, h.flag.y, h.flag.z);
+                    
+                    h.flag = hState.flag ? JSON.parse(JSON.stringify(hState.flag)) : null;
+                    if(h.flag) {
+                        h.flagMesh = createFlagObject(h.flag.x, h.flag.y, h.flag.z);
+                    } else {
+                        h.flagMesh = null;
+                    }
                 } else {
+                    h.flag = hState.flag ? JSON.parse(JSON.stringify(hState.flag)) : null;
                     h.flagMesh = null;
                 }
                 
