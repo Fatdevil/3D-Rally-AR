@@ -174,7 +174,7 @@ function smartAddPoint(pt) {
     if(window._smartShapeClosed) return false;
     
     // ROAD mode: open path, auto-snap to previous road if clicking near it!
-    if(window._smartBuilderType === 'ROAD') {
+    if(window._smartBuilderType === 'ROAD' && typeof currentTool !== 'undefined' && currentTool === 'SMART_BUILDER') {
         if (smartGreenPoints.length === 0 && window._lastRoadEndPoint) {
             let dist = Math.sqrt((pt.x - window._lastRoadEndPoint.x)**2 + (pt.z - window._lastRoadEndPoint.z)**2);
             if (dist < 15.0) { // Snäpp fast om vi är inom 15 meter!
@@ -357,14 +357,22 @@ function autoSortTees(hole) {
 function updateSmartGreenPreview() {
     smartGreenSpheres.forEach(s => window._arcadeScene.remove(s));
     smartGreenSpheres = [];
-    if(smartGreenLineMesh) { window._arcadeScene.remove(smartGreenLineMesh); smartGreenLineMesh = null; }
+    if(smartGreenLineMesh) { 
+        window._arcadeScene.remove(smartGreenLineMesh); 
+        if (smartGreenLineMesh.geometry) smartGreenLineMesh.geometry.dispose();
+        if (smartGreenLineMesh.material) smartGreenLineMesh.material.dispose();
+        smartGreenLineMesh = null; 
+    }
 
-    let sMat = new THREE.MeshBasicMaterial({ color: 0x4ade80 });
-    let sMatFirst = new THREE.MeshBasicMaterial({ color: 0x38bdf8 }); // Blue = start point
-    let sGeo = new THREE.SphereGeometry(0.4, 8, 8);
-    let sGeoFirst = new THREE.SphereGeometry(0.6, 8, 8);
+    if (!window._sgPreviewSMat) {
+        window._sgPreviewSMat = new THREE.MeshBasicMaterial({ color: 0x4ade80 });
+        window._sgPreviewSMatFirst = new THREE.MeshBasicMaterial({ color: 0x38bdf8 }); // Blue = start point
+        window._sgPreviewSGeo = new THREE.SphereGeometry(0.4, 8, 8);
+        window._sgPreviewSGeoFirst = new THREE.SphereGeometry(0.6, 8, 8);
+    }
+    
     smartGreenPoints.forEach((pt, idx) => {
-        let s = new THREE.Mesh(idx === 0 ? sGeoFirst : sGeo, idx === 0 ? sMatFirst : sMat);
+        let s = new THREE.Mesh(idx === 0 ? window._sgPreviewSGeoFirst : window._sgPreviewSGeo, idx === 0 ? window._sgPreviewSMatFirst : window._sgPreviewSMat);
         s.position.copy(pt);
         s.position.y += 0.5;
         window._arcadeScene.add(s);
@@ -1432,13 +1440,64 @@ function createRallyGate(x, y, z, type) {
     return gate;
 }
 
+// ── ROAD SPLINE SNAPPING ──
+// Finds the nearest point on any built road spline and returns the point + tangent direction.
+window.getNearestRoadPoint = function(hitPt) {
+    if (!window._builtRoads || window._builtRoads.length === 0) return null;
+    let closestPt = null;
+    let minDist = Infinity;
+    let closestTangent = new THREE.Vector3(0,0,1);
+    let cRoadId = null;
+    let cIndex = -1;
+    
+    window._builtRoads.forEach(road => {
+        if (!road.sampledPoints || road.sampledPoints.length < 2) return;
+        for (let i = 0; i < road.sampledPoints.length; i++) {
+            let p = road.sampledPoints[i];
+            let dist = Math.sqrt((p.x - hitPt.x)**2 + (p.z - hitPt.z)**2);
+            if (dist < minDist) {
+                minDist = dist;
+                closestPt = { x: p.x, y: p.y, z: p.z };
+                cRoadId = road.id;
+                cIndex = i;
+                
+                let pPrev = i > 0 ? road.sampledPoints[i-1] : p;
+                let pNext = i < road.sampledPoints.length - 1 ? road.sampledPoints[i+1] : p;
+                if (pPrev === p && pNext !== p) {
+                    closestTangent.set(pNext.x - p.x, 0, pNext.z - p.z).normalize();
+                } else if (pNext === p && pPrev !== p) {
+                    closestTangent.set(p.x - pPrev.x, 0, p.z - pPrev.z).normalize();
+                } else if (pNext !== p && pPrev !== p) {
+                    closestTangent.set(pNext.x - pPrev.x, 0, pNext.z - pPrev.z).normalize();
+                }
+            }
+        }
+    });
+    
+    // Snap radius: 30 meters
+    if (minDist > 30) return null;
+    
+    return { point: new THREE.Vector3(closestPt.x, closestPt.y, closestPt.z), tangent: closestTangent, distance: minDist, roadId: cRoadId, splineIndex: cIndex };
+};
+
 // ── RALLY START: Single click to place start gate ──
 window.executeSmartStartClick = function(cx, cy, cz, angle) {
     window.saveUndoState();
     
-    if (typeof window.localGetTerrainAt === 'function') {
-        let t = window.localGetTerrainAt(cx, -cz);
-        cy = t ? t.z : cy;
+    let roadId = null, splineIndex = -1;
+    let snapData = window.getNearestRoadPoint(new THREE.Vector3(cx, cy, cz));
+    if (snapData) {
+        cx = snapData.point.x;
+        cy = snapData.point.y;
+        cz = snapData.point.z;
+        angle = Math.atan2(snapData.tangent.x, snapData.tangent.z);
+        roadId = snapData.roadId;
+        splineIndex = snapData.splineIndex;
+    } else {
+        if (typeof window.localGetTerrainAt === 'function') {
+            let t = window.localGetTerrainAt(cx, -cz);
+            cy = t ? t.z : cy;
+        }
     }
     
     if (window.raceConfig.startMesh) {
@@ -1449,7 +1508,7 @@ window.executeSmartStartClick = function(cx, cy, cz, angle) {
     gate.rotation.y = angle || 0;
     window._arcadeScene.add(gate);
     
-    window.raceConfig.start = { x: cx, y: cy, z: cz, rotation: angle || 0 };
+    window.raceConfig.start = { x: cx, y: cy, z: cz, rotation: angle || 0, roadId: roadId, splineIndex: splineIndex };
     window.raceConfig.startMesh = gate;
     
     let hole = window.courseHoles[window.currentHoleIndex];
@@ -1463,9 +1522,20 @@ window.executeSmartStartClick = function(cx, cy, cz, angle) {
 window.executeSmartFinishClick = function(cx, cy, cz, angle) {
     window.saveUndoState();
     
-    if (typeof window.localGetTerrainAt === 'function') {
-        let t = window.localGetTerrainAt(cx, -cz);
-        cy = t ? t.z : cy;
+    let roadId = null, splineIndex = -1;
+    let snapData = window.getNearestRoadPoint(new THREE.Vector3(cx, cy, cz));
+    if (snapData) {
+        cx = snapData.point.x;
+        cy = snapData.point.y;
+        cz = snapData.point.z;
+        angle = Math.atan2(snapData.tangent.x, snapData.tangent.z);
+        roadId = snapData.roadId;
+        splineIndex = snapData.splineIndex;
+    } else {
+        if (typeof window.localGetTerrainAt === 'function') {
+            let t = window.localGetTerrainAt(cx, -cz);
+            cy = t ? t.z : cy;
+        }
     }
     
     if (window.raceConfig.finishMesh) {
@@ -1476,7 +1546,7 @@ window.executeSmartFinishClick = function(cx, cy, cz, angle) {
     gate.rotation.y = angle || 0;
     window._arcadeScene.add(gate);
     
-    window.raceConfig.finish = { x: cx, y: cy, z: cz, rotation: angle || 0 };
+    window.raceConfig.finish = { x: cx, y: cy, z: cz, rotation: angle || 0, roadId: roadId, splineIndex: splineIndex };
     window.raceConfig.finishMesh = gate;
     
     window.saveLevel();
@@ -1489,11 +1559,23 @@ window.placeCheckpoint = function(hitPt) {
     
     window.saveUndoState();
     
-    let cx = hitPt.x, cz = hitPt.z;
-    let cy = hitPt.y;
-    if (typeof window.localGetTerrainAt === 'function') {
-        let t = window.localGetTerrainAt(cx, -cz);
-        cy = t ? t.z : cy;
+    let cx = hitPt.x, cy = hitPt.y, cz = hitPt.z;
+    let roadId = null, splineIndex = -1;
+    let angle = 0;
+    
+    let snapData = window.getNearestRoadPoint(hitPt);
+    if (snapData) {
+        cx = snapData.point.x;
+        cy = snapData.point.y;
+        cz = snapData.point.z;
+        angle = Math.atan2(snapData.tangent.x, snapData.tangent.z);
+        roadId = snapData.roadId;
+        splineIndex = snapData.splineIndex;
+    } else {
+        if (typeof window.localGetTerrainAt === 'function') {
+            let t = window.localGetTerrainAt(cx, -cz);
+            cy = t ? t.z : cy;
+        }
     }
     
     let cpIndex = window.raceConfig.checkpoints.length;
@@ -1526,7 +1608,7 @@ window.placeCheckpoint = function(hitPt) {
     window._arcadeScene.add(label);
     
     // Store
-    window.raceConfig.checkpoints.push({ x: cx, y: cy, z: cz, radius: radius });
+    window.raceConfig.checkpoints.push({ x: cx, y: cy, z: cz, radius: radius, roadId: roadId, splineIndex: splineIndex });
     window.raceConfig.checkpointMeshes.push({ ring: ring, label: label });
     
     window.saveLevel();
@@ -2301,7 +2383,7 @@ window.executeSplineSmartGreen = function() {
                     let h = positions[(gz * stride + gx) * 3 + 2] - baseHeight;
                     // No edge-fade here — apply-side falloff handles it (prevents double-fade)
                     heights[arrIdx] = Math.round(h * 100) / 100; // 1cm precision
-                    if (Math.abs(h) > 0.1) hasData = true;
+                    if (Math.abs(h) > 0.05) hasData = true;
                 } else {
                     heights[arrIdx] = null;
                 }
@@ -2506,10 +2588,17 @@ window.executeSmartRoad = function() {
     let halfW = roadWidth / 2;
     let shoulderW = window._smartRoadShoulder || 4;
 
+    let surface = window._smartRoadSurface || 'NONE';
     let doFoundation = window._smartRoadFoundation !== false;
     let edgeL = window._smartRoadEdgeL || 'NONE';
     let edgeR = window._smartRoadEdgeR || 'NONE';
     let edgeW = 4.0; // Width of the physical edge (ditch/berm)
+    
+    if (surface === 'GAP') {
+        doFoundation = false;
+        edgeL = 'NONE';
+        edgeR = 'NONE';
+    }
     // Build OPEN spline through waypoints
     let curve = new THREE.CatmullRomCurve3(smartGreenPoints, false, 'centripetal');
     let numSamples = Math.min(600, Math.max(200, smartGreenPoints.length * 50));
@@ -2522,9 +2611,9 @@ window.executeSmartRoad = function() {
     // ── SPATIAL GRID for O(1) nearest-road-point lookup ──
     // Instead of O(n) linear search per vertex, bucket roadData into a grid
     let _gridCellSize = 5.0; // 5m cells
-    let _gridMap = new Map();
-    function _gridKey(wx, wz) { return (Math.floor(wx / _gridCellSize)) + ',' + (Math.floor(wz / _gridCellSize)); }
-    // Will be populated after roadData is built (STEP 4)
+    let _gridCols = Math.ceil(window.TERRAIN_SIZE / _gridCellSize) + 2;
+    let _gridRows = _gridCols;
+    let _gridArray = new Array(_gridCols * _gridRows);
 
     // === STEP 1: Sample ACTUAL terrain height at every spline point ===
     let rawTerrainH = new Float32Array(splinePts.length);
@@ -2613,6 +2702,41 @@ window.executeSmartRoad = function() {
         roadH = rawTerrainH;
     }
     // === STEP 4: Build road centerline data ===
+    let maxBankingPercent = window._smartRoadBanking || 0;
+    let bankMultiplier = (maxBankingPercent / 100) * 20.0; // Max multiplier
+    
+    // Calculate raw turn rates (curvature)
+    let rawTurnRates = new Float32Array(splinePts.length);
+    for(let i = 1; i < splinePts.length - 1; i++) {
+        let prevX = splinePts[i].x - splinePts[i-1].x;
+        let prevZ = splinePts[i].z - splinePts[i-1].z;
+        let nextX = splinePts[i+1].x - splinePts[i].x;
+        let nextZ = splinePts[i+1].z - splinePts[i].z;
+        let lenP = Math.sqrt(prevX*prevX + prevZ*prevZ);
+        let lenN = Math.sqrt(nextX*nextX + nextZ*nextZ);
+        if(lenP > 0.001 && lenN > 0.001) {
+            let px = prevX/lenP, pz = prevZ/lenP;
+            let nx = nextX/lenN, nz = nextZ/lenN;
+            let sinTheta = pz * nx - px * nz; // Flipped sign: positive = left turn, negative = right turn
+            let angle = Math.asin(Math.max(-1, Math.min(1, sinTheta)));
+            rawTurnRates[i] = angle / ((lenP + lenN) * 0.5); // rad per meter
+        }
+    }
+    
+    // Smooth turn rates (running average over 20 points) to anticipate curves
+    let smoothTurnRates = new Float32Array(splinePts.length);
+    let bankWindow = 20;
+    for(let i = 0; i < splinePts.length; i++) {
+        let sum = 0, count = 0;
+        let lo = Math.max(0, i - bankWindow);
+        let hi = Math.min(splinePts.length - 1, i + bankWindow);
+        for(let j = lo; j <= hi; j++) {
+            sum += rawTurnRates[j];
+            count++;
+        }
+        smoothTurnRates[i] = sum / count;
+    }
+
     let roadData = [];
     for(let i = 0; i < splinePts.length; i++) {
         let pt = splinePts[i];
@@ -2638,33 +2762,46 @@ window.executeSmartRoad = function() {
             nz = tx;
         }
 
-        roadData.push({ x: pt.x, z: pt.z, roadH: roadH[i], nx, nz, idx: i, tx: tx, tz: tz });
+        // Auto-banking based on curvature. Max cap at ~45 degrees (0.785 rad)
+        let currentBankRad = smoothTurnRates[i] * bankMultiplier;
+        currentBankRad = Math.max(-0.785, Math.min(0.785, currentBankRad));
+
+        roadData.push({ x: pt.x, z: pt.z, roadH: roadH[i], nx, nz, idx: i, tx: tx, tz: tz, bankRad: currentBankRad });
     }
 
     // ── Populate spatial grid for fast nearest-road lookups ──
     for (let r = 0; r < roadData.length; r++) {
         let rd = roadData[r];
-        let key = _gridKey(rd.x, rd.z);
-        if (!_gridMap.has(key)) _gridMap.set(key, []);
-        _gridMap.get(key).push(r);
+        let cx = Math.floor((rd.x + window.TERRAIN_SIZE/2) / _gridCellSize);
+        let cz = Math.floor((rd.z + window.TERRAIN_SIZE/2) / _gridCellSize);
+        if (cx >= 0 && cx < _gridCols && cz >= 0 && cz < _gridRows) {
+            let idx = cz * _gridCols + cx;
+            if (!_gridArray[idx]) _gridArray[idx] = [];
+            _gridArray[idx].push(r);
+        }
     }
 
     // Fast nearest-road lookup using spatial grid
     let _searchRadius = halfW + shoulderW + edgeW + 4;
     let _cellsToCheck = Math.ceil(_searchRadius / _gridCellSize) + 1;
     function findNearestRoad(vx, vz) {
-        let cellX = Math.floor(vx / _gridCellSize);
-        let cellZ = Math.floor(vz / _gridCellSize);
+        let cellX = Math.floor((vx + window.TERRAIN_SIZE/2) / _gridCellSize);
+        let cellZ = Math.floor((vz + window.TERRAIN_SIZE/2) / _gridCellSize);
         let bestDistSq = Infinity, bestIdx = -1;
         for (let dcy = -_cellsToCheck; dcy <= _cellsToCheck; dcy++) {
             for (let dcx = -_cellsToCheck; dcx <= _cellsToCheck; dcx++) {
-                let bucket = _gridMap.get((cellX + dcx) + ',' + (cellZ + dcy));
-                if (!bucket) continue;
-                for (let bi = 0; bi < bucket.length; bi++) {
-                    let rd = roadData[bucket[bi]];
-                    let dx = vx - rd.x, dz = vz - rd.z;
-                    let d2 = dx * dx + dz * dz;
-                    if (d2 < bestDistSq) { bestDistSq = d2; bestIdx = bucket[bi]; }
+                let cx = cellX + dcx;
+                let cz = cellZ + dcy;
+                if (cx >= 0 && cx < _gridCols && cz >= 0 && cz < _gridRows) {
+                    let bucket = _gridArray[cz * _gridCols + cx];
+                    if (bucket) {
+                        for (let bi = 0; bi < bucket.length; bi++) {
+                            let rd = roadData[bucket[bi]];
+                            let dx = vx - rd.x, dz = vz - rd.z;
+                            let d2 = dx * dx + dz * dz;
+                            if (d2 < bestDistSq) { bestDistSq = d2; bestIdx = bucket[bi]; }
+                        }
+                    }
                 }
             }
         }
@@ -2725,7 +2862,8 @@ window.executeSmartRoad = function() {
                             x: prx, z: prz,
                             nx: r1.nx + t*(r2.nx - r1.nx),
                             nz: r1.nz + t*(r2.nz - r1.nz),
-                            roadH: r1.roadH + t*(r2.roadH - r1.roadH)
+                            roadH: r1.roadH + t*(r2.roadH - r1.roadH),
+                            bankRad: r1.bankRad + t*(r2.bankRad - r1.bankRad)
                         };
                     }
                 }
@@ -2736,7 +2874,17 @@ window.executeSmartRoad = function() {
             if(perpDist > halfW + shoulderW) continue;
 
             let currentH = positions[idx*3+2];
-            let targetH = bestRD.roadH;
+            
+            // Apply banking offset (pivot around INNER edge so it never digs down)
+            let dx = vx - bestRD.x;
+            let dz = vz - bestRD.z;
+            let signedDist = dx * bestRD.nx + dz * bestRD.nz; // Negative on left, positive on right
+            
+            let tanBank = Math.tan(bestRD.bankRad);
+            let lowestOffset = Math.abs(tanBank * halfW); // Shift road up so inner edge stays at ground level
+            let bankOffset = (tanBank * signedDist) + lowestOffset;
+            
+            let targetH = bestRD.roadH + bankOffset;
 
             // Track cut/fill stats
             let delta = targetH - currentH;
@@ -2753,7 +2901,22 @@ window.executeSmartRoad = function() {
                 // === SHOULDER: smoothstep blend to original terrain ===
                 let t = (perpDist - halfW) / shoulderW;
                 t = t * t * (3 - 2 * t);
-                positions[idx*3+2] = targetH + (currentH - targetH) * t;
+                
+                let noiseVal = 0;
+                if(window._smartRoadShoulderNoise) {
+                    // Skapa oregelbunden "stenig" noise med världskoordinaterna
+                    let nx = vx * 0.4;
+                    let nz = vz * 0.4;
+                    let rawNoise = Math.sin(nx)*Math.cos(nz) 
+                                 + 0.5 * Math.sin(nx*2.3 + 2.0)*Math.cos(nz*2.5 + 1.0)
+                                 + 0.25 * Math.sin(nx*5.1 - 1.0)*Math.cos(nz*5.3 - 2.0);
+                                 
+                    // Tona in noisen så den är noll precis vid vägkanten (t=0) och noll vid marken (t=1)
+                    let noiseMask = Math.sin(t * Math.PI); 
+                    noiseVal = rawNoise * noiseMask * 1.5; 
+                }
+                
+                positions[idx*3+2] = targetH + (currentH - targetH) * t + noiseVal;
                 modified++;
             }
         }
@@ -2806,8 +2969,7 @@ window.executeSmartRoad = function() {
     let cutFillMsg = ' | Cut: ' + maxCut.toFixed(1) + 'm, Fill: ' + maxFill.toFixed(1) + 'm';
 
     // === STEP 8: Surface painting + micro-terrain ===
-    let surface = window._smartRoadSurface || 'NONE';
-    if(surface !== 'NONE' && window._arcadePCtx) {
+    if(surface !== 'NONE' && surface !== 'GAP' && window._arcadePCtx) {
         let ctx = window._arcadePCtx;
         let ts = window.TERRAIN_SIZE;
         let canvasRes = 4096;
@@ -2991,6 +3153,7 @@ window.executeSmartRoad = function() {
                 let cx = r0.x + (r1.x - r0.x) * t;
                 let cz = r0.z + (r1.z - r0.z) * t;
                 let ch = r0.roadH + (r1.roadH - r0.roadH) * t;
+                let cBank = r0.bankRad + (r1.bankRad - r0.bankRad) * t;
                 
                 // Interpolate smoothed normal
                 let snx = smoothNx[rIdx] + (smoothNx[Math.min(rIdx + 1, roadData.length - 1)] - smoothNx[rIdx]) * t;
@@ -3026,6 +3189,12 @@ window.executeSmartRoad = function() {
                 }
                 
                 let h = window.getTerrainHeight ? window.getTerrainHeight(ox, oz) : ch;
+                if (doFoundation) {
+                    let tanBank = Math.tan(cBank);
+                    let lowestOffset = Math.abs(tanBank * halfW);
+                    let bankOffset = (tanBank * offsetDist * side) + lowestOffset;
+                    h = ch + bankOffset;
+                }
                 posts.push({ x: ox, z: oz, h: h });
             }
             
@@ -3035,6 +3204,20 @@ window.executeSmartRoad = function() {
         let placeFences = (posts, type) => {
             if (type === 'NONE' || posts.length < 2) return;
             
+            // Filter valid segments first to count instances
+            let validSegments = [];
+            for (let i = 0; i < posts.length - 1; i++) {
+                let a = posts[i], b = posts[i + 1];
+                if (!a || !b) continue;
+                let dx = b.x - a.x, dz = b.z - a.z, dy = b.h - a.h;
+                let hLen = Math.sqrt(dx * dx + dz * dz);
+                if (hLen < 0.05) continue;
+                validSegments.push({ a, b, dx, dy, dz, fLen: Math.sqrt(dx * dx + dy * dy + dz * dz), i });
+            }
+            if (validSegments.length === 0) return;
+            
+            let dummy = new THREE.Object3D();
+            
             // === STAKES: individual vertical pins — breakable ===
             if (type === 'STAKES') {
                 let stakeMat = new THREE.MeshLambertMaterial({ color: 0xdd2222 });
@@ -3042,20 +3225,25 @@ window.executeSmartRoad = function() {
                 let stakeGeo = new THREE.CylinderGeometry(0.06, 0.06, 1.4, 6);
                 let tipGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.3, 6);
                 
-                for (let i = 0; i < posts.length; i++) {
-                    let p = posts[i];
-                    if (!p) continue;
+                let validPosts = posts.filter(p => p !== null);
+                let imStake = new THREE.InstancedMesh(stakeGeo, stakeMat, validPosts.length);
+                let imTip = new THREE.InstancedMesh(tipGeo, stakeMatWhite, validPosts.length);
+                
+                for (let i = 0; i < validPosts.length; i++) {
+                    let p = validPosts[i];
+                    dummy.position.set(p.x, p.h + 0.7, p.z);
+                    dummy.updateMatrix();
+                    imStake.setMatrixAt(i, dummy.matrix);
                     
-                    let stake = new THREE.Mesh(stakeGeo, stakeMat);
-                    stake.position.set(p.x, p.h + 0.7, p.z);
-                    stake.userData = { isBarrier: true, barrierType: 'STAKES', breakable: true, solid: false };
-                    fenceGroup.add(stake);
-                    
-                    let tip = new THREE.Mesh(tipGeo, stakeMatWhite);
-                    tip.position.set(p.x, p.h + 1.55, p.z);
-                    tip.userData = { isBarrier: true, barrierType: 'STAKES', breakable: true, solid: false };
-                    fenceGroup.add(tip);
+                    dummy.position.set(p.x, p.h + 1.55, p.z);
+                    dummy.updateMatrix();
+                    imTip.setMatrixAt(i, dummy.matrix);
                 }
+                
+                imStake.userData = { isBarrier: true, barrierType: 'STAKES', breakable: true, solid: false };
+                imTip.userData = { isBarrier: true, barrierType: 'STAKES', breakable: true, solid: false };
+                fenceGroup.add(imStake);
+                fenceGroup.add(imTip);
                 return;
             }
             
@@ -3063,71 +3251,64 @@ window.executeSmartRoad = function() {
             if (type === 'STONE') {
                 let stoneH = 0.7;  // wall height
                 let stoneW = 0.5;  // wall thickness
-                let blockGeo = new THREE.BoxGeometry(stoneW, stoneH, 0.45);
+                let blockGeo = new THREE.BoxGeometry(stoneW, 1.0, 1.0); // Unit height and length
                 
-                for (let i = 0; i < posts.length - 1; i++) {
-                    let a = posts[i];
-                    let b = posts[i + 1];
-                    if (!a || !b) continue;
+                let imStone1 = new THREE.InstancedMesh(blockGeo, stoneMat, validSegments.length);
+                let imStone2 = new THREE.InstancedMesh(blockGeo, stoneMat2, validSegments.length);
+                let count1 = 0, count2 = 0;
+                
+                for (let s of validSegments) {
+                    let mx = (s.a.x + s.b.x) / 2;
+                    let mz = (s.a.z + s.b.z) / 2;
+                    let my = (s.a.h + s.b.h) / 2;
                     
-                    let dx = b.x - a.x, dz = b.z - a.z, dy = b.h - a.h;
-                    let hLen = Math.sqrt(dx * dx + dz * dz);
-                    if (hLen < 0.05) continue;
+                    let hVar = stoneH + (Math.sin(s.i * 7.3) * 0.08);
                     
-                    let fLen = Math.sqrt(dx * dx + dy * dy + dz * dz);
-                    let mx = (a.x + b.x) / 2;
-                    let mz = (a.z + b.z) / 2;
-                    let my = (a.h + b.h) / 2;
+                    dummy.position.set(mx, my + hVar / 2, mz);
+                    dummy.lookAt(s.b.x, s.b.h + hVar / 2, s.b.z);
+                    dummy.scale.set(1, hVar, Math.max(0.2, s.fLen));
+                    dummy.updateMatrix();
                     
-                    // Alternate stone colors for natural look
-                    let mat = (i % 3 === 0) ? stoneMat2 : stoneMat;
-                    // Slight height variation per block
-                    let hVar = stoneH + (Math.sin(i * 7.3) * 0.08);
-                    let block = new THREE.Mesh(
-                        new THREE.BoxGeometry(stoneW, hVar, Math.max(0.2, fLen)),
-                        mat
-                    );
-                    
-                    block.position.set(mx, my + hVar / 2, mz);
-                    block.lookAt(b.x, b.h + hVar / 2, b.z);
-                    block.userData = { isBarrier: true, barrierType: 'STONE', breakable: false, solid: true };
-                    fenceGroup.add(block);
+                    if (s.i % 3 === 0) {
+                        imStone2.setMatrixAt(count2++, dummy.matrix);
+                    } else {
+                        imStone1.setMatrixAt(count1++, dummy.matrix);
+                    }
                 }
+                
+                imStone1.count = count1;
+                imStone2.count = count2;
+                imStone1.userData = { isBarrier: true, barrierType: 'STONE', breakable: false, solid: true };
+                imStone2.userData = { isBarrier: true, barrierType: 'STONE', breakable: false, solid: true };
+                if (count1 > 0) fenceGroup.add(imStone1);
+                if (count2 > 0) fenceGroup.add(imStone2);
                 return;
             }
             
             // === WOOD / STEEL: segment-based barriers ===
-            for (let i = 0; i < posts.length - 1; i++) {
-                let a = posts[i];
-                let b = posts[i + 1];
+            let isWood = type === 'WOOD';
+            let geo = isWood ? new THREE.BoxGeometry(0.2, 1.2, 1.0) : new THREE.BoxGeometry(0.4, 0.8, 1.0);
+            let mat = isWood ? woodMat : steelMat;
+            let halfHeight = isWood ? 0.6 : 0.4;
+            
+            let imMesh = new THREE.InstancedMesh(geo, mat, validSegments.length);
+            
+            for (let i = 0; i < validSegments.length; i++) {
+                let s = validSegments[i];
+                let mx = (s.a.x + s.b.x) / 2;
+                let mz = (s.a.z + s.b.z) / 2;
+                let my = (s.a.h + s.b.h) / 2;
                 
-                if (!a || !b) continue;
+                dummy.position.set(mx, my + halfHeight, mz);
+                dummy.lookAt(s.b.x, s.b.h + halfHeight, s.b.z);
+                dummy.scale.set(1, 1, s.fLen);
+                dummy.updateMatrix();
                 
-                let dx = b.x - a.x, dz = b.z - a.z, dy = b.h - a.h;
-                let hLen = Math.sqrt(dx * dx + dz * dz);
-                if (hLen < 0.1) continue;
-                
-                let fLen = Math.sqrt(dx * dx + dy * dy + dz * dz);
-                
-                let mx = (a.x + b.x) / 2;
-                let mz = (a.z + b.z) / 2;
-                let my = (a.h + b.h) / 2;
-                
-                let mesh, halfHeight;
-                if (type === 'WOOD') {
-                    mesh = new THREE.Mesh(new THREE.BoxGeometry(0.2, 1.2, fLen), woodMat);
-                    halfHeight = 0.6;
-                    mesh.userData = { isBarrier: true, barrierType: 'WOOD', breakable: true, solid: true };
-                } else {
-                    mesh = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.8, fLen), steelMat);
-                    halfHeight = 0.4;
-                    mesh.userData = { isBarrier: true, barrierType: 'STEEL', breakable: false, solid: true };
-                }
-                
-                mesh.position.set(mx, my + halfHeight, mz);
-                mesh.lookAt(b.x, b.h + halfHeight, b.z);
-                fenceGroup.add(mesh);
+                imMesh.setMatrixAt(i, dummy.matrix);
             }
+            
+            imMesh.userData = { isBarrier: true, barrierType: type, breakable: isWood, solid: true };
+            fenceGroup.add(imMesh);
         };
         
         // Spacing per type: STONE 0.45m (tight blocks), STAKES 1.5m, WOOD/STEEL 1.0m
@@ -3150,6 +3331,22 @@ window.executeSmartRoad = function() {
             id: 'fences_' + Date.now(),
             type: 'fences',
             mesh: fenceGroup
+        });
+    }
+
+    // ── ROAD PIPELINE FIX: Register road data for save/load ──
+    // Stores road geometry so arcade.html can serialize it into rally config.
+    // rally.html uses this to rebuild vertex colors + road decal meshes.
+    if (!window._builtRoads) window._builtRoads = [];
+    let materialMap = { GRAVEL: 'GRAVEL', ASPHALT: 'TARMAC', DIRT: 'MUD' };
+    let rsMaterial = materialMap[surface] || 'GRAVEL';
+    if (surface !== 'GAP') {
+        window._builtRoads.push({
+            id: 'road_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 6),
+            nodes: smartGreenPoints.map(function(p) { return { worldX: p.x, worldY: p.y, worldZ: p.z }; }),
+            width: roadWidth,
+            material: rsMaterial,
+            sampledPoints: splinePts.map(function(p) { return { x: p.x, y: p.y || 0, z: p.z }; })
         });
     }
 

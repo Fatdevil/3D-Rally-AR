@@ -164,7 +164,17 @@
         { r:0xe0, g:0xd8, b:0xa4, type:'SAND' },
         { r:0xc2, g:0xaf, b:0x7c, type:'WASTE' },
         { r:0xef, g:0x44, b:0x44, type:'OB' },
-        { r:0x38, g:0xbd, b:0xf8, type:'WATER' }
+        { r:0x38, g:0xbd, b:0xf8, type:'WATER' },
+        
+        // Rally Palette Colors mapped to correct Physics/Shader strings
+        { r:0x64, g:0x74, b:0x8b, type:'ROUGH' },     // Klippa -> Grass/Dirt
+        { r:0x9c, g:0xa3, b:0xaf, type:'WASTE' },     // Grus -> Gravel/Gravel
+        { r:0x71, g:0x3f, b:0x12, type:'SEMI-ROUGH'}, // Jord -> Gravel/Gravel
+        { r:0x45, g:0x1a, b:0x03, type:'FESCUE' },    // Lera -> Mud/Mud
+        { r:0x14, g:0x53, b:0x2d, type:'DEEP ROUGH'}, // Tät Skog -> Mud/Mud
+        { r:0xd4, g:0xb4, b:0x83, type:'SAND' },      // Öken/Sand -> Dirt/Dirt
+        { r:0x84, g:0xcc, b:0x16, type:'ROUGH' },     // Ljus Gräs -> Grass/Dirt
+        { r:0x1e, g:0x29, b:0x3b, type:'FAIRWAY' }    // Asfalt -> Tarmac/Asphalt
     ];
     function classifyBiomeColor(r, g, b) {
         let best = 'ROUGH', bestDist = Infinity;
@@ -222,6 +232,14 @@
             normal: [-dx / len, -dy / len, 1.0 / len],
             type: surfType
         };
+    };
+
+    // ── ROAD PIPELINE FIX: getTerrainHeight adapter for road-decal.js ──
+    // road-decal.js expects getTerrainHeight(worldX, worldZ) → scalar height.
+    // Wraps localGetTerrainAt which takes (worldX, -worldZ) → {z: height}.
+    window.getTerrainHeight = function(worldX, worldZ) {
+        let t = window.localGetTerrainAt(worldX, -worldZ);
+        return (t && typeof t.z === 'number') ? t.z : 0;
     };
 
     // ── Bilinear heightmap resampler (inline — not shared with arcade.html) ──
@@ -366,19 +384,28 @@
     // window._terrainHeightSourceLabel: set to label of source that applied heightmap.
     // resolveSpawnPosition() reads this to align tee data with the same session.
     function loadTerrain() {
+        // PERF FIX: lazy-load sources — only parse fallbacks if snapshot fails
+        // Old code: parsed ALL 3 localStorage keys eagerly (~10MB JSON on startup)
+        // New code: tries snapshot first, only parses custom/compressed if needed
         let snap = ArcadeStorage.loadTerrainSnapshot();
 
         // Source selection (priority order):
         // 1. Terrain snapshot — H16 from saveLevel(); most reliable for sculpted terrain
         // 2. Custom level    — saveLevel() writes here; freshest builder save
         // 3. Compressed level — arcade_custom_level_z; only written on URL-share import
-        // Same priority as resolveSpawnPosition() so terrain and tees always match.
         let sources = [];
-        if (snap) sources.push({ data: snap, label: 'snapshot', segs: snap.segs });
-        let custom = ArcadeStorage.loadCustomLevel();
-        if (custom) sources.push({ data: custom, label: 'custom', segs: null });
-        let compressed = ArcadeStorage.loadCompressedLevel();
-        if (compressed) sources.push({ data: compressed, label: 'compressed', segs: compressed.segs });
+        if (snap && snap.terrain_heightmap) {
+            sources.push({ data: snap, label: 'snapshot', segs: snap.segs });
+        } else {
+            // Snapshot unusable — load fallback sources
+            if (snap && !snap.terrain_heightmap) {
+                console.warn('Snapshot present but missing terrain_heightmap — loading fallbacks');
+            }
+            let custom = ArcadeStorage.loadCustomLevel();
+            if (custom) sources.push({ data: custom, label: 'custom', segs: null });
+            let compressed = ArcadeStorage.loadCompressedLevel();
+            if (compressed) sources.push({ data: compressed, label: 'compressed', segs: compressed.segs });
+        }
 
         if (sources.length === 0) {
             document.getElementById('loading').style.display = 'none';
@@ -386,11 +413,6 @@
             return false;
         }
 
-        // Fynd 5: log explicitly when snapshot exists but has no terrain_heightmap
-        if (snap && !snap.terrain_heightmap) {
-            console.warn('Snapshot present but missing terrain_heightmap — stale/incomplete snapshot. Clearing.');
-            ArcadeStorage.clearTerrainSnapshot();
-        }
 
         // Fynd 2: track which source applied the heightmap and expose it globally.
         // resolveSpawnPosition() can read window._terrainHeightSourceLabel to pick
@@ -446,9 +468,116 @@
                     const splatTex = window.terrainShaderGeo.buildSplatMap(c, classifyBiomeColor);
                     window._terrainMat.uniforms.u_splat.value = splatTex;
                 }
+                
+                // ── ROAD PIPELINE FIX: rebuild roads from saved data ──
+                // Reconstructs vertex colors (R-channel road mask) and 3D decal meshes
+                // so roads render with full PBR quality in race mode.
+                if (window.raceConfig && window.raceConfig.roads && window.raceConfig.roads.length > 0) {
+                    let roads = window.raceConfig.roads;
+                    // Rebuild sampledPoints from saved nodes (nodes were serialized, sampledPoints were not)
+                    for (let ri = 0; ri < roads.length; ri++) {
+                        let road = roads[ri];
+                        if (!road.nodes || road.nodes.length < 2) continue;
+                        let pts3 = road.nodes.map(function(n) {
+                            return new THREE.Vector3(n.worldX, n.worldY, n.worldZ);
+                        });
+                        let curve = new THREE.CatmullRomCurve3(pts3, false, 'centripetal');
+                        let len = curve.getLength();
+                        let sampleCount = Math.max(2, Math.ceil(len / 2.0));
+                        let sampled = [];
+                        for (let si = 0; si <= sampleCount; si++) {
+                            let t = si / sampleCount;
+                            let pos = curve.getPoint(t);
+                            // Conform Y to loaded terrain
+                            if (typeof window.localGetTerrainAt === 'function') {
+                                let th = window.localGetTerrainAt(pos.x, -pos.z);
+                                if (th && typeof th.z === 'number' && isFinite(th.z)) pos.y = th.z + 0.04;
+                            }
+                            sampled.push(pos);
+                        }
+                        road.sampledPoints = sampled;
+                    }
+                    // Bake vertex color R-channel (road mask) for shader road blending
+                    if (window.terrainShaderGeo) {
+                        window.terrainShaderGeo.bakeRoadVertexColors(roads, planeGeo, TERRAIN_SIZE);
+                    }
+                    // Build road decal overlay meshes (photo-textured gravel/cobblestone)
+                    if (window.roadDecal) {
+                        window.roadDecal.rebuildAll(roads, scene);
+                        window.roadDecal.syncFog(scene);
+                    }
+                    console.log('🛣️ Roads loaded: ' + roads.length + ' road(s) with vertex colors + decals');
+                }
+
+                // ── TREE PIPELINE FIX: render saved trees as procedural InstancedMesh ──
+                if (window._savedTrees && window._savedTrees.length > 0) {
+                    let trees = window._savedTrees;
+                    let trunkGeo = new THREE.CylinderGeometry(0.15, 0.25, 1, 6);
+                    let canopyGeo = new THREE.ConeGeometry(1, 1, 7);
+                    let trunkMat = new THREE.MeshLambertMaterial({ color: 0x5c4033 });
+                    let canopyMat = new THREE.MeshLambertMaterial({ color: 0x2d6b22 });
+                    
+                    let imTrunk = new THREE.InstancedMesh(trunkGeo, trunkMat, trees.length);
+                    let imCanopy = new THREE.InstancedMesh(canopyGeo, canopyMat, trees.length);
+                    imTrunk.castShadow = true;
+                    imCanopy.castShadow = true;
+                    let dummy = new THREE.Object3D();
+                    let placed = 0;
+                    
+                    for (let i = 0; i < trees.length; i++) {
+                        let t = trees[i];
+                        let s = t.s || 1;
+                        let gy = 0;
+                        if (typeof window.getTerrainHeight === 'function') {
+                            gy = window.getTerrainHeight(t.x, t.z);
+                        }
+                        let trunkH = 3.5 * s;
+                        let canopyH = 6.0 * s;
+                        let canopyR = 3.0 * s;
+                        
+                        // Trunk
+                        dummy.position.set(t.x, gy + trunkH / 2, t.z);
+                        dummy.scale.set(s, trunkH, s);
+                        dummy.rotation.set(0, t.r || 0, 0);
+                        dummy.updateMatrix();
+                        imTrunk.setMatrixAt(placed, dummy.matrix);
+                        
+                        // Canopy — color from saved data or default
+                        let col = new THREE.Color(t.c || 0x2d6b22);
+                        imCanopy.setColorAt(placed, col);
+                        
+                        dummy.position.set(t.x, gy + trunkH + canopyH / 2 - 0.5, t.z);
+                        dummy.scale.set(canopyR, canopyH, canopyR);
+                        dummy.updateMatrix();
+                        imCanopy.setMatrixAt(placed, dummy.matrix);
+                        placed++;
+                    }
+                    
+                    imTrunk.count = placed;
+                    imCanopy.count = placed;
+                    imCanopy.instanceColor.needsUpdate = true;
+                    scene.add(imTrunk);
+                    scene.add(imCanopy);
+                    console.log('🌲 Trees loaded: ' + placed + ' procedural trees');
+                }
+
+                // Fallback till "Cartoon-Mode" om spelaren stängt av PBR
+                if (window.raceConfig && window.raceConfig.usePbr === false) {
+                    let tex = new THREE.CanvasTexture(c);
+                    tex.colorSpace = THREE.SRGBColorSpace;
+                    let basicMat = new THREE.MeshLambertMaterial({ map: tex, vertexColors: false });
+                    if (terrainMesh) {
+                        terrainMesh.material = basicMat;
+                        window._terrainMat = basicMat;
+                    }
+                }
                 console.log('✅ Biome texture loaded from', window._terrainHeightSourceLabel || 'snapshot-fallback');
+                window._terrainReady = true; // Signal: biome + roads + trees all loaded
             };
             img.src = biomeSource.terrain_biomemap;
+        } else {
+            // No biome source — terrain is ready immediately (flat/heightmap only)
+            window._terrainReady = true;
         }
 
         return sources.length > 0; // true = rally may start; false = nothing found
@@ -461,6 +590,17 @@
     function resolveSpawnPosition() {
         let level = ArcadeStorage.loadCustomLevel() || ArcadeStorage.loadCompressedLevel();
         if (!level) return null;
+        
+        // TREE PIPELINE FIX: store tree data for rendering after terrain loads
+        if (level.trees && Array.isArray(level.trees) && level.trees.length > 0) {
+            window._savedTrees = level.trees;
+        }
+        
+        // STORAGE FIX: detect snapshot/config mismatch via saveId
+        let snap = ArcadeStorage.loadTerrainSnapshot();
+        if (snap && snap._saveId && level._saveId && snap._saveId !== level._saveId) {
+            console.warn('⚠️ Terrain snapshot (_saveId=' + snap._saveId + ') does not match level config (_saveId=' + level._saveId + '). Terrain and race config may be from different save sessions.');
+        }
         
         // RALLY: read start position + load full race config
         if (level.rally && level.rally.start) {
@@ -487,32 +627,40 @@
     let spawnPos = resolveSpawnPosition(); // may be null
 
     if (terrainLoaded) {
-        // Hide loading, start driving
-        setTimeout(() => {
-            document.getElementById('loading').style.opacity = '0';
-            setTimeout(() => document.getElementById('loading').style.display = 'none', 500);
+        // TIMING FIX: wait for biome img.onload (roads + trees) before spawning car
+        // Polls every 100ms instead of blind 500ms timeout
+        let _startAttempts = 0;
+        function waitForTerrainAndStart() {
+            _startAttempts++;
+            if (window._terrainReady || _startAttempts > 50) { // max 5 sec fallback
+                if (!window._terrainReady) console.warn('⚠️ Terrain not fully ready — starting anyway (timeout)');
+                
+                document.getElementById('loading').style.opacity = '0';
+                setTimeout(() => document.getElementById('loading').style.display = 'none', 500);
 
-            // Activate rally vehicle
-            controls.enabled = false; // Disable orbit controls during driving
-            window.rallyVehicle.activate(scene, camera, controls);
+                // Activate rally vehicle
+                controls.enabled = false;
+                window.rallyVehicle.activate(scene, camera, controls);
 
-            // Override spawn to tee position (after activate sets terrain-height spawn)
-            if (spawnPos && window.rallyVehicle.getCar) {
-                let car = window.rallyVehicle.getCar();
-                // Snap to terrain height at tee XZ
-                if (typeof window.localGetTerrainAt === 'function') {
-                    let t = window.localGetTerrainAt(spawnPos.x, -spawnPos.z);
-                    spawnPos.y = t.z + 0.35 + 1.5; // CAR_HEIGHT + drop margin
+                // Override spawn to saved start position
+                if (spawnPos && window.rallyVehicle.getCar) {
+                    let car = window.rallyVehicle.getCar();
+                    if (typeof window.localGetTerrainAt === 'function') {
+                        let t = window.localGetTerrainAt(spawnPos.x, -spawnPos.z);
+                        spawnPos.y = t.z + 0.35 + 1.5;
+                    }
+                    car.position.copy(spawnPos);
+                    car._spawnPosition = spawnPos.clone();
+                    car._spawnGroundY  = spawnPos.y - 1.5;
+                    if (car.mesh) car.mesh.position.copy(spawnPos);
+                    if (window.rallyRespawn) window.rallyRespawn.init(car);
+                    console.log('✅ Car spawned at tee:', spawnPos.x.toFixed(1), spawnPos.z.toFixed(1));
                 }
-                car.position.copy(spawnPos);
-                car._spawnPosition = spawnPos.clone();
-                car._spawnGroundY  = spawnPos.y - 1.5; // terrain + CAR_HEIGHT, utan drop-margin (Fynd D fix)
-                if (car.mesh) car.mesh.position.copy(spawnPos);
-                // Re-init respawn with corrected spawn position
-                if (window.rallyRespawn) window.rallyRespawn.init(car);
-                console.log('✅ Car spawned at tee:', spawnPos.x.toFixed(1), spawnPos.z.toFixed(1));
+            } else {
+                setTimeout(waitForTerrainAndStart, 100);
             }
-        }, 500);
+        }
+        setTimeout(waitForTerrainAndStart, 200);
     }
 
     // ── Race Logic ──
@@ -527,11 +675,26 @@
         dnf: false,
         checkpointMeshes: [],
         gateMeshes: [],
+        totalLaps: 1,
+        currentLap: 1,
+        lapTimes: [],
+        lastLapSplit: 0,
+        finishArmed: false,
+        carSplineIndex: 0,
+        primaryRoad: null
     };
 
     function initRaceVisuals() {
         let rc = window.raceConfig;
         if (!rc) return;
+        raceState.totalLaps = rc.laps || 1;
+        
+        if (rc.roads && rc.start && rc.start.roadId) {
+            raceState.primaryRoad = rc.roads.find(r => r.id === rc.start.roadId);
+        }
+        if (!raceState.primaryRoad && rc.roads && rc.roads.length > 0) {
+            raceState.primaryRoad = rc.roads[0];
+        }
         
         // Create start gate
         if (rc.start) {
@@ -634,7 +797,11 @@
         h.id = 'race-hud';
         h.innerHTML =
         '<div style="position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:9999;pointer-events:none;font-family:\'Inter\',\'Segoe UI\',sans-serif">' +
-        '<div style="background:rgba(15,23,42,0.92);border:1px solid #334155;border-radius:14px;padding:10px 24px;backdrop-filter:blur(12px);text-align:center;min-width:220px">' +
+        '<div style="background:rgba(15,23,42,0.92);border:1px solid #334155;border-radius:14px;padding:10px 24px;backdrop-filter:blur(12px);text-align:center;min-width:260px">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">' +
+        '  <div style="font-size:12px;color:#94a3b8;font-weight:bold;text-transform:uppercase">Lap <span id="race-lap" style="color:#fff">1/1</span></div>' +
+        '  <div id="race-lastlap" style="font-size:11px;color:#fbbf24;font-weight:bold"></div>' +
+        '</div>' +
         '<div id="race-timer" style="font-size:40px;font-weight:900;color:#4ade80;letter-spacing:-1px;line-height:1">0:00.0</div>' +
         '<div style="display:flex;justify-content:center;gap:16px;margin-top:4px">' +
         '<div><span style="font-size:9px;color:#64748b;text-transform:uppercase;font-weight:bold">Checkpoint</span>' +
@@ -660,9 +827,40 @@
         
         if (raceState.finished || raceState.dnf) return;
         
-        // Detect throttle to start
+        // --- 1. Track Progression (Spline Tracking) ---
+        if (raceState.primaryRoad && raceState.primaryRoad.sampledPoints) {
+            let pts = raceState.primaryRoad.sampledPoints;
+            let minDistSq = Infinity;
+            let closestIdx = raceState.carSplineIndex;
+            let searchStart = Math.max(0, raceState.carSplineIndex - 50);
+            let searchEnd = Math.min(pts.length - 1, raceState.carSplineIndex + 150);
+            
+            if (raceState.carSplineIndex === 0 && raceState.timer < 1.0) {
+                searchStart = 0; searchEnd = pts.length - 1;
+            }
+
+            for(let i = searchStart; i <= searchEnd; i++) {
+                let p = pts[i];
+                let dx = carPos.x - p.x;
+                let dz = carPos.z - p.z;
+                let distSq = dx*dx + dz*dz;
+                if (distSq < minDistSq) { minDistSq = distSq; closestIdx = i; }
+            }
+            raceState.carSplineIndex = closestIdx;
+        }
+
+        // --- 2. Arming Logic (Circuit Support) ---
+        if (!raceState.finishArmed) {
+            let dxA = carPos.x - rc.start.x;
+            let dzA = carPos.z - rc.start.z;
+            if (Math.sqrt(dxA*dxA + dzA*dzA) > 40 || raceState.checkpointsHit.length > 0) {
+                raceState.finishArmed = true;
+                console.log("🏁 Finish Line ARMED!");
+            }
+        }
+        
+        // --- 3. Start Detection ---
         if (!raceState.started) {
-            // Check if car is moving (any velocity)
             let car = window.rallyVehicle.getCar();
             if (car && car._speed && Math.abs(car._speed) > 0.5) {
                 raceState.started = true;
@@ -674,14 +872,19 @@
         
         raceState.timer += dt;
         
-        // Check checkpoints in order
+        // --- 4. Spline-Based Checkpoints ---
         if (rc.checkpoints && raceState.nextCheckpoint < rc.checkpoints.length) {
             let cp = rc.checkpoints[raceState.nextCheckpoint];
+            let validY = Math.abs(carPos.y - cp.y) < 8.0;
+            
+            let passedSpline = cp.splineIndex !== undefined && raceState.carSplineIndex >= cp.splineIndex;
+            
             let dx = carPos.x - cp.x, dz = carPos.z - cp.z;
             let dist = Math.sqrt(dx*dx + dz*dz);
-            if (dist < (cp.radius || 10)) {
+            let inRadius = dist < (cp.radius || 10);
+            
+            if (validY && (inRadius || passedSpline)) {
                 raceState.checkpointsHit.push(raceState.nextCheckpoint);
-                // Flash checkpoint ring green
                 let ring = raceState.checkpointMeshes[raceState.nextCheckpoint];
                 if (ring) {
                     ring.material.color.setHex(0x4ade80);
@@ -692,29 +895,67 @@
                 console.log('📍 Checkpoint ' + raceState.checkpointsHit.length + '/' + rc.checkpoints.length);
             }
         }
-        
-        // Check finish
-        let allCPDone = !rc.checkpoints || raceState.nextCheckpoint >= rc.checkpoints.length;
-        let dxF = carPos.x - rc.finish.x, dzF = carPos.z - rc.finish.z;
-        let distFinish = Math.sqrt(dxF*dxF + dzF*dzF);
-        
-        if (distFinish < 15) {
-            // Check missed checkpoints
-            if (!allCPDone) {
-                let missed = rc.checkpoints.length - raceState.checkpointsHit.length;
-                let rule = rc.missedCheckpointRule || 'PENALTY_5S';
-                if (rule === 'FAIL') {
-                    raceState.dnf = true;
-                    showRaceResult();
-                    return;
-                } else if (rule === 'PENALTY_2S') raceState.penalty += missed * 2;
-                else if (rule === 'PENALTY_5S') raceState.penalty += missed * 5;
-                else if (rule === 'PENALTY_10S') raceState.penalty += missed * 10;
+
+        // --- 5. Finish Line (Strict Checks) ---
+        if (raceState.finishArmed) {
+            let dxF = carPos.x - rc.finish.x, dzF = carPos.z - rc.finish.z;
+            let distFinish = Math.sqrt(dxF*dxF + dzF*dzF);
+            let validFinishY = Math.abs(carPos.y - rc.finish.y) < 8.0;
+            
+            if (distFinish < 15 && validFinishY) {
+                let carForward = new THREE.Vector3(0,0,1).applyQuaternion(window.rallyVehicle.getCar().quaternion);
+                let finishForward = new THREE.Vector3(Math.sin(rc.finish.rotation || 0), 0, Math.cos(rc.finish.rotation || 0));
+                
+                let dot = carForward.x * finishForward.x + carForward.z * finishForward.z;
+                
+                if (dot > 0) { // Must cross forward
+                    let allCPDone = !rc.checkpoints || raceState.nextCheckpoint >= rc.checkpoints.length;
+                    
+                    if (!allCPDone) {
+                        let missed = rc.checkpoints.length - raceState.checkpointsHit.length;
+                        let rule = rc.missedCheckpointRule || 'PENALTY_5S';
+                        if (rule === 'FAIL') {
+                            raceState.dnf = true;
+                            showRaceResult();
+                            return;
+                        } else if (rule === 'PENALTY_2S') raceState.penalty += missed * 2;
+                        else if (rule === 'PENALTY_5S') raceState.penalty += missed * 5;
+                        else if (rule === 'PENALTY_10S') raceState.penalty += missed * 10;
+                    }
+
+                    let currentTotalTime = raceState.timer + raceState.penalty;
+                    let lapTime = currentTotalTime - raceState.lastLapSplit;
+                    raceState.lapTimes.push(lapTime);
+                    raceState.lastLapSplit = currentTotalTime;
+
+                    if (raceState.currentLap < raceState.totalLaps) {
+                        raceState.currentLap++;
+                        raceState.nextCheckpoint = 0;
+                        raceState.checkpointsHit = [];
+                        raceState.finishArmed = false;
+                        raceState.carSplineIndex = 0;
+                        
+                        let msg = document.getElementById('race-lap-msg');
+                        if (msg) msg.remove();
+                        msg = document.createElement('div');
+                        msg.id = 'race-lap-msg';
+                        let min = Math.floor(lapTime / 60);
+                        let sec = Math.floor(lapTime % 60);
+                        let dec = Math.floor((lapTime % 1) * 10);
+                        let timeStr = min + ':' + String(sec).padStart(2, '0') + '.' + dec;
+                        msg.innerHTML = 'VARV ' + (raceState.currentLap - 1) + ' KLART!<br><span style="font-size:20px;color:#fff">' + timeStr + '</span>';
+                        msg.style.cssText = 'position:fixed;top:40%;left:50%;transform:translate(-50%,-50%);z-index:10000;pointer-events:none;' +
+                        'color:#fbbf24;font-size:36px;font-weight:900;font-family:\'Inter\',sans-serif;text-shadow:0 0 30px rgba(251,191,36,0.5);text-align:center;transition:opacity 2s ease;';
+                        document.body.appendChild(msg);
+                        setTimeout(() => { if (msg) msg.style.opacity = '0'; setTimeout(() => { if (msg) msg.remove(); }, 2000); }, 2000);
+                    } else {
+                        raceState.finished = true;
+                        raceState.finalTime = currentTotalTime;
+                        showRaceResult();
+                        return;
+                    }
+                }
             }
-            raceState.finished = true;
-            raceState.finalTime = raceState.timer + raceState.penalty;
-            showRaceResult();
-            return;
         }
         
         // Update HUD
@@ -730,6 +971,18 @@
             let dec = Math.floor((t % 1) * 10);
             te.textContent = min + ':' + String(sec).padStart(2, '0') + '.' + dec;
             te.style.color = raceState.started ? '#4ade80' : '#94a3b8';
+        }
+        let lapEl = document.getElementById('race-lap');
+        if (lapEl) {
+            lapEl.textContent = raceState.currentLap + '/' + raceState.totalLaps;
+        }
+        let lastLapEl = document.getElementById('race-lastlap');
+        if (lastLapEl && raceState.lapTimes.length > 0) {
+            let ll = raceState.lapTimes[raceState.lapTimes.length - 1];
+            let min = Math.floor(ll / 60);
+            let sec = Math.floor(ll % 60);
+            let dec = Math.floor((ll % 1) * 10);
+            lastLapEl.textContent = 'Last: ' + min + ':' + String(sec).padStart(2, '0') + '.' + dec;
         }
         let cp = document.getElementById('race-cp');
         let rc = window.raceConfig;
@@ -764,9 +1017,22 @@
             let dec = Math.floor((t % 1) * 10);
             let timeStr = min + ':' + String(sec).padStart(2, '0') + '.' + dec;
             let penStr = raceState.penalty > 0 ? '<div style="color:#ef4444;font-size:14px;margin-top:4px">Penalty: +' + raceState.penalty + 's</div>' : '';
+            
+            let lapsHtml = '';
+            if (raceState.lapTimes.length > 1) {
+                lapsHtml = '<div style="margin-top:12px;background:rgba(0,0,0,0.3);padding:8px;border-radius:8px;font-size:12px;color:#cbd5e1;text-align:left;max-height:100px;overflow-y:auto;">';
+                raceState.lapTimes.forEach((lt, i) => {
+                    let lm = Math.floor(lt / 60);
+                    let ls = Math.floor(lt % 60);
+                    let ld = Math.floor((lt % 1) * 10);
+                    lapsHtml += '<div style="display:flex;justify-content:space-between;margin-bottom:2px"><span>Varv ' + (i+1) + ':</span><span style="font-family:monospace">' + lm + ':' + String(ls).padStart(2, '0') + '.' + ld + '</span></div>';
+                });
+                lapsHtml += '</div>';
+            }
+            
             d.innerHTML = '<div style="font-size:22px;font-weight:700;color:#4ade80;text-transform:uppercase;letter-spacing:2px">🏁 FINISHED</div>' +
                 '<div style="font-size:56px;font-weight:900;color:#fff;letter-spacing:-2px;margin:8px 0;line-height:1">' + timeStr + '</div>' +
-                penStr +
+                penStr + lapsHtml +
                 '<button onclick="location.reload()" style="margin-top:16px;background:#4ade80;color:#0f172a;border:none;padding:12px 28px;border-radius:10px;font-weight:800;font-size:14px;cursor:pointer">↻ Kör igen</button>';
         }
         document.body.appendChild(d);

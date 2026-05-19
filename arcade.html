@@ -284,7 +284,7 @@
         <div class="top-left">
             <button id="btn-hamburger" class="sys-btn" onclick="toggleMenu()">☰</button>
             <button id="btn-mode-build" class="sys-btn" onclick="setMode('BUILD')" style="border-color:#38bdf8; color:#38bdf8;">🔨 BUILD</button>
-            <button id="btn-mode-play" class="sys-btn" onclick="window.location.href='rally.html'" style="background:#dc2626; border-color:#dc2626; color:#fff;">🏎️ KÖR</button>
+            <button id="btn-mode-play" class="sys-btn" onclick="if(window.EDITOR_MODE === 'rally') launchRally(); else window.location.href='rally.html';" style="background:#dc2626; border-color:#dc2626; color:#fff;">🏎️ KÖR</button>
         </div>
         <!-- CENTER: Asset Budget removed (Managed by Admin) -->
         <div class="top-center">
@@ -511,17 +511,17 @@
         <!-- PAINT Tool Panel (Freehand & Polygon) -->
         <div id="paint-tool-panel" class="prop-panel" style="display:none; flex-direction:column; gap:6px;">
             <div style="display:flex; gap:4px; margin-bottom:6px;">
-                <button id="paint-mode-freehand" onclick="setPaintMode('FREEHAND')" style="flex:1; background:#4ade80; color:#0f172a; border:none; padding:6px 4px; font-size:10px; border-radius:5px; font-weight:bold; cursor:pointer;">🖌️ FRIHAND</button>
+                <button id="paint-mode-freehand" onclick="setPaintMode('FREEHAND')" style="flex:1; background:#4ade80; color:#0f172a; border:none; padding:6px 4px; font-size:10px; border-radius:5px; font-weight:bold; cursor:pointer;">🖌️ FREEHAND</button>
                 <button id="paint-mode-polygon" onclick="setPaintMode('POLYGON')" style="flex:1; background:#334155; color:#94a3b8; border:none; padding:6px 4px; font-size:10px; border-radius:5px; font-weight:bold; cursor:pointer;">📐 POLYGON</button>
             </div>
             <div id="paint-panel-content"></div>
             
             <div id="polygon-actions-container" style="display:none; margin-top:6px;">
                 <div style="display:flex; gap:4px; margin-bottom:4px;">
-                    <button onclick="if(window.undoPolygonPoint) window.undoPolygonPoint();" style="flex:1; background:#334155; color:#94a3b8; border:none; padding:8px 4px; border-radius:5px; font-weight:bold; font-size:10px; cursor:pointer;">↩️ Ångra Punkt</button>
-                    <button onclick="if(window.clearSmartGreen) window.clearSmartGreen();" style="flex:1; background:#ef4444; color:#fff; border:none; padding:8px 4px; border-radius:5px; font-weight:bold; font-size:10px; cursor:pointer;">🗑️ Rensa</button>
+                    <button onclick="if(window.undoPolygonPoint) window.undoPolygonPoint();" style="flex:1; background:#334155; color:#94a3b8; border:none; padding:8px 4px; border-radius:5px; font-weight:bold; font-size:10px; cursor:pointer;">↩️ Undo Point</button>
+                    <button onclick="if(window.clearSmartGreen) window.clearSmartGreen();" style="flex:1; background:#ef4444; color:#fff; border:none; padding:8px 4px; border-radius:5px; font-weight:bold; font-size:10px; cursor:pointer;">🗑️ Clear</button>
                 </div>
-                <button id="btn-execute-polygon" onclick="if(window.executeSmartPaint) window.executeSmartPaint();" style="width:100%; background:linear-gradient(135deg, #8b5cf6, #6366f1); color:#fff; border:none; padding:10px 0; border-radius:6px; font-weight:bold; font-size:12px; cursor:pointer; box-shadow:0 4px 15px rgba(139,92,246,0.4);">🎨 FYLL POLYGON</button>
+                <button id="btn-execute-polygon" onclick="if(window.executeSmartPaint) window.executeSmartPaint();" style="width:100%; background:linear-gradient(135deg, #8b5cf6, #6366f1); color:#fff; border:none; padding:10px 0; border-radius:6px; font-weight:bold; font-size:12px; cursor:pointer; box-shadow:0 4px 15px rgba(139,92,246,0.4);">🎨 FILL POLYGON</button>
             </div>
             <script>
                 window._paintToolMode = 'FREEHAND';
@@ -745,6 +745,12 @@
                             if (typeof window.renderStampLibrary === 'function') window.renderStampLibrary();
                             let countEl = document.getElementById('stamp-count');
                             if (countEl && window._stampLibrary) countEl.textContent = window._stampLibrary.length;
+                            
+                            if (typeof setStampMode === 'function') {
+                                if (!window._stampLibrary || window._stampLibrary.length === 0) {
+                                    setStampMode('CAPTURE');
+                                }
+                            }
                         }
                     }
                     if (mode !== 'STAMP' && typeof sculptBrushCursor !== 'undefined' && sculptBrushCursor) {
@@ -956,6 +962,17 @@
                     </div>
                 </div>
                 
+                <!-- PBR TEXTURES TOGGLE (inside ENV panel) -->
+                <div style="margin-top:10px; padding-top:10px; border-top:1px solid #334155;">
+                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                        <input type="checkbox" id="env-use-pbr" onchange="if(window.raceConfig) window.raceConfig.usePbr = this.checked;" style="accent-color:#6366f1; width:16px; height:16px;" checked>
+                        <span style="color:#94a3b8; font-size:10px; font-weight:bold;">🌟 PBR TEXTURES (RACE MODE)</span>
+                    </label>
+                    <div style="color:#475569; font-size:9px; margin-top:4px; line-height:1.2;">
+                        Checked = Fotorealism i spelet.<br>Unchecked = Platt cartoon-stil.
+                    </div>
+                </div>
+
                 <!-- NATURAL BLEND (inside ENV panel) -->
                 <div style="margin-top:10px; padding-top:10px; border-top:1px solid #334155;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
@@ -4561,6 +4578,7 @@
         checkpoints: [],        // [{x, y, z, radius}, ...]
         checkpointMeshes: [],   // 3D checkpoint rings
         bestTime: null,         // Best lap time (seconds)
+        laps: 1,
         missedCheckpointRule: 'PENALTY_5S',  // NONE | PENALTY_2S | PENALTY_5S | PENALTY_10S | FAIL
     };
     window.raceConfig = raceConfig;
@@ -5030,15 +5048,32 @@
     function updateMemoryBudget() {
         if (appMode !== 'BUILD') return;
         
-        let dumpTargets = targets.map(t => ({ x: t.mesh.position.x, y: t.mesh.position.y, z: t.mesh.position.z, c: t.defColor }));
-        let dumpHoles = courseHoles.map(h => ({ par: h.par, tees: h.tees, flag: h.flag ? {x: h.flag.x, y: h.flag.y, z: h.flag.z, isTarget: h.flag.isTarget} : null, aimPoint: h.aimPoint || null, rangeLinesEnabled: h.rangeLinesEnabled }));
-        let dumpTrees = window.placedTrees ? window.placedTrees.map(t => ({type: t.type, x: t.x, z: t.z, s: t.scale, r: t.rot, c: t.color, tc: t.trunkColor})) : [];
-        let hm = Array.from(planeGeo.attributes.position.array).filter((v, i) => i % 3 === 2); 
-        let w_hm = typeof waterGeo !== 'undefined' ? Array.from(waterGeo.attributes.position.array).filter((v, i) => i % 3 === 2) : [];
+        // PERF FIX: estimate size without copying arrays or JSON.stringify
+        // Old code: Array.from(2.1M floats) + .filter() + JSON.stringify = ~5.6MB GC every 2s
+        // New code: direct byte estimation from known data structures = 0 allocations
+        let vertexCount = planeGeo ? planeGeo.attributes.position.count : 0;
+        let treeCount = window.placedTrees ? window.placedTrees.length : 0;
+        let roadCount = window._builtRoads ? window._builtRoads.length : 0;
+        let targetCount = targets ? targets.length : 0;
+        let holeCount = courseHoles ? courseHoles.length : 0;
+        let waterVertCount = typeof waterGeo !== 'undefined' && waterGeo ? waterGeo.attributes.position.count : 0;
         
-        let baseStr = JSON.stringify({ targets: dumpTargets, holes: dumpHoles, trees: dumpTrees, terrain_heightmap: { ground: hm, water: w_hm, waterTableLevel: window.waterTableLevel, waterType: window.currentWaterType } });
-        let byteSize = new Blob([baseStr]).size;
-        let totalMB = (byteSize / (1024 * 1024)) + 2.5; // +2.5MB uppskattning för texturer (biome map + water mask)
+        // Byte estimates per component (based on actual JSON output measurements)
+        let heightmapBytes = (vertexCount + waterVertCount) * 8; // ~8 bytes per float as JSON number
+        let treeBytes = treeCount * 55;       // ~55 bytes per tree object
+        let roadBytes = 0;
+        if (window._builtRoads) {
+            for (let i = 0; i < window._builtRoads.length; i++) {
+                let r = window._builtRoads[i];
+                roadBytes += (r.nodes ? r.nodes.length * 40 : 0) + 80; // ~40 bytes/node + overhead
+            }
+        }
+        let targetBytes = targetCount * 50;
+        let holeBytes = holeCount * 200;
+        let textureBytes = 2.5 * 1024 * 1024; // ~2.5MB for biome + water textures
+        
+        let totalBytes = heightmapBytes + treeBytes + roadBytes + targetBytes + holeBytes + textureBytes;
+        let totalMB = totalBytes / (1024 * 1024);
         
         let memCur = document.getElementById('mem-current');
         let memBar = document.getElementById('mem-bar');
@@ -5064,29 +5099,44 @@
             surrounding: h.surrounding || null,
             surroundConfig: h.surroundConfig || null
         }));
+        // Serialize placed trees (same format as publish/URL-share)
+        let dumpTrees = window.placedTrees ? window.placedTrees.map(t => ({
+            type: t.type, x: t.x, z: t.z, s: t.scale, r: t.rot, c: t.color, tc: t.trunkColor
+        })) : [];
+        
+        // STORAGE FIX: saveId couples snapshot and custom_level (prevents mismatch)
+        let _saveId = Date.now();
         
         // Rally mode: save raceConfig alongside holes (holes kept for backward compat)
         if (window.EDITOR_MODE === 'rally') {
             let rallyData = {
-                start: raceConfig.start,
-                finish: raceConfig.finish,
+                start: raceConfig.start ? {x: raceConfig.start.x, y: raceConfig.start.y, z: raceConfig.start.z, rotation: raceConfig.start.rotation} : null,
+                finish: raceConfig.finish ? {x: raceConfig.finish.x, y: raceConfig.finish.y, z: raceConfig.finish.z, rotation: raceConfig.finish.rotation} : null,
                 checkpoints: raceConfig.checkpoints.map(cp => ({x: cp.x, y: cp.y, z: cp.z, radius: cp.radius || 10})),
                 bestTime: raceConfig.bestTime,
+                laps: raceConfig.laps || 1,
                 missedCheckpointRule: raceConfig.missedCheckpointRule,
+                usePbr: raceConfig.usePbr !== false,
+                // ROAD PIPELINE FIX: serialize road geometry for rally.html
+                // rally.html rebuilds sampledPoints from nodes (saves ~80% storage)
+                roads: (window._builtRoads || []).map(function(r) {
+                    return {
+                        id: r.id,
+                        nodes: r.nodes,
+                        width: r.width,
+                        material: r.material
+                    };
+                }),
             };
-            ArcadeStorage.saveCustomLevel({ targets: dumpTargets, holes: dumpHoles, rally: rallyData });
+            ArcadeStorage.saveCustomLevel({ targets: dumpTargets, holes: dumpHoles, rally: rallyData, trees: dumpTrees, _saveId: _saveId });
         } else {
-            ArcadeStorage.saveCustomLevel({ targets: dumpTargets, holes: dumpHoles });
+            ArcadeStorage.saveCustomLevel({ targets: dumpTargets, holes: dumpHoles, trees: dumpTrees, _saveId: _saveId });
         }
 
         // ── Terrain snapshot for rally.html ──────────────────────────────
         // Saves H16 heightmap + biome PNG so rally.html can drive sculpted terrain.
-        // Fixes applied here:
-        //  - Chunked btoa (no apply() stack overflow on 600-seg heightmaps)
-        //  - Int16 height clamp: ±327m hard limit prevents silent wraparound
-        //  - Saves TERRAIN_SEGS as metadata so rally.html can resample if needed
-        //  - PNG (lossless) for biomemap: avoids JPEG artefacts near surface borders
-        //  - Clears stale snapshot on failure so old terrain isn't prioritised
+        // STORAGE FIX: saveId links snapshot to custom_level (prevents mismatch)
+        // STORAGE FIX: biome canvas downsampled 4096→2048 (PNG ~75% smaller)
         try {
             if (typeof pako !== 'undefined' && planeGeo) {
                 let pos = planeGeo.attributes.position.array;
@@ -5106,9 +5156,16 @@
                     binary += String.fromCharCode.apply(null, compressed.subarray(i, i + CHUNK));
                 }
                 let heightmapH16 = 'H16|' + btoa(binary);
-                // PNG (lossless) — JPEG artefacts near OB/WATER edges cause wrong surface type
-                let biomemap = (typeof pCtx !== 'undefined' && pCtx) ? pCtx.canvas.toDataURL('image/png') : null;
-                let ok = ArcadeStorage.saveTerrainSnapshot(heightmapH16, biomemap, TERRAIN_SEGS);
+                // STORAGE FIX: downsample 4096→2048 to reduce PNG size from ~3MB to ~800KB
+                let biomemap = null;
+                if (typeof pCtx !== 'undefined' && pCtx) {
+                    let exportCanvas = document.createElement('canvas');
+                    exportCanvas.width = exportCanvas.height = 2048;
+                    let ectx = exportCanvas.getContext('2d');
+                    ectx.drawImage(pCtx.canvas, 0, 0, 2048, 2048);
+                    biomemap = exportCanvas.toDataURL('image/png');
+                }
+                let ok = ArcadeStorage.saveTerrainSnapshot(heightmapH16, biomemap, TERRAIN_SEGS, _saveId);
                 if (!ok) {
                     // Save failed (storage full?) — clear stale snapshot so rally
                     // doesn't load old terrain instead of falling back to flat
@@ -5127,7 +5184,7 @@
         }
         // ─────────────────────────────────────────────────────────────────
 
-        if (appMode === 'BUILD') window.hasUnsavedChanges = true;
+        if (appMode === 'BUILD') window.hasUnsavedChanges = false;
     }
 
     
@@ -5230,6 +5287,79 @@
         window._bypassCapture = false;
     };
 
+    window.validateRallyTrack = function(showErrorFn) {
+        if (!window._builtRoads || window._builtRoads.length === 0) {
+            showErrorFn("Rally bana kräver en väg (Road Spline). Dra en väg först.");
+            return false;
+        }
+        if (!raceConfig.start) {
+            showErrorFn("Placera ut START på vägen.");
+            return false;
+        }
+        if (!raceConfig.finish) {
+            showErrorFn("Placera ut MÅL på vägen.");
+            return false;
+        }
+        
+        // Spline order validation
+        let sIdx = raceConfig.start.splineIndex;
+        let fIdx = raceConfig.finish.splineIndex;
+        if (sIdx === undefined || fIdx === undefined) {
+            showErrorFn("Start och Mål är gamla/friflygande. Placera om dem så de snäpper fast på vägen.");
+            return false;
+        }
+        
+        if (raceConfig.start.roadId !== raceConfig.finish.roadId) {
+             showErrorFn("Start och Mål måste sitta på samma väg.");
+             return false;
+        }
+        
+        let checkpointsValid = true;
+        let lastIdx = sIdx;
+        for (let i = 0; i < raceConfig.checkpoints.length; i++) {
+            let cp = raceConfig.checkpoints[i];
+            if (cp.roadId !== raceConfig.start.roadId) {
+                showErrorFn("Checkpoint " + (i+1) + " sitter på fel väg.");
+                checkpointsValid = false; break;
+            }
+            if (cp.splineIndex === undefined || cp.splineIndex <= lastIdx) {
+                showErrorFn("Checkpoint " + (i+1) + " är placerad före föregående markör längs vägen. Ta bort den och placera i rätt ordning.");
+                checkpointsValid = false; break;
+            }
+            lastIdx = cp.splineIndex;
+        }
+        if (!checkpointsValid) return false;
+        
+        // SPRINT vs CIRCUIT check
+        let isCircuit = (raceConfig.laps || 1) > 1;
+        if (isCircuit) {
+            let dx = raceConfig.start.x - raceConfig.finish.x;
+            let dz = raceConfig.start.z - raceConfig.finish.z;
+            let dist = Math.sqrt(dx*dx + dz*dz);
+            if (dist > 30) {
+                showErrorFn("Circuit (" + raceConfig.laps + " varv) kräver att Start och Mål sitter på varandra (Loop).");
+                return false;
+            }
+        } else {
+            if (fIdx <= lastIdx && lastIdx !== sIdx) { // lastIdx !== sIdx protects track with no checkpoints
+                showErrorFn("Mållinjen måste sitta efter sista checkpointen.");
+                return false;
+            }
+        }
+        
+        return true;
+    };
+
+    window.launchRally = function() {
+        let valid = window.validateRallyTrack(function(msg) {
+            if (window.showBuildToast) window.showBuildToast('⚠️ ' + msg, '#ef4444');
+        });
+        if (valid) {
+            saveLevel();
+            window.location.href = 'rally.html';
+        }
+    };
+
     window.publishCourse = async function(options = { isDraft: false, overwrite: false }) {
         let name = document.getElementById('course-name-input').value;
         let author = document.getElementById('author-name-input').value;
@@ -5244,12 +5374,17 @@
         if(!name && !options.isDraft) { showError("Please enter a course name!"); return; }
         
         if (!options.isDraft) {
-            let isRange = (new URLSearchParams(window.location.search)).get('mode') === 'range' || window._isRangeMode;
-            if (!isRange) {
-                let h1HasTee = courseHoles[0].tees && (courseHoles[0].tees.red || courseHoles[0].tees.yellow || courseHoles[0].tees.white || courseHoles[0].tees.black);
-                if(!h1HasTee || !courseHoles[0].flag) {
-                    showError("Validation Error: You must build at least Hole 1 with a Tee and a Flag.");
-                    return;
+            if (window.EDITOR_MODE === 'rally') {
+                let valid = window.validateRallyTrack(showError);
+                if (!valid) return;
+            } else {
+                let isRange = (new URLSearchParams(window.location.search)).get('mode') === 'range' || window._isRangeMode;
+                if (!isRange) {
+                    let h1HasTee = courseHoles[0].tees && (courseHoles[0].tees.red || courseHoles[0].tees.yellow || courseHoles[0].tees.white || courseHoles[0].tees.black);
+                    if(!h1HasTee || !courseHoles[0].flag) {
+                        showError("Validation Error: You must build at least Hole 1 with a Tee and a Flag.");
+                        return;
+                    }
                 }
             }
         }
@@ -5412,14 +5547,29 @@
             }
 
             let payload = {
-                v: 2, // Version 2: includes terrain_segs
+                v: 3, // Version 3: includes rally config
                 h: dumpHoles,
                 t: dumpTargets,
                 r: dumpTrees,
                 m: heights,
                 w: waterHeights.length > 0 ? waterHeights : undefined,
-                segs: TERRAIN_SEGS // Save current resolution for load-time validation
+                segs: TERRAIN_SEGS
             };
+            
+            // SAVE/LOAD FIX: include rally config in URL-share
+            if (window.EDITOR_MODE === 'rally' && typeof raceConfig !== 'undefined') {
+                payload.rl = {
+                    s: raceConfig.start ? {x: raceConfig.start.x, y: raceConfig.start.y, z: raceConfig.start.z, rotation: raceConfig.start.rotation} : null,
+                    f: raceConfig.finish ? {x: raceConfig.finish.x, y: raceConfig.finish.y, z: raceConfig.finish.z, rotation: raceConfig.finish.rotation} : null,
+                    cp: (raceConfig.checkpoints || []).map(function(cp) { return {x: cp.x, y: cp.y, z: cp.z, r: cp.radius || 10}; }),
+                    laps: raceConfig.laps || 1,
+                    rule: raceConfig.missedCheckpointRule,
+                    pbr: raceConfig.usePbr !== false,
+                    roads: (window._builtRoads || []).map(function(rd) {
+                        return { id: rd.id, nodes: rd.nodes, width: rd.width, material: rd.material };
+                    })
+                };
+            }
 
             let json = JSON.stringify(payload);
             
@@ -5499,14 +5649,27 @@
             let json = pako.inflate(bytes, { to: 'string' });
             let data = JSON.parse(json);
             
-            if (data.v !== 1) { console.warn('Unknown share format version:', data.v); }
+            if (data.v !== 1 && data.v !== 2 && data.v !== 3) { console.warn('Unknown share format version:', data.v); }
             
             // Convert compact format back to loadLevel format
             let result = {
                 targets: data.t || [],
                 holes: data.h || [],
-                trees: (data.r || []).map(t => ({type: t.t, x: t.x, z: t.z, s: t.s, r: t.r}))
+                trees: (data.r || []).map(t => ({type: t.t, x: t.x, z: t.z, s: t.s, r: t.r, c: t.c}))
             };
+            
+            // SAVE/LOAD FIX: restore rally config from URL-share (v3+)
+            if (data.rl) {
+                result.rally = {
+                    start: data.rl.s,
+                    finish: data.rl.f,
+                    checkpoints: (data.rl.cp || []).map(function(cp) { return {x: cp.x, y: cp.y, z: cp.z, radius: cp.r || 10}; }),
+                    laps: data.rl.laps || 1,
+                    missedCheckpointRule: data.rl.rule || 'PENALTY_5S',
+                    usePbr: data.rl.pbr !== false,
+                    roads: data.rl.roads || []
+                };
+            }
             
             // _resampleHeightmap is now defined at top-level scope (always available)
 
@@ -5794,8 +5957,19 @@
                     raceConfig.finish = rd.finish || null;
                     raceConfig.checkpoints = rd.checkpoints || [];
                     raceConfig.bestTime = rd.bestTime || null;
+                    raceConfig.laps = rd.laps || 1;
                     raceConfig.missedCheckpointRule = rd.missedCheckpointRule || 'PENALTY_5S';
+                    raceConfig.usePbr = rd.usePbr !== false;
                     
+                    // ROAD PIPELINE FIX: restore saved roads (always reset to prevent stale data)
+                    window._builtRoads = (rd.roads && rd.roads.length > 0) ? rd.roads : [];
+                    
+                    let lapsEl = document.getElementById('sb-race-laps');
+                    if (lapsEl) lapsEl.value = raceConfig.laps;
+                    
+                    let pbrEl = document.getElementById('env-use-pbr');
+                    if (pbrEl) pbrEl.checked = raceConfig.usePbr;
+
                     // Recreate start gate mesh
                     if (raceConfig.startMesh) { scene.remove(raceConfig.startMesh); raceConfig.startMesh = null; }
                     if (raceConfig.start && typeof createRallyGate === 'function') {
@@ -8767,16 +8941,25 @@
             document.getElementById('measure-hud').style.display = 'block';
             updateMeasureHudCount();
         }
-        if(toolName !== 'SPLINE') {
+        if(toolName !== 'SPLINE' && toolName !== 'INSPECT') {
             let pnl = document.getElementById('spline-action-panel');
             if(pnl) pnl.style.display = 'none';
             if(typeof window.clearSpline === 'function') window.clearSpline();
+        } else if (toolName === 'INSPECT') {
+            let pnl = document.getElementById('spline-action-panel');
+            if(pnl) pnl.style.display = 'none';
         }
-        if(toolName !== 'SMART_BUILDER') {
+        
+        if(toolName !== 'SMART_BUILDER' && toolName !== 'INSPECT') {
             let sgPnl = document.getElementById('smart-green-action-panel');
             if(sgPnl) sgPnl.style.display = 'none';
             if(typeof window.clearSmartGreen === 'function') window.clearSmartGreen();
             // Restore right toolbar
+            let rt = document.getElementById('right-toolbar');
+            if(rt) rt.style.display = '';
+        } else if (toolName === 'INSPECT') {
+            let sgPnl = document.getElementById('smart-green-action-panel');
+            if(sgPnl) sgPnl.style.display = 'none';
             let rt = document.getElementById('right-toolbar');
             if(rt) rt.style.display = '';
         } else {
@@ -9088,15 +9271,33 @@
                         sculptBrushCursor.geometry = new THREE.RingGeometry(stampRadius - 0.8, stampRadius, 64);
                         currentBrushSize = stampRadius; // Prevent re-creating every frame
                     }
-                } else if(currentTool === 'SMART_BUILDER' && window.EDITOR_MODE === 'rally' && (window._smartBuilderType === 'TEE' || window._smartBuilderType === 'GREEN')) {
+                } else if(currentTool === 'SMART_BUILDER' && window.EDITOR_MODE === 'rally' && (window._smartBuilderType === 'TEE' || window._smartBuilderType === 'GREEN' || window._smartBuilderType === 'AIM')) {
                     sculptBrushCursor.visible = false;
                     
-                    if (!window._rallyGateManualRotation) {
-                        let autoRot = autoAlignToRoad(lastHitPoint.x, lastHitPoint.z);
-                        if (autoRot !== null) window._rallyGateRotation = autoRot;
+                    // ── SPLINE SNAPPING ──
+                    if (typeof window.getNearestRoadPoint === 'function') {
+                        let snapData = window.getNearestRoadPoint(lastHitPoint);
+                        if (snapData) {
+                            lastHitPoint.copy(snapData.point);
+                            if (!window._rallyGateManualRotation) {
+                                // Calculate angle from tangent (tangent points in the direction of the road)
+                                window._rallyGateRotation = Math.atan2(snapData.tangent.x, snapData.tangent.z);
+                            }
+                        } else {
+                            if (!window._rallyGateManualRotation) {
+                                let autoRot = autoAlignToRoad(lastHitPoint.x, lastHitPoint.z);
+                                if (autoRot !== null) window._rallyGateRotation = autoRot;
+                            }
+                        }
                     }
                     
                     let isStart = window._smartBuilderType === 'TEE';
+                    let isFinish = window._smartBuilderType === 'GREEN';
+                    let isCheckpoint = window._smartBuilderType === 'AIM';
+                    
+                    if (window._ghostRallyStart) window._ghostRallyStart.visible = false;
+                    if (window._ghostRallyFinish) window._ghostRallyFinish.visible = false;
+                    if (window._ghostRallyCheckpoint) window._ghostRallyCheckpoint.visible = false;
                     
                     if (isStart) {
                         if (!window._ghostRallyStart) {
@@ -9111,7 +9312,7 @@
                             window._ghostRallyStart.rotation.y = window._rallyGateRotation || 0;
                             window._ghostRallyStart.visible = true;
                         }
-                    } else {
+                    } else if (isFinish) {
                         if (!window._ghostRallyFinish) {
                             if (typeof createRallyGate === 'function') {
                                 window._ghostRallyFinish = createRallyGate(0, 0, 0, 'finish');
@@ -9123,6 +9324,20 @@
                             window._ghostRallyFinish.position.copy(lastHitPoint);
                             window._ghostRallyFinish.rotation.y = window._rallyGateRotation || 0;
                             window._ghostRallyFinish.visible = true;
+                        }
+                    } else if (isCheckpoint) {
+                        if (!window._ghostRallyCheckpoint) {
+                            let ring = new THREE.Mesh(
+                                new THREE.TorusGeometry(5, 0.25, 8, 24),
+                                new THREE.MeshLambertMaterial({ color: 0xfacc15, transparent: true, opacity: 0.4 })
+                            );
+                            ring.rotation.x = Math.PI / 2;
+                            window._ghostRallyCheckpoint = ring;
+                            scene.add(window._ghostRallyCheckpoint);
+                        }
+                        if (window._ghostRallyCheckpoint) {
+                            window._ghostRallyCheckpoint.position.set(lastHitPoint.x, lastHitPoint.y + 3, lastHitPoint.z);
+                            window._ghostRallyCheckpoint.visible = true;
                         }
                     }
                 } else {
@@ -9538,6 +9753,14 @@
             // Apply Manual Target Height if "Match Ground" is unchecked
             if (window.rampSnapToGround === false) {
                 B.y = A.y + (window.rampEndOffset || 0);
+            } else {
+                // BUG FIX: Fetch original height from snapshot so the ramp doesn't creep up on itself
+                let gx = Math.round((B.x + (TERRAIN_SIZE/2)) / (TERRAIN_SIZE/TERRAIN_SEGS));
+                let gz = Math.round((B.z + (TERRAIN_SIZE/2)) / (TERRAIN_SIZE/TERRAIN_SEGS));
+                gx = Math.max(0, Math.min(TERRAIN_SEGS, gx));
+                gz = Math.max(0, Math.min(TERRAIN_SEGS, gz));
+                let idx = gz * (TERRAIN_SEGS+1) + gx;
+                B.y = window.rampSnapshotHeights[idx*3 + 2];
             }
             
             let R = currentBrushSize;
@@ -11295,16 +11518,31 @@ window.triggerExplosion = function(x, y, z) {
         <button onclick="window.removeLastCheckpoint()" style="background:#ef4444; color:#fff; border:none; padding:6px 10px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer; width:100%;">❌ Ångra Sista CP</button>
     </div>
     
-    <!-- Rally: Checkpoint Rule -->
+    <!-- Rally: Checkpoint Rule and Laps -->
     <div id="sb-rally-rules" style="display:none; margin-bottom:4px;">
-        <div style="color:#64748b; font-size:9px; font-weight:bold; text-transform:uppercase; margin-bottom:4px; text-align:left;">Missad Checkpoint</div>
-        <select id="sb-cp-rule" onchange="if(window.raceConfig) { window.raceConfig.missedCheckpointRule = this.value; if(window.saveLevel) window.saveLevel(); }" style="width:100%; background:#1e293b; color:#e2e8f0; border:1px solid #334155; border-radius:5px; padding:5px; font-size:11px; font-weight:bold;">
-            <option value="NONE">Ingen straff</option>
-            <option value="PENALTY_2S">+2 sek</option>
-            <option value="PENALTY_5S" selected>+5 sek</option>
-            <option value="PENALTY_10S">+10 sek</option>
-            <option value="FAIL">DNF (Diskvalificerad)</option>
-        </select>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+            <div>
+                <div style="color:#64748b; font-size:9px; font-weight:bold; text-transform:uppercase; margin-bottom:4px; text-align:left;">Missad CP</div>
+                <select id="sb-cp-rule" onchange="if(window.raceConfig) { window.raceConfig.missedCheckpointRule = this.value; if(window.saveLevel) window.saveLevel(); }" style="width:100%; background:#1e293b; color:#e2e8f0; border:1px solid #334155; border-radius:5px; padding:5px; font-size:11px; font-weight:bold;">
+                    <option value="NONE">Inget straff</option>
+                    <option value="PENALTY_2S">+2 sek</option>
+                    <option value="PENALTY_5S" selected>+5 sek</option>
+                    <option value="PENALTY_10S">+10 sek</option>
+                    <option value="FAIL">DNF</option>
+                </select>
+            </div>
+            <div>
+                <div style="color:#64748b; font-size:9px; font-weight:bold; text-transform:uppercase; margin-bottom:4px; text-align:left;">Antal Varv</div>
+                <select id="sb-race-laps" onchange="if(window.raceConfig) { window.raceConfig.laps = parseInt(this.value); if(window.saveLevel) window.saveLevel(); }" style="width:100%; background:#1e293b; color:#e2e8f0; border:1px solid #334155; border-radius:5px; padding:5px; font-size:11px; font-weight:bold;">
+                    <option value="1" selected>1 Varv</option>
+                    <option value="2">2 Varv</option>
+                    <option value="3">3 Varv</option>
+                    <option value="4">4 Varv</option>
+                    <option value="5">5 Varv</option>
+                    <option value="10">10 Varv</option>
+                </select>
+            </div>
+        </div>
     </div>
 
     <!-- Separator between type selector and controls -->
@@ -11404,7 +11642,13 @@ window.triggerExplosion = function(x, y, z) {
 
     <!-- PAINT controls -->
     <div id="sb-paint-controls" style="display:none;">
-        <div style="color:#64748b; font-size:9px; font-weight:bold; text-transform:uppercase; margin-bottom:4px; text-align:left;">Surface Type</div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+            <div style="color:#64748b; font-size:9px; font-weight:bold; text-transform:uppercase;">Surface Type</div>
+            <select id="sp-palette-select" onchange="window.setPaintPalette(this.value)" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; font-size:9px; font-weight:bold; padding:2px; border-radius:3px; outline:none; cursor:pointer;">
+                <option value="GOLF">Golf-färger</option>
+                <option value="RALLY">Natur / Rally</option>
+            </select>
+        </div>
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:3px; margin-bottom:6px;">
             <button id="sp-foregreen" onclick="setSmartPaintSurface('foregreen')" class="sp-btn" style="border:2px solid transparent; padding:5px 3px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer; color:#fff; text-shadow:1px 1px 2px rgba(0,0,0,0.8);">Foregreen</button>
             <button id="sp-fairway" onclick="setSmartPaintSurface('fairway')" class="sp-btn" style="border:2px solid transparent; padding:5px 3px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer; color:#fff; text-shadow:1px 1px 2px rgba(0,0,0,0.8);">Fairway</button>
@@ -11490,6 +11734,22 @@ window.triggerExplosion = function(x, y, z) {
             <label style="color:#94a3b8; font-size:9px; font-weight:bold; text-transform:uppercase;">Shoulder <span id="sr-shoulder-val" style="color:#38bdf8;">4m</span></label>
             <input type="range" id="sr-road-shoulder" min="1" max="12" value="4" step="1" oninput="window._smartRoadShoulder = parseInt(this.value); document.getElementById('sr-shoulder-val').textContent = this.value + 'm';" style="width:100%; accent-color:#38bdf8; cursor:pointer;">
             <div style="display:flex; justify-content:space-between; color:#475569; font-size:8px; margin-bottom:6px;"><span>1m Brant</span><span>12m Mjuk</span></div>
+            
+            <div style="display:flex; align-items:center; gap:6px; margin-top:2px;">
+                <input type="checkbox" id="sr-shoulder-noise-cb" onchange="window._smartRoadShoulderNoise = this.checked;" style="accent-color:#38bdf8; cursor:pointer;">
+                <label for="sr-shoulder-noise-cb" style="color:#94a3b8; font-size:9px; font-weight:bold; text-transform:uppercase; cursor:pointer;" title="Skapar stenig, oregelbunden terräng på väggrenarna">Rugged Shoulders (Noise)</label>
+            </div>
+        </div>
+
+        <div style="height:1px; background:#334155; margin:8px 0;"></div>
+
+        <!-- Banking / Velodrom -->
+        <div id="sr-bank-opts" style="display:flex; flex-direction:column; margin-bottom:8px;">
+            <label style="color:#94a3b8; font-size:9px; font-weight:bold; text-transform:uppercase; display:flex; justify-content:space-between;">
+                Auto-Velodrom <span id="sr-bank-val" style="color:#a78bfa;">0%</span>
+            </label>
+            <input type="range" id="sr-bank-slider" min="0" max="100" step="5" value="0" oninput="document.getElementById('sr-bank-val').textContent = this.value + '%'; window._smartRoadBanking = parseInt(this.value);" style="width:100%; accent-color:#a78bfa; cursor:pointer;" title="Lutar automatiskt kurvor inåt baserat på skärpa">
+            <div style="display:flex; justify-content:space-between; color:#475569; font-size:8px; margin-bottom:2px;"><span>Platt Väg</span><span>Maximal Auto-lutning</span></div>
         </div>
 
         <div style="height:1px; background:#334155; margin:8px 0;"></div>
@@ -11499,6 +11759,7 @@ window.triggerExplosion = function(x, y, z) {
             <button id="sr-surf-gravel" onclick="window._smartRoadSurface='GRAVEL'; setRoadSurface('GRAVEL')" style="background:#334155; color:#94a3b8; border:none; padding:5px 4px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer;">🪨 Grus</button>
             <button id="sr-surf-asphalt" onclick="window._smartRoadSurface='ASPHALT'; setRoadSurface('ASPHALT')" style="background:#334155; color:#94a3b8; border:none; padding:5px 4px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer;">⬛ Asfalt</button>
             <button id="sr-surf-dirt" onclick="window._smartRoadSurface='DIRT'; setRoadSurface('DIRT')" style="background:#334155; color:#94a3b8; border:none; padding:5px 4px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer;">🟫 Jord</button>
+            <button id="sr-surf-gap" onclick="window._smartRoadSurface='GAP'; setRoadSurface('GAP')" style="background:#334155; color:#94a3b8; border:none; padding:5px 4px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer;" title="Svävande överhopp utan väg">🛫 Gap</button>
         </div>
         <div id="sr-gravel-opts" style="display:none;">
             <label style="color:#94a3b8; font-size:9px; font-weight:bold; text-transform:uppercase;">Stones <span id="sr-stone-val" style="color:#a78bfa;">50%</span></label>
@@ -11574,6 +11835,25 @@ window.triggerExplosion = function(x, y, z) {
             if(gravelOpts) gravelOpts.style.display = (type === 'GRAVEL') ? 'block' : 'none';
         }
 
+        window._paintPalette = 'GOLF';
+        window.setPaintPalette = function(pal) {
+            window._paintPalette = pal;
+            var rallyNames = {foregreen:'Klippa / Berg', fairway:'Ljust Grus', semi:'Brun Jord', rough:'Mörk Lera', fescue:'Tät Skog', bunker:'Öken / Sand', waste:'Ljus Gräs', ob:'Asfalt'};
+            var golfNames = {foregreen:'Foregreen', fairway:'Fairway', semi:'Semi-rough', rough:'Rough', fescue:'Deep Rough', bunker:'Sand', waste:'Waste', ob:'OB'};
+            var names = (pal === 'RALLY') ? rallyNames : golfNames;
+            
+            document.getElementById('sp-foregreen').textContent = names.foregreen;
+            document.getElementById('sp-fairway').textContent = names.fairway;
+            document.getElementById('sp-semi').textContent = names.semi;
+            document.getElementById('sp-rough').textContent = names.rough;
+            document.getElementById('sp-fescue').textContent = names.fescue;
+            document.getElementById('sp-bunker').textContent = names.bunker;
+            document.getElementById('sp-waste').textContent = names.waste;
+            document.getElementById('sp-ob').textContent = names.ob;
+            
+            setSmartPaintSurface(window._smartPaintSurface || 'foregreen');
+        };
+
         function setSmartPaintSurface(surface) {
             window._smartPaintSurface = surface;
             var cfg = window.CURRENT_BIOME_CONFIG;
@@ -11591,6 +11871,27 @@ window.triggerExplosion = function(x, y, z) {
                 custom: document.getElementById('sp-custom-color').value
             };
             var nameMap = {foregreen:'Foregreen', fairway:'Fairway', semi:'Semi-rough', rough:'Rough', fescue:'Deep Rough', green:'Green', bunker:'Sand', waste:'Waste', water:'Water', ob:'OB', custom:'Custom'};
+            
+            if (window._paintPalette === 'RALLY') {
+                colorMap.foregreen = '#64748b'; // Klippa
+                colorMap.fairway = '#9ca3af';   // Grus
+                colorMap.semi = '#713f12';      // Jord
+                colorMap.rough = '#451a03';     // Lera
+                colorMap.fescue = '#14532d';    // Tät Skog
+                colorMap.bunker = '#d4b483';    // Öken/Sand
+                colorMap.waste = '#84cc16';     // Ljus Gräs
+                colorMap.ob = '#1e293b';        // Asfalt
+                
+                nameMap.foregreen = 'Klippa / Berg';
+                nameMap.fairway = 'Ljust Grus';
+                nameMap.semi = 'Brun Jord';
+                nameMap.rough = 'Mörk Lera';
+                nameMap.fescue = 'Tät Skog';
+                nameMap.bunker = 'Öken / Sand';
+                nameMap.waste = 'Ljus Gräs';
+                nameMap.ob = 'Asfalt';
+            }
+            
             var color = colorMap[surface] || '#7db952';
             window._smartPaintColor = color;
             window.activeColor = color;

@@ -125,10 +125,10 @@
 
             for (let i = 0; i < count; i++) {
                 // PlaneGeometry: positions[i*3]=localX, [i*3+1]=localY, [i*3+2]=height
-                // After rotation -90°X: localX=worldX, localY=worldZ (NOT -worldZ here
-                // because we read raw geometry — not post-rotation world coords)
+                // After rotation -90°X: localX=worldX, localY=-worldZ
+                // sampledPoints use worldZ, so we negate localY to match
                 const vx = positions[i * 3];
-                const vz = positions[i * 3 + 1]; // ← localY = worldZ in terrain plane
+                const vz = -positions[i * 3 + 1]; // localY = -worldZ → negate to get worldZ
 
                 let minDist = Infinity;
                 for (let j = 0; j < pts.length - 1; j++) {

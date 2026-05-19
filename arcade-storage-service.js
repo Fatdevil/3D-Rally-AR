@@ -69,12 +69,13 @@ window.ArcadeStorage = {
     // ----- TERRAIN SNAPSHOT (rally.html reads this) -----
     // Saves a compact heightmap (H16 format) + biome data URL so rally.html
     // can reconstruct the sculpted terrain without needing the server.
-    saveTerrainSnapshot(heightmapH16, biomemapDataUrl, segs) {
+    saveTerrainSnapshot(heightmapH16, biomemapDataUrl, segs, saveId) {
         try {
             const snap = {
                 terrain_heightmap: heightmapH16,
                 terrain_biomemap: biomemapDataUrl,
                 segs: segs || 600,   // segment count — used by rally.html to detect resample need
+                _saveId: saveId || Date.now(),  // links to arcade_custom_level._saveId
                 ts: Date.now()
             };
             localStorage.setItem(this.KEYS.TERRAIN_SNAP, JSON.stringify(snap));
