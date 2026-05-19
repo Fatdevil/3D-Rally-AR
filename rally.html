@@ -653,6 +653,10 @@
                     car._spawnPosition = spawnPos.clone();
                     car._spawnGroundY  = spawnPos.y - 1.5;
                     if (car.mesh) car.mesh.position.copy(spawnPos);
+                    if (level.rally && level.rally.start && level.rally.start.rotation !== undefined) {
+                        car.heading = level.rally.start.rotation;
+                        if (car.mesh) car.mesh.rotation.y = car.heading;
+                    }
                     if (window.rallyRespawn) window.rallyRespawn.init(car);
                     console.log('✅ Car spawned at tee:', spawnPos.x.toFixed(1), spawnPos.z.toFixed(1));
                 }
