@@ -1181,9 +1181,13 @@ function createHUD() {
     if (isMobile) {
         innerHTML = `
         <div style="background:rgba(15,23,42,0.92);border:1px solid #334155;border-radius:16px;padding:10px 18px;backdrop-filter:blur(12px);display:flex;align-items:center;gap:14px;pointer-events:none;box-shadow:0 8px 32px rgba(0,0,0,0.3)">
-            <div style="text-align:center;min-width:55px;">
+            <div style="text-align:center;min-width:65px;position:relative;">
                 <div id="rally-speed" style="font-size:32px;font-weight:900;color:#4ade80;letter-spacing:-1px;line-height:1">0</div>
                 <div style="font-size:9px;color:#64748b;font-weight:bold;text-transform:uppercase;letter-spacing:1px;margin-top:1px">km/h</div>
+                <!-- Gear Box (Mobile) -->
+                <div style="position:absolute;top:-4px;right:-8px;background:#1e293b;border:1px solid #38bdf8;border-radius:4px;padding:1px 4px;font-size:10px;font-weight:900;color:#38bdf8;line-height:1">
+                    G:<span id="rally-gear">1</span>
+                </div>
             </div>
             <div style="width:1px;height:30px;background:#334155"></div>
             <div style="display:flex;flex-direction:column;gap:1px;font-size:10px;font-weight:bold">
@@ -1199,27 +1203,69 @@ function createHUD() {
                 </div>
                 <div id="rally-damage-text" style="font-size:9px;color:#4ade80;font-weight:bold;margin-top:2px;text-align:right">0%</div>
             </div>
+            <!-- Dummy elements to prevent JS errors on mobile -->
+            <div id="rally-tyre-info" style="display:none"></div>
+            <div id="rally-weather" style="display:none"></div>
+            <div id="rally-rpm-fill" style="display:none"></div>
+            <div id="rally-rpm-val" style="display:none"></div>
             <div id="rally-drift-badge" style="font-size:10px;font-weight:900;color:#f97316;opacity:0;transition:opacity 0.2s;position:absolute;bottom:-18px;left:50%;transform:translateX(-50%)">🔥 DRIFT</div>
         </div>`;
     } else {
         innerHTML = `
-        <div style="background:rgba(15,23,42,0.92);border:1px solid #334155;border-radius:16px;padding:16px 24px;backdrop-filter:blur(12px);min-width:180px;text-align:center">
-        <div id="rally-speed" style="font-size:52px;font-weight:900;color:#38bdf8;letter-spacing:-2px;line-height:1">0</div>
-        <div style="font-size:11px;color:#64748b;font-weight:bold;text-transform:uppercase;letter-spacing:2px;margin-top:2px">km/h</div>
-        <div style="height:1px;background:#334155;margin:10px 0"></div>
-        <div style="display:flex;justify-content:space-between;align-items:center">
-        <div><div style="font-size:8px;color:#64748b;text-transform:uppercase;font-weight:bold">Surface</div>
-        <div id="rally-surface" style="font-size:12px;color:#4ade80;font-weight:bold">DIRT</div></div>
-        <div><div style="font-size:8px;color:#64748b;text-transform:uppercase;font-weight:bold">Grip</div>
-        <div id="rally-grip" style="font-size:12px;color:#fbbf24;font-weight:bold">50%</div></div></div>
-        <div id="rally-drift-badge" style="font-size:14px;font-weight:900;color:#f97316;margin-top:6px;opacity:0;transition:opacity 0.2s">🔥 DRIFT</div>
-        <div style="font-size:9px;color:#475569;margin-top:4px">Slip: <span id="rally-slip">0</span>°</div>
-        <div style="height:1px;background:#334155;margin:10px 0"></div>
-        <div style="font-size:8px;color:#64748b;text-transform:uppercase;font-weight:bold;margin-bottom:4px">Car Damage</div>
-        <div style="background:#1e293b;border-radius:4px;height:6px;overflow:hidden">
-          <div id="rally-damage-bar" style="height:100%;width:0%;background:#4ade80;border-radius:4px;transition:width 0.2s,background 0.4s"></div>
-        </div>
-        <div id="rally-damage-text" style="font-size:10px;color:#4ade80;font-weight:bold;margin-top:3px">0%</div>
+        <div style="background:rgba(15,23,42,0.92);border:1px solid #334155;border-radius:16px;padding:16px 24px;backdrop-filter:blur(12px);min-width:200px;text-align:center;position:relative;box-shadow:0 12px 40px rgba(0,0,0,0.4)">
+            
+            <!-- Speed & Gear Row -->
+            <div style="display:flex;justify-content:center;align-items:center;gap:16px;margin-bottom:6px;">
+                <div style="text-align:left;">
+                    <div id="rally-speed" style="font-size:52px;font-weight:900;color:#38bdf8;letter-spacing:-2px;line-height:1;margin:0">0</div>
+                    <div style="font-size:10px;color:#64748b;font-weight:bold;text-transform:uppercase;letter-spacing:2px;margin-top:2px">km/h</div>
+                </div>
+                
+                <!-- Gear Box -->
+                <div style="background:#1e293b;border:2px solid #38bdf8;border-radius:10px;padding:6px 12px;min-width:46px;text-align:center;">
+                    <div style="font-size:8px;color:#64748b;font-weight:bold;text-transform:uppercase;letter-spacing:1px;margin-bottom:2px">GEAR</div>
+                    <div id="rally-gear" style="font-size:24px;font-weight:900;color:#38bdf8;line-height:1">1</div>
+                </div>
+            </div>
+
+            <!-- RPM Gauge Bar -->
+            <div style="margin:8px 0 10px 0;text-align:left;">
+                <div style="display:flex;justify-content:space-between;font-size:8px;color:#64748b;font-weight:bold;text-transform:uppercase;margin-bottom:3px">
+                    <span>RPM</span>
+                    <span id="rally-rpm-val" style="color:#60a5fa;font-family:monospace">0 RPM</span>
+                </div>
+                <div style="background:#1e293b;border-radius:3px;height:6px;overflow:hidden;border:1px solid #334155;position:relative;">
+                    <div id="rally-rpm-fill" style="height:100%;width:0%;background:#60a5fa;border-radius:3px;transition:width 0.05s;"></div>
+                </div>
+            </div>
+
+            <!-- Tyre Info Container -->
+            <div id="rally-tyre-info" style="font-size:9px;font-weight:bold;margin:6px 0;display:flex;justify-content:center;gap:6px;align-items:center;">
+            </div>
+
+            <!-- Weather Indicator -->
+            <div id="rally-weather" style="font-size:10px;font-weight:bold;color:#94a3b8;margin:4px 0;display:none;">
+            </div>
+
+            <div style="height:1px;background:#334155;margin:10px 0"></div>
+            <div style="display:flex;justify-content:space-between;align-items:center">
+                <div>
+                    <div style="font-size:8px;color:#64748b;text-transform:uppercase;font-weight:bold">Surface</div>
+                    <div id="rally-surface" style="font-size:12px;color:#4ade80;font-weight:bold">DIRT</div>
+                </div>
+                <div>
+                    <div style="font-size:8px;color:#64748b;text-transform:uppercase;font-weight:bold">Grip</div>
+                    <div id="rally-grip" style="font-size:12px;color:#fbbf24;font-weight:bold">50%</div>
+                </div>
+            </div>
+            <div id="rally-drift-badge" style="font-size:14px;font-weight:900;color:#f97316;margin-top:6px;opacity:0;transition:opacity 0.2s">🔥 DRIFT</div>
+            <div style="font-size:9px;color:#475569;margin-top:4px">Slip: <span id="rally-slip">0</span>°</div>
+            <div style="height:1px;background:#334155;margin:10px 0"></div>
+            <div style="font-size:8px;color:#64748b;text-transform:uppercase;font-weight:bold;margin-bottom:4px">Car Damage</div>
+            <div style="background:#1e293b;border-radius:4px;height:6px;overflow:hidden">
+              <div id="rally-damage-bar" style="height:100%;width:0%;background:#4ade80;border-radius:4px;transition:width 0.2s,background 0.4s"></div>
+            </div>
+            <div id="rally-damage-text" style="font-size:10px;color:#4ade80;font-weight:bold;margin-top:3px">0%</div>
         </div>`;
     }
 
@@ -1243,7 +1289,13 @@ function updateHUD() {
         dr=document.getElementById('rally-drift-badge'),
         sl=document.getElementById('rally-slip'),
         db=document.getElementById('rally-damage-bar'),
-        dt2=document.getElementById('rally-damage-text');
+        dt2=document.getElementById('rally-damage-text'),
+        gearEl=document.getElementById('rally-gear'),
+        rpmFill=document.getElementById('rally-rpm-fill'),
+        rpmVal=document.getElementById('rally-rpm-val'),
+        tyreEl=document.getElementById('rally-tyre-info'),
+        weatherEl=document.getElementById('rally-weather');
+
     if(se){
         let kmh=Math.round(car.displaySpeed*3.6);
         se.textContent=kmh;
@@ -1261,31 +1313,21 @@ function updateHUD() {
     }
     if(dr) dr.style.opacity = car.isDrifting?'1':'0';
     if(sl) sl.textContent = Math.abs(Math.round(car.slipAngleDeg));
-    // FAS2-H2: Gear & RPM display (overlay on speed element)
-    let gearEl = document.getElementById('rally-gear');
-    if (!gearEl && se) {
-        gearEl = document.createElement('div');
-        gearEl.id = 'rally-gear';
-        gearEl.style.cssText = 'position:absolute;top:-2px;right:-8px;font-size:18px;font-weight:900;color:#60a5fa;letter-spacing:-1px;';
-        se.parentElement.style.position = 'relative';
-        se.parentElement.appendChild(gearEl);
-        // RPM bar
-        let rpmBar = document.createElement('div');
-        rpmBar.id = 'rally-rpm-bar';
-        rpmBar.style.cssText = 'height:3px;background:#334155;border-radius:2px;margin-top:3px;overflow:hidden;';
-        let rpmFill = document.createElement('div');
-        rpmFill.id = 'rally-rpm-fill';
-        rpmFill.style.cssText = 'height:100%;width:0%;background:#60a5fa;border-radius:2px;transition:width 0.05s;';
-        rpmBar.appendChild(rpmFill);
-        se.parentElement.appendChild(rpmBar);
+    
+    if (gearEl) {
+        gearEl.textContent = car.gear;
     }
-    if (gearEl) gearEl.textContent = car.gear;
-    let rpmFill = document.getElementById('rally-rpm-fill');
+    
     if (rpmFill) {
         let rpmPct = clamp((car.rpm - CFG.IDLE_RPM) / (CFG.MAX_RPM - CFG.IDLE_RPM) * 100, 0, 100);
         rpmFill.style.width = rpmPct + '%';
         rpmFill.style.background = rpmPct > 85 ? '#ef4444' : rpmPct > 65 ? '#fbbf24' : '#60a5fa';
     }
+    if (rpmVal) {
+        rpmVal.textContent = Math.round(car.rpm) + ' RPM';
+        rpmVal.style.color = car.rpm > CFG.MAX_RPM * 0.85 ? '#ef4444' : car.rpm > CFG.MAX_RPM * 0.65 ? '#fbbf24' : '#60a5fa';
+    }
+    
     // Damage bar (reads from rallyDamage module)
     if(db && dt2) {
         let dmg = window.rallyDamage ? window.rallyDamage.getDamage() : 0;
@@ -1298,13 +1340,6 @@ function updateHUD() {
     }
 
     // FAS3-H4: Tyre compound / wear / temp display
-    let tyreEl = document.getElementById('rally-tyre-info');
-    if (!tyreEl && se) {
-        tyreEl = document.createElement('div');
-        tyreEl.id = 'rally-tyre-info';
-        tyreEl.style.cssText = 'font-size:9px;font-weight:bold;margin-top:4px;display:flex;gap:6px;align-items:center;';
-        se.parentElement.appendChild(tyreEl);
-    }
     if (tyreEl) {
         let compound = TYRE_COMPOUNDS[car.tyreCompound] || TYRE_COMPOUNDS.SOFT;
         let wearPct = Math.round(car.tyreWear * 100);
@@ -1315,13 +1350,6 @@ function updateHUD() {
     }
 
     // FAS3-M4: Weather indicator
-    let weatherEl = document.getElementById('rally-weather');
-    if (!weatherEl && se) {
-        weatherEl = document.createElement('div');
-        weatherEl.id = 'rally-weather';
-        weatherEl.style.cssText = 'font-size:10px;font-weight:bold;color:#94a3b8;margin-top:2px;';
-        se.parentElement.appendChild(weatherEl);
-    }
     if (weatherEl && window.rallyWeather) {
         let w = window.rallyWeather.getCurrentWeather();
         if (w && w.label !== 'DRY') {
