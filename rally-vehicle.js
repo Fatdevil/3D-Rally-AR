@@ -243,14 +243,39 @@ function createCarMesh() {
     g.add(diffuser);
 
     // === HEADLIGHTS (2× front) ===
+    let headlightLights = [];
+    let headlightMeshes = [];
+    let lightsActive = (typeof car !== 'undefined' && car && car.headlightsOn);
     for (let side of [-0.7, 0.7]) {
+        let lightMat = new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: lightsActive ? 0xfffee0 : 0x000000 });
         let headlight = new THREE.Mesh(
             new THREE.BoxGeometry(0.35, 0.12, 0.08),
-            accentMat
+            lightMat
         );
         headlight.position.set(side, 0.55 + yOff, 2.08);
         g.add(headlight);
+        headlightMeshes.push(headlight);
+
+        // Actual Three.js SpotLight for headlight beam
+        let spotLight = new THREE.SpotLight(0xfffee0, lightsActive ? 15.0 : 0.0, 50, Math.PI / 4, 0.5, 0.8);
+        spotLight.position.set(side, 0.55 + yOff, 2.1);
+        spotLight.castShadow = true;
+        spotLight.shadow.mapSize.width = 512;
+        spotLight.shadow.mapSize.height = 512;
+        spotLight.shadow.camera.near = 0.5;
+        spotLight.shadow.camera.far = 50;
+
+        let target = new THREE.Object3D();
+        target.position.set(side, 0.55 + yOff, 15.0); // 15m in front
+        
+        g.add(spotLight);
+        g.add(target);
+        spotLight.target = target;
+        
+        headlightLights.push(spotLight);
     }
+    g.userData.headlights = headlightLights;
+    g.userData.headlightMeshes = headlightMeshes;
 
     // === TAILLIGHTS (2× rear) ===
     for (let side of [-0.7, 0.7]) {
@@ -1360,6 +1385,24 @@ function updateHUD() {
         }
     }
 }
+
+window.setCarHeadlights = function(on) {
+    if (typeof car === 'undefined' || !car) return;
+    car.headlightsOn = on;
+    if (!car.mesh) return;
+    let headlights = car.mesh.userData.headlights;
+    let meshes = car.mesh.userData.headlightMeshes;
+    if (headlights) {
+        headlights.forEach(l => {
+            l.intensity = on ? 15.0 : 0.0;
+        });
+    }
+    if (meshes) {
+        meshes.forEach(m => {
+            m.material.emissive.setHex(on ? 0xfffee0 : 0x000000);
+        });
+    }
+};
 
 function createTouchControls() {
     if (touchControlsEl) return;

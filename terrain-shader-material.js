@@ -50,6 +50,9 @@ uniform float u_fogNear;
 uniform float u_fogFar;
 uniform float u_terrainMaxHeight;
 uniform float u_playMode;
+uniform float u_ambientIntensity;
+uniform float u_sunIntensity;
+uniform vec3  u_sunColor;
 
 varying vec2  vUv;
 varying vec3  vNormal;
@@ -146,9 +149,9 @@ void main() {
 
     // ── 9. Lighting ───────────────────────────────────────────────────────────
     float diff    = max(dot(finalN, normalize(u_sunDir)), 0.0);
-    float ambient = 0.38;
-    float light   = ambient + (1.0 - ambient) * diff;
-    vec4  litColor = terrainColor * light;
+    float ambient = u_ambientIntensity;
+    float light   = ambient + (1.0 - ambient) * diff * u_sunIntensity;
+    vec4  litColor = vec4(terrainColor.rgb * light * u_sunColor, terrainColor.a);
 
     // ── 10. Distance fog ──────────────────────────────────────────────────────
     float fogT = smoothstep(u_fogNear, u_fogFar, vFogDepth);
@@ -182,6 +185,9 @@ void main() {
                 u_fogFar:           { value: opts.fogFar   !== undefined ? opts.fogFar   : 1800.0 },
                 u_terrainMaxHeight: { value: opts.terrainMaxHeight || 120.0 },
                 u_playMode:         { value: 0.0 },
+                u_ambientIntensity: { value: 0.38 },
+                u_sunIntensity:     { value: 1.0 },
+                u_sunColor:         { value: new THREE.Color(0xffffff) },
             },
             vertexShader:   TERRAIN_VERT,
             fragmentShader: TERRAIN_FRAG,

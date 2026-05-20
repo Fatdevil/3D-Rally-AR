@@ -124,10 +124,106 @@
     dLight.shadow.camera.bottom = -100;
     dLight.shadow.camera.near = 0.5;
     dLight.shadow.camera.far = 1000;
+    dLight.shadow.bias = -0.0005; // fix shadow acne
     dLight.shadow.mapSize.width = 2048;
     dLight.shadow.mapSize.height = 2048;
     scene.add(dLight);
-    scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+    const ambLight2 = new THREE.AmbientLight(0xffffff, 0.4);
+    scene.add(ambLight2);
+
+    window.sceneLights = {
+        amb1: ambLight,
+        amb2: ambLight2,
+        dir: dLight
+    };
+
+    window.setTimeOfDay = function(time) {
+        if (!window.sceneLights || !window.scene) return;
+        let lights = window.sceneLights;
+        let scene = window.scene;
+        let headlightsOn = false;
+        let mat = window._terrainMat;
+
+        if (time === 'DAY') {
+            lights.amb1.intensity = 0.5;
+            lights.amb1.color.setHex(0xffffff);
+            lights.amb2.intensity = 0.4;
+            lights.amb2.color.setHex(0xffffff);
+            lights.dir.intensity = 1.2;
+            lights.dir.color.setHex(0xffffff);
+            lights.dir.position.set(200, 500, 100);
+            scene.background.setHex(0x87ceeb);
+            if (scene.fog) {
+                scene.fog.color.setHex(0x87ceeb);
+                scene.fog.near = 400;
+                scene.fog.far = 900;
+            }
+            headlightsOn = false;
+
+            if (mat && mat.uniforms) {
+                mat.uniforms.u_ambientIntensity.value = 0.38;
+                mat.uniforms.u_sunIntensity.value = 1.0;
+                mat.uniforms.u_sunColor.value.setHex(0xffffff);
+                mat.uniforms.u_sunDir.value.set(0.6, 0.8, 0.4).normalize();
+                mat.uniforms.u_fogColor.value.setHex(0x87ceeb);
+                mat.uniforms.u_fogNear.value = 400;
+                mat.uniforms.u_fogFar.value = 900;
+            }
+        } else if (time === 'SUNSET') {
+            lights.amb1.intensity = 0.25;
+            lights.amb1.color.setHex(0xfdba74);
+            lights.amb2.intensity = 0.15;
+            lights.amb2.color.setHex(0xf97316);
+            lights.dir.intensity = 0.6;
+            lights.dir.color.setHex(0xea580c);
+            lights.dir.position.set(300, 120, 50);
+            scene.background.setHex(0xfb923c);
+            if (scene.fog) {
+                scene.fog.color.setHex(0xfb923c);
+                scene.fog.near = 300;
+                scene.fog.far = 800;
+            }
+            headlightsOn = true;
+
+            if (mat && mat.uniforms) {
+                mat.uniforms.u_ambientIntensity.value = 0.20;
+                mat.uniforms.u_sunIntensity.value = 0.6;
+                mat.uniforms.u_sunColor.value.setHex(0xf97316);
+                mat.uniforms.u_sunDir.value.set(0.9, 0.3, 0.1).normalize();
+                mat.uniforms.u_fogColor.value.setHex(0xfb923c);
+                mat.uniforms.u_fogNear.value = 300;
+                mat.uniforms.u_fogFar.value = 800;
+            }
+        } else if (time === 'NIGHT') {
+            lights.amb1.intensity = 0.05;
+            lights.amb1.color.setHex(0x1e1b4b);
+            lights.amb2.intensity = 0.0;
+            lights.dir.intensity = 0.08;
+            lights.dir.color.setHex(0x93c5fd);
+            lights.dir.position.set(-100, 300, -50);
+            scene.background.setHex(0x020617);
+            if (scene.fog) {
+                scene.fog.color.setHex(0x020617);
+                scene.fog.near = 50;
+                scene.fog.far = 250;
+            }
+            headlightsOn = true;
+
+            if (mat && mat.uniforms) {
+                mat.uniforms.u_ambientIntensity.value = 0.05;
+                mat.uniforms.u_sunIntensity.value = 0.08;
+                mat.uniforms.u_sunColor.value.setHex(0x93c5fd);
+                mat.uniforms.u_sunDir.value.set(-0.3, 0.9, -0.1).normalize();
+                mat.uniforms.u_fogColor.value.setHex(0x020617);
+                mat.uniforms.u_fogNear.value = 50;
+                mat.uniforms.u_fogFar.value = 250;
+            }
+        }
+
+        if (window.setCarHeadlights) {
+            window.setCarHeadlights(headlightsOn);
+        }
+    };
     
     // VISUELL HJÄLP: Ett gigantiskt rutnät för att se att världen faktiskt roterar
     // Eftersom himlen och gräset är solida färger blir det en synvilla annars.
@@ -154,6 +250,11 @@
     scene.add(terrainMesh);
     window._terrainMat = planeMat;
     window._terrainGeo = planeGeo;  // FAS0-M1: expose for tire track painting
+    
+    // Sync starting lighting values with the shader uniforms
+    setTimeout(() => {
+        if (window.setTimeOfDay) window.setTimeOfDay('DAY');
+    }, 100);
 
 
     // ── Biome color → surface type classifier ──
@@ -1339,6 +1440,16 @@
             <option value="HEAVY_RAIN">🌧️ Heavy Rain</option>
             <option value="FOG">🌫️ Fog</option>
             <option value="SNOW_FALL">❄️ Snow</option>
+        </select>
+    </div>
+
+    <!-- TIME OF DAY Selector -->
+    <div style="border-top:1px solid #334155; padding-top:10px; margin-top:8px;">
+        <div style="font-size:11px; font-weight:bold; color:#fb923c; margin-bottom:4px;">🌇 TIME OF DAY</div>
+        <select id="tod-select" style="width:100%; background:#1e293b; border:1px solid #334155; border-radius:6px; color:#e2e8f0; padding:6px 8px; font-size:12px; cursor:pointer;" onchange="if(window.setTimeOfDay) window.setTimeOfDay(this.value)">
+            <option value="DAY">☀️ Day</option>
+            <option value="SUNSET">🌅 Sunset</option>
+            <option value="NIGHT">🌙 Night</option>
         </select>
     </div>
 
