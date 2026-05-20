@@ -385,9 +385,15 @@ function updateVehicle(dt) {
     car.visualPitch = lerp(car.visualPitch, tgtPitch, pitchRate);
 
     // Terrain slope
-    let nx = terrain.normal[0]||0, nz = terrain.normal[1]||0;
-    let slopePitch = (nx*Math.sin(car.heading) + nz*Math.cos(car.heading))*0.6;
-    let slopeRoll = (nx*Math.cos(car.heading) - nz*Math.sin(car.heading))*0.5;
+    let slopePitch = 0;
+    let slopeRoll = 0;
+    if (car.onGround) {
+        let nx = terrain.normal[0]||0, nz = terrain.normal[1]||0;
+        // Pitch: nose up/down to match slope. 0.95 multiplier for realistic alignment.
+        slopePitch = (nx*Math.sin(car.heading) + nz*Math.cos(car.heading)) * 0.95;
+        // Roll: tilt left/right. Inverted sign so car tilts with the hill side instead of into it.
+        slopeRoll = (-nx*Math.cos(car.heading) + nz*Math.sin(car.heading)) * 0.95;
+    }
 
     // Skip mesh rotation if volting (damage system controls rotation)
     if (window.rallyDamage && window.rallyDamage.isVolting()) {
