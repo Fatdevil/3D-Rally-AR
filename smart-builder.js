@@ -1429,11 +1429,20 @@ function createRallyGate(x, y, z, type) {
     }
     
     let bannerTex = new THREE.CanvasTexture(bannerCanvas);
-    let bannerMat = new THREE.MeshBasicMaterial({ map: bannerTex, side: THREE.DoubleSide });
-    let banner = new THREE.Mesh(bannerGeo, bannerMat);
-    banner.position.set(0, poleH - 1.0, 0.3);
-    banner.rotation.y = Math.PI; // Rotate 180 deg so the front text faces the oncoming driver
-    gate.add(banner);
+    let bannerFront = new THREE.Mesh(
+        bannerGeo,
+        new THREE.MeshBasicMaterial({ map: bannerTex, side: THREE.FrontSide })
+    );
+    bannerFront.position.set(0, poleH - 1.0, 0.02);
+    bannerFront.rotation.y = Math.PI; // Rotated so the front faces oncoming driver
+    gate.add(bannerFront);
+    
+    let bannerBack = new THREE.Mesh(
+        bannerGeo,
+        new THREE.MeshBasicMaterial({ map: bannerTex, side: THREE.FrontSide })
+    );
+    bannerBack.position.set(0, poleH - 1.0, -0.02);
+    gate.add(bannerBack);
     
     gate.position.set(x, y, z);
     return gate;

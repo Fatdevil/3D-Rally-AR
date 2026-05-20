@@ -784,12 +784,21 @@
             bCtx.fillText('FINISH', 128, 44);
         }
         let bannerTex = new THREE.CanvasTexture(bannerCanvas);
-        let banner = new THREE.Mesh(
-            new THREE.PlaneGeometry(roadW * 0.8, 1.2),
-            new THREE.MeshBasicMaterial({ map: bannerTex, side: THREE.DoubleSide })
+        let bannerGeo = new THREE.PlaneGeometry(roadW * 0.8, 1.2);
+        let bannerFront = new THREE.Mesh(
+            bannerGeo,
+            new THREE.MeshBasicMaterial({ map: bannerTex, side: THREE.FrontSide })
         );
-        banner.position.set(0, poleH - 1.0, 0.3);
-        gate.add(banner);
+        bannerFront.position.set(0, poleH - 1.0, 0.02);
+        gate.add(bannerFront);
+        
+        let bannerBack = new THREE.Mesh(
+            bannerGeo,
+            new THREE.MeshBasicMaterial({ map: bannerTex, side: THREE.FrontSide })
+        );
+        bannerBack.position.set(0, poleH - 1.0, -0.02);
+        bannerBack.rotation.y = Math.PI;
+        gate.add(bannerBack);
         
         let groundY = 0;
         if (typeof window.localGetTerrainAt === 'function') {

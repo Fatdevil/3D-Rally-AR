@@ -356,8 +356,8 @@ function updateVehicle(dt) {
     let latAccel = (lateralVel - car.prevLateralVel) / Math.max(dt,0.001);
     car.prevLateralVel = lateralVel;
     // SPELKÄNSLA: Öka roll/krängning markant vid styrning så bilen lutar utåt i svängen (centrifugalkraft)
-    let rollAssist = input.steer * 4.0; 
-    let tgtRoll = clamp(-latAccel*CFG.ROLL_SENS + rollAssist, -15, 15);
+    let rollAssist = -input.steer * 4.0; 
+    let tgtRoll = clamp(latAccel*CFG.ROLL_SENS + rollAssist, -15, 15);
     let rollRate = 1 - Math.pow(1 - 0.2, dt * 60);
     car.visualRoll = lerp(car.visualRoll, tgtRoll, rollRate);
 
@@ -374,7 +374,7 @@ function updateVehicle(dt) {
 
     // Terrain slope
     let nx = terrain.normal[0]||0, nz = terrain.normal[1]||0;
-    let slopePitch = -(nx*Math.sin(car.heading) + nz*Math.cos(car.heading))*0.6;
+    let slopePitch = (nx*Math.sin(car.heading) + nz*Math.cos(car.heading))*0.6;
     let slopeRoll = (nx*Math.cos(car.heading) - nz*Math.sin(car.heading))*0.5;
 
     // Skip mesh rotation if volting (damage system controls rotation)
