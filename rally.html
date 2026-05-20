@@ -1270,7 +1270,7 @@ function syncTunerUI() {
     if (!car) return;
     
     let surfaceKey = car.surfaceKey || 'DIRT';
-    let surface = window.SURFACES ? window.SURFACES[surfaceKey] : null;
+    let surface = window.RALLY_SURFACES ? window.RALLY_SURFACES[surfaceKey] : null;
     let CFG = window.rallyVehicle.CFG;
     
     if (surface) {
@@ -1300,7 +1300,7 @@ function updateTunedPhysics() {
     if (!car) return;
     
     let surfaceKey = car.surfaceKey || 'DIRT';
-    let surface = window.SURFACES ? window.SURFACES[surfaceKey] : null;
+    let surface = window.RALLY_SURFACES ? window.RALLY_SURFACES[surfaceKey] : null;
     let CFG = window.rallyVehicle.CFG;
     
     let g = parseFloat(document.getElementById('slide-grip').value);
