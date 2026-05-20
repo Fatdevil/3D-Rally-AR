@@ -187,6 +187,12 @@ function updateVehicle(dt) {
         let throttleScale = 1.0 - speedRatio*speedRatio;
         let accel = (CFG.ENGINE_FORCE/CFG.MASS) * throttleScale * input.throttle * surface.accel;
         accel *= dmgMod.accelMult;
+        
+        // Traction limit (Väg 1): limit forward acceleration by normal-force-derived tire friction
+        let normalY = car.onGround ? ((terrain.normal && terrain.normal[2] !== undefined) ? terrain.normal[2] : 1.0) : 0.0;
+        let maxTractionAccel = CFG.GRAVITY * surface.grip * normalY * 1.5;
+        accel = Math.min(accel, maxTractionAccel);
+        
         car.velocity.addScaledVector(fwd, accel*dt);
     } else if(input.throttle>0 && forwardVel<0) {
         // Throttle while reversing = brake
@@ -197,6 +203,12 @@ function updateVehicle(dt) {
     // Reverse — aktiveras när bilen är nästan stillastående (forwardVel ≤0.1 m/s)
     if(input.brake>0 && forwardVel<=0.1) {
         let accel = (CFG.ENGINE_FORCE/CFG.MASS)*0.4*input.brake*surface.accel;
+        
+        // Traction limit for reverse
+        let normalY = car.onGround ? ((terrain.normal && terrain.normal[2] !== undefined) ? terrain.normal[2] : 1.0) : 0.0;
+        let maxTractionAccel = CFG.GRAVITY * surface.grip * normalY * 1.5;
+        accel = Math.min(accel, maxTractionAccel);
+        
         car.velocity.addScaledVector(fwd, -accel*dt);
     }
     // Braking — FYN-01 fix: tröskel sänkt från > 0.5 till > 0.1 m/s.
