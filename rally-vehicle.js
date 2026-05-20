@@ -21,7 +21,8 @@ const CFG = {
     DRIFT_STEER_BONUS: 1.5, HANDBRAKE_GRIP: 0.05,
     GRAVITY: 9.81, GRAVITY_AIR_MULT: 1.4, AIR_CONTROL: 0.3,
     CAR_HEIGHT: 0.35, WHEEL_SPIN: 0.15,
-    ROLL_SENS: 0.8, PITCH_SENS: 0.12
+    ROLL_SENS: 0.8, PITCH_SENS: 0.12,
+    DRIFT_TARGET_GRIP: 0.20 // Exponerad för realtidsjustering
 };
 const DMG_VOLT_THRESH = 25; // m/s barrier impact to trigger volt
 
@@ -176,7 +177,7 @@ function updateVehicle(dt) {
     // Grip factor curve (lerped, not binary)
     let targetGrip;
     if(input.handbrake && forwardVel > 3) targetGrip = CFG.HANDBRAKE_GRIP;
-    else if(car.isDrifting) targetGrip = 0.20; // Sänkt från 0.25 för mer svepande sladdar (80% sidobevarande)
+    else if(car.isDrifting) targetGrip = CFG.DRIFT_TARGET_GRIP; // Använder konfigurerbar greppfaktor
     else targetGrip = 0.90;
     let gripSpeed = car.isDrifting ? (surface.driftSustain*3.0) : (surface.driftRecovery*5.0);
     car.gripFactor = lerp(car.gripFactor, targetGrip, gripSpeed*dt);
@@ -706,6 +707,7 @@ window.rallyVehicle = {
     isDrifting:()=>car.isDrifting,
     getSlipAngle:()=>car.slipAngleDeg,
     getKeys:()=>keys,
-    getInput:()=>input
+    getInput:()=>input,
+    CFG: CFG
 };
 })();

@@ -1193,5 +1193,155 @@
 })();
 </script>
 
+<!-- Physics Tuner Panel -->
+<div id="physics-tuner-btn" style="position:fixed; top:16px; right:16px; z-index:10001; background:rgba(15,23,42,0.85); border:1px solid #334155; border-radius:10px; color:#94a3b8; padding:8px 14px; font-size:12px; font-weight:bold; cursor:pointer; backdrop-filter:blur(8px); transition:all 0.2s;" onclick="toggleTuner()">🔧 Physics Tuner</div>
+
+<div id="physics-tuner-panel" style="position:fixed; top:60px; right:16px; z-index:10001; width:300px; background:rgba(15,23,42,0.92); border:1px solid #334155; border-radius:12px; color:#e2e8f0; padding:16px; font-family:sans-serif; backdrop-filter:blur(10px); display:none; flex-direction:column; gap:12px; box-shadow:0 10px 25px -5px rgba(0,0,0,0.5);">
+    <h3 style="margin:0 0 4px 0; font-size:14px; text-transform:uppercase; letter-spacing:1px; color:#4ade80;">Physics Tuner</h3>
+    <div style="font-size:11px; color:#64748b; margin-top:-6px;">Tune active surface: <span id="tuner-active-surf" style="color:#fbbf24; font-weight:bold;">-</span></div>
+    
+    <!-- Grip Slider -->
+    <div style="display:flex; flex-direction:column; gap:4px;">
+        <div style="display:flex; justify-content:space-between; font-size:11px;">
+            <span>Surface Grip</span>
+            <span id="val-grip" style="font-weight:bold; color:#4ade80;">-</span>
+        </div>
+        <input type="range" id="slide-grip" min="0.10" max="1.00" step="0.01" style="width:100%; accent-color:#4ade80;" oninput="updateTunedPhysics()">
+    </div>
+
+    <!-- Drift Threshold Slider -->
+    <div style="display:flex; flex-direction:column; gap:4px;">
+        <div style="display:flex; justify-content:space-between; font-size:11px;">
+            <span>Drift Start Threshold (deg)</span>
+            <span id="val-threshold" style="font-weight:bold; color:#4ade80;">-</span>
+        </div>
+        <input type="range" id="slide-threshold" min="5" max="25" step="0.5" style="width:100%; accent-color:#4ade80;" oninput="updateTunedPhysics()">
+    </div>
+
+    <!-- Drift Sustain Slider -->
+    <div style="display:flex; flex-direction:column; gap:4px;">
+        <div style="display:flex; justify-content:space-between; font-size:11px;">
+            <span>Drift Sustain (low=snappy, high=slide)</span>
+            <span id="val-sustain" style="font-weight:bold; color:#4ade80;">-</span>
+        </div>
+        <input type="range" id="slide-sustain" min="0.5" max="3.0" step="0.1" style="width:100%; accent-color:#4ade80;" oninput="updateTunedPhysics()">
+    </div>
+
+    <!-- Drift Target Grip Slider -->
+    <div style="display:flex; flex-direction:column; gap:4px;">
+        <div style="display:flex; justify-content:space-between; font-size:11px;">
+            <span>Drift Target Grip (sliding fäste)</span>
+            <span id="val-targetgrip" style="font-weight:bold; color:#4ade80;">-</span>
+        </div>
+        <input type="range" id="slide-targetgrip" min="0.05" max="0.40" step="0.01" style="width:100%; accent-color:#4ade80;" oninput="updateTunedPhysics()">
+    </div>
+
+    <!-- Drift Steer Bonus Slider -->
+    <div style="display:flex; flex-direction:column; gap:4px;">
+        <div style="display:flex; justify-content:space-between; font-size:11px;">
+            <span>Drift Steer Bonus (motstyrning)</span>
+            <span id="val-steerbonus" style="font-weight:bold; color:#4ade80;">-</span>
+        </div>
+        <input type="range" id="slide-steerbonus" min="1.0" max="2.5" step="0.1" style="width:100%; accent-color:#4ade80;" oninput="updateTunedPhysics()">
+    </div>
+
+    <div style="font-size:10px; color:#64748b; text-align:center; margin-top:4px; border-top:1px solid #334155; padding-top:8px;">Drive to feel changes instantly!</div>
+</div>
+
+<script>
+function toggleTuner() {
+    let panel = document.getElementById('physics-tuner-panel');
+    let btn = document.getElementById('physics-tuner-btn');
+    if (panel.style.display === 'none') {
+        panel.style.display = 'flex';
+        btn.style.borderColor = '#4ade80';
+        btn.style.color = '#fff';
+        syncTunerUI();
+    } else {
+        panel.style.display = 'none';
+        btn.style.borderColor = '#334155';
+        btn.style.color = '#94a3b8';
+    }
+}
+
+function syncTunerUI() {
+    if (!window.rallyVehicle || !window.rallyVehicle.isActive()) return;
+    let car = window.rallyVehicle.getCar();
+    if (!car) return;
+    
+    let surfaceKey = car.surfaceKey || 'DIRT';
+    let surface = window.SURFACES ? window.SURFACES[surfaceKey] : null;
+    let CFG = window.rallyVehicle.CFG;
+    
+    if (surface) {
+        document.getElementById('tuner-active-surf').innerText = surfaceKey;
+        document.getElementById('slide-grip').value = surface.grip;
+        document.getElementById('val-grip').innerText = surface.grip.toFixed(2);
+        
+        document.getElementById('slide-threshold').value = surface.driftThreshold;
+        document.getElementById('val-threshold').innerText = surface.driftThreshold + '°';
+        
+        document.getElementById('slide-sustain').value = surface.driftSustain;
+        document.getElementById('val-sustain').innerText = surface.driftSustain.toFixed(1);
+    }
+    
+    if (CFG) {
+        document.getElementById('slide-targetgrip').value = CFG.DRIFT_TARGET_GRIP || 0.20;
+        document.getElementById('val-targetgrip').innerText = (CFG.DRIFT_TARGET_GRIP || 0.20).toFixed(2);
+        
+        document.getElementById('slide-steerbonus').value = CFG.DRIFT_STEER_BONUS || 1.5;
+        document.getElementById('val-steerbonus').innerText = (CFG.DRIFT_STEER_BONUS || 1.5).toFixed(1);
+    }
+}
+
+function updateTunedPhysics() {
+    if (!window.rallyVehicle || !window.rallyVehicle.isActive()) return;
+    let car = window.rallyVehicle.getCar();
+    if (!car) return;
+    
+    let surfaceKey = car.surfaceKey || 'DIRT';
+    let surface = window.SURFACES ? window.SURFACES[surfaceKey] : null;
+    let CFG = window.rallyVehicle.CFG;
+    
+    let g = parseFloat(document.getElementById('slide-grip').value);
+    let t = parseFloat(document.getElementById('slide-threshold').value);
+    let s = parseFloat(document.getElementById('slide-sustain').value);
+    let tg = parseFloat(document.getElementById('slide-targetgrip').value);
+    let sb = parseFloat(document.getElementById('slide-steerbonus').value);
+    
+    document.getElementById('val-grip').innerText = g.toFixed(2);
+    document.getElementById('val-threshold').innerText = t + '°';
+    document.getElementById('val-sustain').innerText = s.toFixed(1);
+    document.getElementById('val-targetgrip').innerText = tg.toFixed(2);
+    document.getElementById('val-steerbonus').innerText = sb.toFixed(1);
+    
+    if (surface) {
+        surface.grip = g;
+        surface.driftThreshold = t;
+        surface.driftSustain = s;
+    }
+    
+    if (CFG) {
+        CFG.DRIFT_TARGET_GRIP = tg;
+        CFG.DRIFT_STEER_BONUS = sb;
+    }
+}
+
+setInterval(() => {
+    let panel = document.getElementById('physics-tuner-panel');
+    if (panel && panel.style.display === 'flex') {
+        if (window.rallyVehicle && window.rallyVehicle.isActive()) {
+            let car = window.rallyVehicle.getCar();
+            if (car) {
+                let lbl = document.getElementById('tuner-active-surf');
+                if (lbl && lbl.innerText !== car.surfaceKey) {
+                    syncTunerUI();
+                }
+            }
+        }
+    }
+}, 500);
+</script>
+
 </body>
 </html>
