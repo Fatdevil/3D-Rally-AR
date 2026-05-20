@@ -17,7 +17,7 @@ varying float vFogDepth;
 
 void main() {
     vRoadUV   = uv;
-    vNormal   = normalize(normalMatrix * normal);
+    vNormal   = normalize(vec3(modelMatrix * vec4(normal, 0.0)));
     vec4 wp   = modelMatrix * vec4(position, 1.0);
     vWorldPos = wp.xyz;
     vec4 mvp  = modelViewMatrix * vec4(position, 1.0);

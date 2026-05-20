@@ -16,7 +16,7 @@ varying vec3  vWorldPos;
 
 void main() {
     vUv      = uv;
-    vNormal  = normalize(normalMatrix * normal);
+    vNormal  = normalize(vec3(modelMatrix * vec4(normal, 0.0)));
     vColor   = color.rgb;
 
     vec4 worldPos4 = modelMatrix * vec4(position, 1.0);
