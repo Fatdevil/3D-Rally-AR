@@ -7,7 +7,7 @@
 
 const SURFACES = {
     ASPHALT: {
-        grip: 0.97, longGrip: 0.98, brake: 1.00,
+        grip: 0.85, longGrip: 0.98, brake: 1.00,
         maxSpeed: 1.00, accel: 1.00, dragAdd: 0.00,
         driftThreshold: 20, driftSustain: 0.7, driftRecovery: 0.95,
         particle: 'rubber_smoke', particleIntensity: 0.4,
@@ -15,9 +15,9 @@ const SURFACES = {
         color: '#4ade80', label: 'ASPHALT'
     },
     GRAVEL: {
-        grip: 0.62, longGrip: 0.70, brake: 0.75,
+        grip: 0.52, longGrip: 0.70, brake: 0.75,
         maxSpeed: 0.88, accel: 0.84, dragAdd: 0.002, // Rejält sänkt
-        driftThreshold: 12, driftSustain: 1.3, driftRecovery: 0.70,
+        driftThreshold: 10, driftSustain: 1.3, driftRecovery: 0.70,
         particle: 'gravel_spray', particleIntensity: 0.9,
         rumble: 0.4, depthVariance: 0.12, landing: 0.75,
         color: '#a3e635', label: 'GRAVEL'

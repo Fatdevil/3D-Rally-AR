@@ -176,7 +176,7 @@ function updateVehicle(dt) {
     // Grip factor curve (lerped, not binary)
     let targetGrip;
     if(input.handbrake && forwardVel > 3) targetGrip = CFG.HANDBRAKE_GRIP;
-    else if(car.isDrifting) targetGrip = 0.25;
+    else if(car.isDrifting) targetGrip = 0.20; // Sänkt från 0.25 för mer svepande sladdar (80% sidobevarande)
     else targetGrip = 0.90;
     let gripSpeed = car.isDrifting ? (surface.driftSustain*3.0) : (surface.driftRecovery*5.0);
     car.gripFactor = lerp(car.gripFactor, targetGrip, gripSpeed*dt);
