@@ -1382,6 +1382,10 @@
 
     // ── Vehicle Switch (H key) + ESC to hub ──
     window.addEventListener('keydown', (e) => {
+        // Force blur of any active UI elements (selects, inputs, buttons) so game inputs (W/S/A/D, Arrows) don't trigger form events
+        if (document.activeElement && (document.activeElement.tagName === 'SELECT' || document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'BUTTON')) {
+            document.activeElement.blur();
+        }
         if (e.key === 'Escape') {
             window.location.href = 'rally_hub.html';
         }
@@ -1440,7 +1444,7 @@
             <span>Surface Grip</span>
             <span id="val-grip" style="font-weight:bold; color:#4ade80;">-</span>
         </div>
-        <input type="range" id="slide-grip" min="0.10" max="1.00" step="0.01" style="width:100%; accent-color:#4ade80;" oninput="updateTunedPhysics()">
+        <input type="range" id="slide-grip" min="0.10" max="1.00" step="0.01" style="width:100%; accent-color:#4ade80;" oninput="updateTunedPhysics()" onchange="this.blur()">
     </div>
 
     <!-- Drift Threshold Slider -->
@@ -1449,7 +1453,7 @@
             <span>Drift Start Threshold (deg)</span>
             <span id="val-threshold" style="font-weight:bold; color:#4ade80;">-</span>
         </div>
-        <input type="range" id="slide-threshold" min="5" max="25" step="0.5" style="width:100%; accent-color:#4ade80;" oninput="updateTunedPhysics()">
+        <input type="range" id="slide-threshold" min="5" max="25" step="0.5" style="width:100%; accent-color:#4ade80;" oninput="updateTunedPhysics()" onchange="this.blur()">
     </div>
 
     <!-- Drift Sustain Slider -->
@@ -1458,7 +1462,7 @@
             <span>Drift Sustain (low=snappy, high=slide)</span>
             <span id="val-sustain" style="font-weight:bold; color:#4ade80;">-</span>
         </div>
-        <input type="range" id="slide-sustain" min="0.5" max="3.0" step="0.1" style="width:100%; accent-color:#4ade80;" oninput="updateTunedPhysics()">
+        <input type="range" id="slide-sustain" min="0.5" max="3.0" step="0.1" style="width:100%; accent-color:#4ade80;" oninput="updateTunedPhysics()" onchange="this.blur()">
     </div>
 
     <!-- Drift Target Grip Slider -->
@@ -1467,7 +1471,7 @@
             <span>Drift Target Grip (sliding fäste)</span>
             <span id="val-targetgrip" style="font-weight:bold; color:#4ade80;">-</span>
         </div>
-        <input type="range" id="slide-targetgrip" min="0.05" max="0.40" step="0.01" style="width:100%; accent-color:#4ade80;" oninput="updateTunedPhysics()">
+        <input type="range" id="slide-targetgrip" min="0.05" max="0.40" step="0.01" style="width:100%; accent-color:#4ade80;" oninput="updateTunedPhysics()" onchange="this.blur()">
     </div>
 
     <!-- Drift Steer Bonus Slider -->
@@ -1476,13 +1480,13 @@
             <span>Drift Steer Bonus (motstyrning)</span>
             <span id="val-steerbonus" style="font-weight:bold; color:#4ade80;">-</span>
         </div>
-        <input type="range" id="slide-steerbonus" min="1.0" max="2.5" step="0.1" style="width:100%; accent-color:#4ade80;" oninput="updateTunedPhysics()">
+        <input type="range" id="slide-steerbonus" min="1.0" max="2.5" step="0.1" style="width:100%; accent-color:#4ade80;" oninput="updateTunedPhysics()" onchange="this.blur()">
     </div>
 
     <!-- FIX-M4: Weather Selector -->
     <div style="border-top:1px solid #334155; padding-top:10px; margin-top:8px;">
         <div style="font-size:11px; font-weight:bold; color:#38bdf8; margin-bottom:4px;">🌤️ WEATHER</div>
-        <select id="weather-select" style="width:100%; background:#1e293b; border:1px solid #334155; border-radius:6px; color:#e2e8f0; padding:6px 8px; font-size:12px; cursor:pointer;" onchange="if(window.rallyWeather) window.rallyWeather.setWeather(this.value);">
+        <select id="weather-select" style="width:100%; background:#1e293b; border:1px solid #334155; border-radius:6px; color:#e2e8f0; padding:6px 8px; font-size:12px; cursor:pointer;" onchange="if(window.rallyWeather) window.rallyWeather.setWeather(this.value); this.blur();">
             <option value="DRY">☀️ Dry</option>
             <option value="LIGHT_RAIN">🌦️ Light Rain</option>
             <option value="HEAVY_RAIN">🌧️ Heavy Rain</option>
@@ -1494,7 +1498,7 @@
     <!-- TIME OF DAY Selector -->
     <div style="border-top:1px solid #334155; padding-top:10px; margin-top:8px;">
         <div style="font-size:11px; font-weight:bold; color:#fb923c; margin-bottom:4px;">🌇 TIME OF DAY</div>
-        <select id="tod-select" style="width:100%; background:#1e293b; border:1px solid #334155; border-radius:6px; color:#e2e8f0; padding:6px 8px; font-size:12px; cursor:pointer;" onchange="if(window.setTimeOfDay) window.setTimeOfDay(this.value)">
+        <select id="tod-select" style="width:100%; background:#1e293b; border:1px solid #334155; border-radius:6px; color:#e2e8f0; padding:6px 8px; font-size:12px; cursor:pointer;" onchange="if(window.setTimeOfDay) window.setTimeOfDay(this.value); this.blur();">
             <option value="DAY">☀️ Day</option>
             <option value="SUNSET">🌅 Sunset</option>
             <option value="NIGHT">🌙 Night</option>
@@ -1504,7 +1508,7 @@
     <!-- FIX-M3: Car Profile Selector -->
     <div style="border-top:1px solid #334155; padding-top:10px; margin-top:8px;">
         <div style="font-size:11px; font-weight:bold; color:#f472b6; margin-bottom:4px;">🏎️ CAR PROFILE</div>
-        <select id="profile-select" style="width:100%; background:#1e293b; border:1px solid #334155; border-radius:6px; color:#e2e8f0; padding:6px 8px; font-size:12px; cursor:pointer;" onchange="if(window.rallyVehicle) window.rallyVehicle.applyProfile(this.value);">
+        <select id="profile-select" style="width:100%; background:#1e293b; border:1px solid #334155; border-radius:6px; color:#e2e8f0; padding:6px 8px; font-size:12px; cursor:pointer;" onchange="if(window.rallyVehicle) window.rallyVehicle.applyProfile(this.value); this.blur();">
             <option value="GROUP_A">🏎️ Group A (4WD balanced)</option>
             <option value="WRC">🏁 WRC (Aggressive 4WD)</option>
             <option value="RWD_DRIFT">💨 RWD Drift (Tail-happy)</option>
@@ -1516,7 +1520,7 @@
     <!-- FIX-H4: Tyre Compound Selector -->
     <div style="border-top:1px solid #334155; padding-top:10px; margin-top:8px;">
         <div style="font-size:11px; font-weight:bold; color:#ef4444; margin-bottom:4px;">🔴 TYRE COMPOUND</div>
-        <select id="tyre-select" style="width:100%; background:#1e293b; border:1px solid #334155; border-radius:6px; color:#e2e8f0; padding:6px 8px; font-size:12px; cursor:pointer;" onchange="if(window.rallyVehicle) window.rallyVehicle.setCompound(this.value);">
+        <select id="tyre-select" style="width:100%; background:#1e293b; border:1px solid #334155; border-radius:6px; color:#e2e8f0; padding:6px 8px; font-size:12px; cursor:pointer;" onchange="if(window.rallyVehicle) window.rallyVehicle.setCompound(this.value); this.blur();">
             <option value="SOFT" style="color:#ef4444;">🔴 Soft (Max grip, fast wear)</option>
             <option value="MEDIUM" style="color:#fbbf24;">🟡 Medium (Balanced)</option>
             <option value="HARD" style="color:#94a3b8;">⚪ Hard (Low grip, durable)</option>
