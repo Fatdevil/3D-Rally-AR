@@ -53,6 +53,11 @@ uniform float u_playMode;
 uniform float u_ambientIntensity;
 uniform float u_sunIntensity;
 uniform vec3  u_sunColor;
+uniform float u_headlightIntensity;
+uniform vec3  u_headlight1Pos;
+uniform vec3  u_headlight1Dir;
+uniform vec3  u_headlight2Pos;
+uniform vec3  u_headlight2Dir;
 
 varying vec2  vUv;
 varying vec3  vNormal;
@@ -150,8 +155,41 @@ void main() {
     // ── 9. Lighting ───────────────────────────────────────────────────────────
     float diff    = max(dot(finalN, normalize(u_sunDir)), 0.0);
     float ambient = u_ambientIntensity;
-    float light   = ambient + (1.0 - ambient) * diff * u_sunIntensity;
-    vec4  litColor = vec4(terrainColor.rgb * light * u_sunColor, terrainColor.a);
+    float sunLight = ambient + (1.0 - ambient) * diff * u_sunIntensity;
+    vec3  totalLight = sunLight * u_sunColor;
+
+    // Headlight spotlight calculation
+    if (u_headlightIntensity > 0.01) {
+        // Headlight 1
+        vec3 toLight1 = vWorldPos - u_headlight1Pos;
+        float dist1 = length(toLight1);
+        if (dist1 < 50.0) {
+            vec3 toLight1Dir = normalize(toLight1);
+            float dotSpot1 = dot(toLight1Dir, u_headlight1Dir);
+            if (dotSpot1 > 0.82) {
+                float coneAtten = smoothstep(0.82, 0.95, dotSpot1);
+                float distAtten = 1.0 - (dist1 / 50.0);
+                float normalAtten = max(dot(finalN, -toLight1Dir), 0.0);
+                totalLight += vec3(1.0, 0.98, 0.90) * coneAtten * distAtten * normalAtten * 2.8 * u_headlightIntensity;
+            }
+        }
+        
+        // Headlight 2
+        vec3 toLight2 = vWorldPos - u_headlight2Pos;
+        float dist2 = length(toLight2);
+        if (dist2 < 50.0) {
+            vec3 toLight2Dir = normalize(toLight2);
+            float dotSpot2 = dot(toLight2Dir, u_headlight2Dir);
+            if (dotSpot2 > 0.82) {
+                float coneAtten = smoothstep(0.82, 0.95, dotSpot2);
+                float distAtten = 1.0 - (dist2 / 50.0);
+                float normalAtten = max(dot(finalN, -toLight2Dir), 0.0);
+                totalLight += vec3(1.0, 0.98, 0.90) * coneAtten * distAtten * normalAtten * 2.8 * u_headlightIntensity;
+            }
+        }
+    }
+
+    vec4 litColor = vec4(terrainColor.rgb * totalLight, terrainColor.a);
 
     // ── 10. Distance fog ──────────────────────────────────────────────────────
     float fogT = smoothstep(u_fogNear, u_fogFar, vFogDepth);
@@ -188,6 +226,11 @@ void main() {
                 u_ambientIntensity: { value: 0.38 },
                 u_sunIntensity:     { value: 1.0 },
                 u_sunColor:         { value: new THREE.Color(0xffffff) },
+                u_headlightIntensity: { value: 0.0 },
+                u_headlight1Pos:     { value: new THREE.Vector3() },
+                u_headlight1Dir:     { value: new THREE.Vector3() },
+                u_headlight2Pos:     { value: new THREE.Vector3() },
+                u_headlight2Dir:     { value: new THREE.Vector3() },
             },
             vertexShader:   TERRAIN_VERT,
             fragmentShader: TERRAIN_FRAG,

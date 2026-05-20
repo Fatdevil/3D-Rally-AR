@@ -1317,6 +1317,48 @@
             if (window.raceConfig && window.raceConfig.start) {
                 updateRaceLogic(dt);
             }
+            
+            // Dynamic headlights: calculate world space positions/vectors and update custom shaders
+            let car = window.rallyVehicle.getCar ? window.rallyVehicle.getCar() : null;
+            if (car && car.mesh) {
+                let active = car.headlightsOn ? 1.0 : 0.0;
+                
+                // Headlight local offsets: Left (-0.7, -0.15, 2.08), Right (0.7, -0.15, 2.08)
+                let leftPos = new THREE.Vector3(-0.7, -0.15, 2.08);
+                let rightPos = new THREE.Vector3(0.7, -0.15, 2.08);
+                
+                leftPos.applyMatrix4(car.mesh.matrixWorld);
+                rightPos.applyMatrix4(car.mesh.matrixWorld);
+                
+                // Heading direction (+Z locally)
+                let fwdDir = new THREE.Vector3(0, 0, 1);
+                fwdDir.applyQuaternion(car.mesh.quaternion);
+                fwdDir.normalize();
+                
+                // 1. Terrain shader
+                let terrainMat = window._terrainMat;
+                if (terrainMat && terrainMat.uniforms) {
+                    terrainMat.uniforms.u_headlight1Pos.value.copy(leftPos);
+                    terrainMat.uniforms.u_headlight1Dir.value.copy(fwdDir);
+                    terrainMat.uniforms.u_headlight2Pos.value.copy(rightPos);
+                    terrainMat.uniforms.u_headlight2Dir.value.copy(fwdDir);
+                    terrainMat.uniforms.u_headlightIntensity.value = active;
+                }
+                
+                // 2. Road decals shader
+                if (window.roadDecal && window.roadDecal.materials) {
+                    for (let key in window.roadDecal.materials) {
+                        let rmat = window.roadDecal.materials[key];
+                        if (rmat && rmat.uniforms) {
+                            rmat.uniforms.u_headlight1Pos.value.copy(leftPos);
+                            rmat.uniforms.u_headlight1Dir.value.copy(fwdDir);
+                            rmat.uniforms.u_headlight2Pos.value.copy(rightPos);
+                            rmat.uniforms.u_headlight2Dir.value.copy(fwdDir);
+                            rmat.uniforms.u_headlightIntensity.value = active;
+                        }
+                    }
+                }
+            }
         } else {
             controls.update();
         }
