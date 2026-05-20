@@ -21,7 +21,7 @@ const CFG = {
     DRIFT_STEER_BONUS: 1.5, HANDBRAKE_GRIP: 0.05,
     GRAVITY: 9.81, GRAVITY_AIR_MULT: 1.4, AIR_CONTROL: 0.3,
     CAR_HEIGHT: 0.35, WHEEL_SPIN: 0.15,
-    ROLL_SENS: 0.8, PITCH_SENS: 0.4
+    ROLL_SENS: 0.8, PITCH_SENS: 0.12
 };
 const DMG_VOLT_THRESH = 25; // m/s barrier impact to trigger volt
 
@@ -190,7 +190,7 @@ function updateVehicle(dt) {
         
         // Traction limit (Väg 1): limit forward acceleration by normal-force-derived tire friction
         let normalY = car.onGround ? ((terrain.normal && terrain.normal[2] !== undefined) ? terrain.normal[2] : 1.0) : 0.0;
-        let maxTractionAccel = CFG.GRAVITY * surface.grip * normalY * 1.5;
+        let maxTractionAccel = CFG.GRAVITY * surface.grip * normalY * 4.0;
         accel = Math.min(accel, maxTractionAccel);
         
         car.velocity.addScaledVector(fwd, accel*dt);
@@ -206,7 +206,7 @@ function updateVehicle(dt) {
         
         // Traction limit for reverse
         let normalY = car.onGround ? ((terrain.normal && terrain.normal[2] !== undefined) ? terrain.normal[2] : 1.0) : 0.0;
-        let maxTractionAccel = CFG.GRAVITY * surface.grip * normalY * 1.5;
+        let maxTractionAccel = CFG.GRAVITY * surface.grip * normalY * 4.0;
         accel = Math.min(accel, maxTractionAccel);
         
         car.velocity.addScaledVector(fwd, -accel*dt);
@@ -375,12 +375,12 @@ function updateVehicle(dt) {
 
     let fwdAccel = (forwardVel - car.prevForwardVel) / Math.max(dt,0.001);
     car.prevForwardVel = forwardVel;
-    // SPELKÄNSLA: Öka pitch markant vid gas/broms så nosen lyfts/dyker
+    // SPELKÄNSLA: Öka pitch mjukt vid gas/broms så nosen lyfts/dyker (klampad för att förhindra mark-clipping)
     let pitchAssist = 0;
-    if(input.throttle > 0) pitchAssist = -4.0; // W = Nosen upp
-    if(input.brake > 0) pitchAssist = 6.0;    // S = Nosen ner
+    if(input.throttle > 0) pitchAssist = -1.2; // W = Nosen upp
+    if(input.brake > 0) pitchAssist = 2.0;    // S = Nosen ner
     // FIX: fwdAccel måste vara negativ för att lyfta nosen!
-    let tgtPitch = clamp(-fwdAccel*CFG.PITCH_SENS + pitchAssist, -12, 12);
+    let tgtPitch = clamp(-fwdAccel*CFG.PITCH_SENS + pitchAssist, -4, 4);
     let pitchRate = 1 - Math.pow(1 - 0.2, dt * 60);
     car.visualPitch = lerp(car.visualPitch, tgtPitch, pitchRate);
 
