@@ -1323,6 +1323,9 @@
             if (car && car.mesh) {
                 let active = car.headlightsOn ? 1.0 : 0.0;
                 
+                // Force update matrixWorld to get the exact position and orientation of this frame
+                car.mesh.updateMatrixWorld(true);
+                
                 // Headlight local offsets: Left (-0.7, -0.15, 2.08), Right (0.7, -0.15, 2.08)
                 let leftPos = new THREE.Vector3(-0.7, -0.15, 2.08);
                 let rightPos = new THREE.Vector3(0.7, -0.15, 2.08);
@@ -1330,9 +1333,12 @@
                 leftPos.applyMatrix4(car.mesh.matrixWorld);
                 rightPos.applyMatrix4(car.mesh.matrixWorld);
                 
-                // Heading direction (+Z locally)
-                let fwdDir = new THREE.Vector3(0, 0, 1);
-                fwdDir.applyQuaternion(car.mesh.quaternion);
+                // Extract exact world direction (+Z local direction) directly from matrixWorld column 2
+                let fwdDir = new THREE.Vector3();
+                fwdDir.setFromMatrixColumn(car.mesh.matrixWorld, 2);
+                
+                // Tilt headlights slightly downwards (3 degrees) so they sweep/illuminate the ground better
+                fwdDir.y -= 0.05;
                 fwdDir.normalize();
                 
                 // 1. Terrain shader
