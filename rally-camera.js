@@ -32,6 +32,9 @@ let shakeTimer = 0;
 let impactFreeze = 0;   // seconds remaining at slow speed
 const SLOWMO_FACTOR = 0.1; // 10% time-speed during freeze
 
+// FAS0-M2: Surface rumble (continuous micro-shake)
+let rumbleIntensity = 0;  // 0..0.5, set by rally-vehicle.js each frame
+
 // ─── Init (called from rally-vehicle activate) ───
 function init(car) {
     camHeading = car.heading;
@@ -136,6 +139,12 @@ function update(camera, physDt, realDt) {
         camera.position.y += (Math.random() - 0.5) * shake * 0.5;
     }
 
+    // FAS0-M2: Surface rumble — continuous low-amplitude micro-shake
+    if (rumbleIntensity > 0.01) {
+        camera.position.x += (Math.random() - 0.5) * rumbleIntensity * 0.15;
+        camera.position.y += (Math.random() - 0.5) * rumbleIntensity * 0.08;
+    }
+
     // FOV boost (time-based lerp)
     let speedRatio = clamp(Math.abs(car.speed) / 52, 0, 1);
     let targetFov = CAM.FOV_BASE + speedRatio * CAM.FOV_BOOST;
@@ -150,6 +159,7 @@ window.rallyCamera = {
     update: update,
     triggerShake: triggerShake,
     computePhysDt: computePhysDt,
+    setRumble: function(val) { rumbleIntensity = val; },  // FAS0-M2
     isSlowMo: function() { return impactFreeze > 0; }
 };
 

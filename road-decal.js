@@ -40,6 +40,7 @@ void main() {
             ao:     'Ground062S_1K-JPG_AmbientOcclusion.jpg',
             tileScale: 0.33,   // tile every ~3m
             brightness: 1.18,  // exposure boost
+            tint: [1.0, 1.0, 1.0],
         },
         TARMAC: {
             base: 'Kullersten_textures/ground_tiles_01_1k/',
@@ -48,8 +49,73 @@ void main() {
             ao:     'ground_tiles_01_ambient_occlusion_1k.png',
             tileScale: 0.25,   // tile every ~4m (larger stones)
             brightness: 1.50,  // cobblestone is dark, strong lift needed
+            tint: [1.0, 1.0, 1.0],
+        },
+        MUD: {
+            base: 'Ground_062_textures/',
+            color:  'Ground062S_1K-JPG_Color.jpg',
+            normal: 'Ground062S_1K-JPG_NormalGL.jpg',
+            ao:     'Ground062S_1K-JPG_AmbientOcclusion.jpg',
+            tileScale: 0.33,
+            brightness: 0.75,  // darker mud look
+            tint: [0.55, 0.40, 0.30], // brownish tint matching terrain mud
         },
     };
+
+    // Helper functions to generate procedural canvas-based textures (bypasses CORS on file:///)
+    function createProceduralCanvas(materialType, mapType) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 128;
+        canvas.height = 128;
+        const ctx = canvas.getContext('2d');
+        if (mapType === 'color') {
+            if (materialType === 'TARMAC') {
+                // Dark grey cobblestone/asphalt
+                ctx.fillStyle = '#444444';
+                ctx.fillRect(0, 0, 128, 128);
+                ctx.strokeStyle = '#222222';
+                ctx.lineWidth = 2;
+                for (let i = 0; i <= 128; i += 16) {
+                    ctx.beginPath();
+                    ctx.moveTo(i, 0); ctx.lineTo(i, 128);
+                    ctx.moveTo(0, i); ctx.lineTo(128, i);
+                    ctx.stroke();
+                }
+            } else if (materialType === 'MUD') {
+                // Mud/dirt color
+                ctx.fillStyle = '#4a3525';
+                ctx.fillRect(0, 0, 128, 128);
+                for (let i = 0; i < 200; i++) {
+                    ctx.fillStyle = Math.random() > 0.5 ? '#3c2b1e' : '#58402c';
+                    ctx.fillRect(Math.random() * 128, Math.random() * 128, 4, 4);
+                }
+            } else {
+                // Gravel color
+                ctx.fillStyle = '#a69575';
+                ctx.fillRect(0, 0, 128, 128);
+                for (let i = 0; i < 400; i++) {
+                    ctx.fillStyle = Math.random() > 0.5 ? '#7b6c50' : '#c4b595';
+                    ctx.fillRect(Math.random() * 128, Math.random() * 128, 2, 2);
+                }
+            }
+        } else if (mapType === 'normal') {
+            // Flat/neutral normal
+            ctx.fillStyle = 'rgb(128, 128, 255)';
+            ctx.fillRect(0, 0, 128, 128);
+        } else {
+            // AO map: pure white
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, 128, 128);
+        }
+        return canvas;
+    }
+
+    function createProceduralRoadTexture(materialType, mapType) {
+        const canvas = createProceduralCanvas(materialType, mapType);
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+        return tex;
+    }
 
     // Fragment shader with configurable brightness + tile scale via uniforms
     const ROAD_FRAG_MULTI = /* glsl */`
@@ -62,6 +128,7 @@ uniform float u_fogNear;
 uniform float u_fogFar;
 uniform float u_tileScale;
 uniform float u_brightness;
+uniform vec3  u_tint;
 
 varying vec2  vRoadUV;
 varying vec3  vWorldPos;
@@ -76,6 +143,9 @@ void main() {
     vec3 albedo  = texture2D(u_gravel_alb, texUV).rgb;
     vec3 nMap    = texture2D(u_gravel_normal, texUV).rgb;
     float ao     = texture2D(u_gravel_ao, texUV).r;
+
+    // Apply tint color multiplier
+    albedo *= u_tint;
 
     // Perturb normal with normal map (tangent-space approx for flat road)
     vec3 nTan = nMap * 2.0 - 1.0;
@@ -109,20 +179,53 @@ void main() {
         const key = materialType || 'GRAVEL';
         if (_materials[key]) return _materials[key];
 
-        // Fall back to GRAVEL for unknown types
         const texSet = ROAD_TEX_SETS[key] || ROAD_TEX_SETS.GRAVEL;
-        const loader = new THREE.TextureLoader();
+        const isLocalFile = window.location.protocol === 'file:';
 
-        const colorTex = loader.load(texSet.base + texSet.color, function() {
-            console.log('🪨 Road ' + key + ' color texture loaded');
-        });
-        colorTex.wrapS = colorTex.wrapT = THREE.RepeatWrapping;
+        let colorTex, normalTex, aoTex;
 
-        const normalTex = loader.load(texSet.base + texSet.normal);
-        normalTex.wrapS = normalTex.wrapT = THREE.RepeatWrapping;
+        if (isLocalFile) {
+            console.log('🌐 Bypassing CORS on file:// protocol for road ' + key + ' using procedural textures');
+            colorTex = createProceduralRoadTexture(key, 'color');
+            normalTex = createProceduralRoadTexture(key, 'normal');
+            aoTex = createProceduralRoadTexture(key, 'ao');
+        } else {
+            const loader = new THREE.TextureLoader();
+            colorTex = loader.load(texSet.base + texSet.color, 
+                function() {
+                    console.log('🪨 Road ' + key + ' color texture loaded');
+                },
+                undefined,
+                function(err) {
+                    console.warn('⚠️ Failed to load color texture for ' + key + ', falling back to procedural:', err);
+                    colorTex.image = createProceduralCanvas(key, 'color');
+                    colorTex.needsUpdate = true;
+                }
+            );
+            colorTex.wrapS = colorTex.wrapT = THREE.RepeatWrapping;
 
-        const aoTex = loader.load(texSet.base + texSet.ao);
-        aoTex.wrapS = aoTex.wrapT = THREE.RepeatWrapping;
+            normalTex = loader.load(texSet.base + texSet.normal,
+                undefined,
+                undefined,
+                function(err) {
+                    console.warn('⚠️ Failed to load normal texture for ' + key + ', falling back to procedural:', err);
+                    normalTex.image = createProceduralCanvas(key, 'normal');
+                    normalTex.needsUpdate = true;
+                }
+            );
+            normalTex.wrapS = normalTex.wrapT = THREE.RepeatWrapping;
+
+            aoTex = loader.load(texSet.base + texSet.ao,
+                undefined,
+                undefined,
+                function(err) {
+                    console.warn('⚠️ Failed to load AO texture for ' + key + ', falling back to procedural:', err);
+                    aoTex.image = createProceduralCanvas(key, 'ao');
+                    aoTex.needsUpdate = true;
+                }
+            );
+            aoTex.wrapS = aoTex.wrapT = THREE.RepeatWrapping;
+        }
 
         const mat = new THREE.ShaderMaterial({
             uniforms: {
@@ -135,6 +238,7 @@ void main() {
                 u_fogFar:        { value: 1800.0 },
                 u_tileScale:     { value: texSet.tileScale },
                 u_brightness:    { value: texSet.brightness },
+                u_tint:          { value: new THREE.Color(texSet.tint[0], texSet.tint[1], texSet.tint[2]) },
             },
             vertexShader:   ROAD_VERT,
             fragmentShader: ROAD_FRAG_MULTI,
@@ -142,8 +246,8 @@ void main() {
             depthWrite:     false,
             side:           THREE.DoubleSide,
             polygonOffset:       true,
-            polygonOffsetFactor: -1,
-            polygonOffsetUnits:  -1,
+            polygonOffsetFactor: -4,
+            polygonOffsetUnits:  -4,
         });
 
         _materials[key] = mat;
@@ -159,7 +263,7 @@ void main() {
         const shoulder = 1.5;                      // shoulder width in meters (covers canvas lineJoin:round at curves)
         const totalHalf = halfW + shoulder;         // total half-width including shoulder
         const getH     = window.getTerrainHeight;
-        const yOffset  = 0.25;                     // meters above terrain (prevents poke-through on sculpted slopes)
+        const yOffset  = 0.02;                     // meters above terrain (prevents poke-through on sculpted slopes)
 
         // Extend mesh beyond first/last point to match canvas lineCap:'round'
         // Canvas lineCap:'round' adds a semicircle of radius = lineWidth/2 at each end

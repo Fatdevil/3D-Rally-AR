@@ -120,7 +120,17 @@ void main() {
     float roadMask  = vColor.r;
     float roadSmooth = smoothstep(0.0, 1.0, roadMask);
     float roadAO    = texture2D(u_gravel_ao, gravelUV).r;
-    vec4  roadColor = cGravel * roadAO;
+    
+    // Dynamically calculate road texture based on underlying splat weights
+    vec4  roadBase = cGravel * wGravel + cTarmac * wTarmac + mudTint * wMud;
+    float roadWeightSum = wGravel + wTarmac + wMud;
+    if (roadWeightSum > 0.001) {
+        roadBase = roadBase / roadWeightSum;
+    } else {
+        roadBase = cGravel;
+    }
+    
+    vec4  roadColor = roadBase * roadAO;
     // Tire tracks darken via B-channel
     float tireTracks = vColor.b * roadMask;
     roadColor.rgb   *= (1.0 - tireTracks * 0.30);

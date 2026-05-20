@@ -3836,30 +3836,54 @@
         
         let threeX = px;
         let threeZ = -py;
-        
-        let gx = Math.round((threeX + (TERRAIN_SIZE/2)) / (TERRAIN_SIZE/TERRAIN_SEGS));
-        let gz = Math.round((threeZ + (TERRAIN_SIZE/2)) / (TERRAIN_SIZE/TERRAIN_SEGS));
-        
-        if(gx < 0) gx = 0; if(gx > TERRAIN_SEGS) gx = TERRAIN_SEGS;
-        if(gz < 0) gz = 0; if(gz > TERRAIN_SEGS) gz = TERRAIN_SEGS;
-        
-        let idx = gz * (TERRAIN_SEGS+1) + gx;
+        let step = TERRAIN_SIZE / TERRAIN_SEGS;
         let positions = planeGeo.attributes.position.array;
-        let height = positions[idx * 3 + 2]; 
-        
-        let gxRight = Math.min(TERRAIN_SEGS, gx + 1);
-        let gzDown = Math.max(0, gz - 1); 
+        let stride = TERRAIN_SEGS + 1;
 
-        let hR = positions[(gz * (TERRAIN_SEGS+1) + gxRight) * 3 + 2];
-        let hD = positions[(gzDown * (TERRAIN_SEGS+1) + gx) * 3 + 2];
-        
-        let step = TERRAIN_SIZE/TERRAIN_SEGS;
-        let dx_phys = (hR - height) / step;
-        let dy_phys = (hD - height) / step; 
-        
-        let len = Math.sqrt(dx_phys*dx_phys + dy_phys*dy_phys + 1.0);
-        let normal = [-dx_phys/len, -dy_phys/len, 1.0/len];
-        
+        // FIX-K5: Bilinear interpolation (replaces Math.round nearest-vertex)
+        // Continuous grid coordinates (fractional)
+        let fx = (threeX + TERRAIN_SIZE / 2) / step;
+        let fz = (threeZ + TERRAIN_SIZE / 2) / step;
+
+        // Sample 4 corners for smooth height
+        let x0 = Math.floor(fx), x1 = x0 + 1;
+        let z0 = Math.floor(fz), z1 = z0 + 1;
+        let tx = fx - x0, tz = fz - z0;
+
+        // Clamp to grid bounds
+        let cx0 = Math.max(0, Math.min(TERRAIN_SEGS, x0));
+        let cx1 = Math.max(0, Math.min(TERRAIN_SEGS, x1));
+        let cz0 = Math.max(0, Math.min(TERRAIN_SEGS, z0));
+        let cz1 = Math.max(0, Math.min(TERRAIN_SEGS, z1));
+
+        let h00 = positions[(cz0 * stride + cx0) * 3 + 2];
+        let h10 = positions[(cz0 * stride + cx1) * 3 + 2];
+        let h01 = positions[(cz1 * stride + cx0) * 3 + 2];
+        let h11 = positions[(cz1 * stride + cx1) * 3 + 2];
+
+        let height = h00 * (1 - tx) * (1 - tz) + h10 * tx * (1 - tz)
+                   + h01 * (1 - tx) * tz       + h11 * tx * tz;
+
+        // FIX-M7: 5-point symmetric central difference normal
+        // (replaces 2-point asymmetric right+down)
+        let gx = Math.round(fx), gz = Math.round(fz);
+        gx = Math.max(1, Math.min(TERRAIN_SEGS - 1, gx));
+        gz = Math.max(1, Math.min(TERRAIN_SEGS - 1, gz));
+
+        let hL = positions[(gz * stride + (gx - 1)) * 3 + 2];
+        let hR = positions[(gz * stride + (gx + 1)) * 3 + 2];
+        let hU = positions[((gz + 1) * stride + gx) * 3 + 2];
+        let hD = positions[((gz - 1) * stride + gx) * 3 + 2];
+
+        let ndx = (hR - hL) / (2 * step);  // symmetric slope in +X
+        let ndz = (hU - hD) / (2 * step);  // symmetric slope in +Z
+        let len = Math.sqrt(ndx * ndx + ndz * ndz + 1.0);
+        let normal = [-ndx/len, -ndz/len, 1.0/len];
+
+        // Keep idx for water lookup (use nearest grid point)
+        let idx = Math.round(fz) * stride + Math.round(fx);
+        idx = Math.max(0, Math.min(positions.length / 3 - 1, idx));
+
         let cX = Math.floor(((threeX + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096);
         let cZ = Math.floor(((threeZ + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096);
         if (cX < 0) cX = 0; if (cX >= 4096) cX = 4095;
@@ -8020,16 +8044,16 @@
                     fescue:    { name: 'DEEP OFF-ROAD',hex: cfg.fescueColor   || '#2d4c1a' },
                     water:     { name: 'WATER',        hex: cfg.waterColor    || '#38bdf8' },
                     // Rally specifika vägar (matchar smart-builder färger exakt)
-                    rallyGravel:  { name: 'GRAVEL',    hex: '#B8A88A' },
-                    rallyAsphalt: { name: 'ASPHALT',   hex: '#555555' },
-                    rallyDirt:    { name: 'DIRT ROAD', hex: '#8B7355' }
+                    rallyGravel:  { name: 'GRAVEL',    hex: '#C2AF7C' },
+                    rallyAsphalt: { name: 'ASPHALT',   hex: '#7DB952' },
+                    rallyDirt:    { name: 'DIRT ROAD', hex: '#2D4C1A' }
                 };
                 
                 let bestDist = Infinity;
                 for (let key in surfaceMap) {
                     let c = hexRgb(surfaceMap[key].hex);
                     let d = cDist(r, g, b, c[0], c[1], c[2]);
-                    if (d < bestDist) { bestDist = d; biomeType = surfaceMap[key].name; }
+                    if (d <= bestDist) { bestDist = d; biomeType = surfaceMap[key].name; }
                 }
                 let waterHeight = -99;
                 if (typeof waterGeo !== 'undefined' && waterGeo) {

@@ -67,6 +67,8 @@
 <script src="arcade-api-service.js"></script>
 <script src="arcade-storage-service.js"></script>
 <script src="rally-surfaces.js"></script>
+<script src="rally-weather.js"></script>            <!-- FAS3-M4: Weather system -->
+<script src="rally-car-profiles.js"></script>       <!-- FAS3-M3: Car profiles -->
 <script src="rally-damage.js"></script>
 <script src="rally-camera.js"></script>
 <script src="rally-respawn.js"></script>
@@ -151,6 +153,7 @@
     terrainMesh.receiveShadow = true;
     scene.add(terrainMesh);
     window._terrainMat = planeMat;
+    window._terrainGeo = planeGeo;  // FAS0-M1: expose for tire track painting
 
 
     // ── Biome color → surface type classifier ──
@@ -189,28 +192,52 @@
     }
 
     // ── localGetTerrainAt (needed by rally-vehicle.js) ──
+    // FAS0-K5: Bilinear interpolation (replaces nearest-vertex Math.round)
+    // FAS0-M7: 5-point central difference normal (replaces 2-point asymmetric)
     window.localGetTerrainAt = function(px, py) {
         let threeX = px;
         let threeZ = -py;
         let step = TERRAIN_SIZE / TERRAIN_SEGS;
         let positions = planeGeo.attributes.position.array;
+        let stride = TERRAIN_SEGS + 1;
 
-        let gx = Math.round((threeX + TERRAIN_SIZE / 2) / step);
-        let gz = Math.round((threeZ + TERRAIN_SIZE / 2) / step);
-        gx = Math.max(0, Math.min(TERRAIN_SEGS, gx));
-        gz = Math.max(0, Math.min(TERRAIN_SEGS, gz));
+        // K5: Continuous grid coordinates (fractional)
+        let fx = (threeX + TERRAIN_SIZE / 2) / step;
+        let fz = (threeZ + TERRAIN_SIZE / 2) / step;
 
-        let idx = gz * (TERRAIN_SEGS + 1) + gx;
-        let height = positions[idx * 3 + 2];
+        // K5: Bilinear interpolation — sample 4 corners
+        let x0 = Math.floor(fx), x1 = x0 + 1;
+        let z0 = Math.floor(fz), z1 = z0 + 1;
+        let tx = fx - x0, tz = fz - z0;
 
-        // Normal calculation
-        let gxR = Math.min(TERRAIN_SEGS, gx + 1);
-        let gzD = Math.max(0, gz - 1);
-        let hR = positions[(gz * (TERRAIN_SEGS + 1) + gxR) * 3 + 2];
-        let hD = positions[(gzD * (TERRAIN_SEGS + 1) + gx) * 3 + 2];
-        let dx = (hR - height) / step;
-        let dy = (hD - height) / step;
-        let len = Math.sqrt(dx * dx + dy * dy + 1.0);
+        // Clamp to grid bounds
+        let cx0 = Math.max(0, Math.min(TERRAIN_SEGS, x0));
+        let cx1 = Math.max(0, Math.min(TERRAIN_SEGS, x1));
+        let cz0 = Math.max(0, Math.min(TERRAIN_SEGS, z0));
+        let cz1 = Math.max(0, Math.min(TERRAIN_SEGS, z1));
+
+        let h00 = positions[(cz0 * stride + cx0) * 3 + 2];
+        let h10 = positions[(cz0 * stride + cx1) * 3 + 2];
+        let h01 = positions[(cz1 * stride + cx0) * 3 + 2];
+        let h11 = positions[(cz1 * stride + cx1) * 3 + 2];
+
+        let height = h00 * (1 - tx) * (1 - tz) + h10 * tx * (1 - tz)
+                   + h01 * (1 - tx) * tz       + h11 * tx * tz;
+
+        // M7: 5-point central difference normal (symmetric, smooth)
+        // Uses nearest integer grid point, clamped 1 cell from edge
+        let gx = Math.round(fx), gz = Math.round(fz);
+        gx = Math.max(1, Math.min(TERRAIN_SEGS - 1, gx));
+        gz = Math.max(1, Math.min(TERRAIN_SEGS - 1, gz));
+
+        let hL = positions[(gz * stride + (gx - 1)) * 3 + 2];
+        let hR = positions[(gz * stride + (gx + 1)) * 3 + 2];
+        let hU = positions[((gz + 1) * stride + gx) * 3 + 2];
+        let hD = positions[((gz - 1) * stride + gx) * 3 + 2];
+
+        let ndx = (hR - hL) / (2 * step);  // slope in +X
+        let ndz = (hU - hD) / (2 * step);  // slope in +Z
+        let len = Math.sqrt(ndx * ndx + ndz * ndz + 1.0);
 
         // Biome detection from color data (if available)
         let surfType = 'FAIRWAY';
@@ -229,9 +256,67 @@
                 surfType = classifyBiomeColor(px[0], px[1], px[2]);
             }
         }
+
+        // Road override: check if coordinate lies within any road spline geometry
+        if (window.raceConfig && window.raceConfig.roads) {
+            let px = threeX, py = -threeZ; // world X and Z coordinates
+            for (let ri = 0; ri < window.raceConfig.roads.length; ri++) {
+                let road = window.raceConfig.roads[ri];
+                let pts = road.sampledPoints;
+                if (!pts || pts.length < 2) continue;
+                
+                let halfW = road.width / 2;
+                
+                // Fast bounding box check
+                if (!road._bbox) {
+                    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+                    for (let pi = 0; pi < pts.length; pi++) {
+                        let pt = pts[pi];
+                        if (pt.x < minX) minX = pt.x; if (pt.x > maxX) maxX = pt.x;
+                        if (pt.z < minZ) minZ = pt.z; if (pt.z > maxZ) maxZ = pt.z;
+                    }
+                    road._bbox = { minX: minX - halfW, maxX: maxX + halfW, minZ: minZ - halfW, maxZ: maxZ + halfW };
+                }
+                let bbox = road._bbox;
+                if (px < bbox.minX || px > bbox.maxX || py < bbox.minZ || py > bbox.maxZ) {
+                    continue; 
+                }
+
+                // Check distance to each segment of the road
+                let onRoad = false;
+                for (let si = 0; si < pts.length - 1; si++) {
+                    let p1 = pts[si];
+                    let p2 = pts[si + 1];
+                    let l2 = (p1.x - p2.x) ** 2 + (p1.z - p2.z) ** 2;
+                    if (l2 === 0) continue;
+                    let t = ((px - p1.x) * (p2.x - p1.x) + (py - p1.z) * (p2.z - p1.z)) / l2;
+                    t = Math.max(0, Math.min(1, t));
+                    let projX = p1.x + t * (p2.x - p1.x);
+                    let projZ = p1.z + t * (p2.z - p1.z);
+                    let d2 = (px - projX) ** 2 + (py - projZ) ** 2;
+                    
+                    if (d2 < halfW * halfW) {
+                        onRoad = true;
+                        break;
+                    }
+                }
+
+                if (onRoad) {
+                    if (road.material === 'TARMAC') {
+                        surfType = 'FAIRWAY'; // Translates to ASPHALT (0.85 grip)
+                    } else if (road.material === 'MUD') {
+                        surfType = 'FESCUE';   // Translates to MUD (0.38 grip)
+                    } else {
+                        surfType = 'WASTE';    // Translates to GRAVEL (0.52 grip)
+                    }
+                    break;
+                }
+            }
+        }
+
         return {
             z: height,
-            normal: [-dx / len, dy / len, 1.0 / len],
+            normal: [-ndx / len, -ndz / len, 1.0 / len],
             type: surfType
         };
     };
@@ -1243,6 +1328,41 @@
             <span id="val-steerbonus" style="font-weight:bold; color:#4ade80;">-</span>
         </div>
         <input type="range" id="slide-steerbonus" min="1.0" max="2.5" step="0.1" style="width:100%; accent-color:#4ade80;" oninput="updateTunedPhysics()">
+    </div>
+
+    <!-- FIX-M4: Weather Selector -->
+    <div style="border-top:1px solid #334155; padding-top:10px; margin-top:8px;">
+        <div style="font-size:11px; font-weight:bold; color:#38bdf8; margin-bottom:4px;">🌤️ WEATHER</div>
+        <select id="weather-select" style="width:100%; background:#1e293b; border:1px solid #334155; border-radius:6px; color:#e2e8f0; padding:6px 8px; font-size:12px; cursor:pointer;" onchange="if(window.rallyWeather) window.rallyWeather.setWeather(this.value);">
+            <option value="DRY">☀️ Dry</option>
+            <option value="LIGHT_RAIN">🌦️ Light Rain</option>
+            <option value="HEAVY_RAIN">🌧️ Heavy Rain</option>
+            <option value="FOG">🌫️ Fog</option>
+            <option value="SNOW_FALL">❄️ Snow</option>
+        </select>
+    </div>
+
+    <!-- FIX-M3: Car Profile Selector -->
+    <div style="border-top:1px solid #334155; padding-top:10px; margin-top:8px;">
+        <div style="font-size:11px; font-weight:bold; color:#f472b6; margin-bottom:4px;">🏎️ CAR PROFILE</div>
+        <select id="profile-select" style="width:100%; background:#1e293b; border:1px solid #334155; border-radius:6px; color:#e2e8f0; padding:6px 8px; font-size:12px; cursor:pointer;" onchange="if(window.rallyVehicle) window.rallyVehicle.applyProfile(this.value);">
+            <option value="GROUP_A">🏎️ Group A (4WD balanced)</option>
+            <option value="WRC">🏁 WRC (Aggressive 4WD)</option>
+            <option value="RWD_DRIFT">💨 RWD Drift (Tail-happy)</option>
+            <option value="FWD_HOT">🚗 FWD Hot Hatch (Nimble)</option>
+            <option value="TROPHY_TRUCK">🛻 Trophy Truck (Offroad)</option>
+        </select>
+    </div>
+
+    <!-- FIX-H4: Tyre Compound Selector -->
+    <div style="border-top:1px solid #334155; padding-top:10px; margin-top:8px;">
+        <div style="font-size:11px; font-weight:bold; color:#ef4444; margin-bottom:4px;">🔴 TYRE COMPOUND</div>
+        <select id="tyre-select" style="width:100%; background:#1e293b; border:1px solid #334155; border-radius:6px; color:#e2e8f0; padding:6px 8px; font-size:12px; cursor:pointer;" onchange="if(window.rallyVehicle) window.rallyVehicle.setCompound(this.value);">
+            <option value="SOFT" style="color:#ef4444;">🔴 Soft (Max grip, fast wear)</option>
+            <option value="MEDIUM" style="color:#fbbf24;">🟡 Medium (Balanced)</option>
+            <option value="HARD" style="color:#94a3b8;">⚪ Hard (Low grip, durable)</option>
+            <option value="WET" style="color:#38bdf8;">🔵 Wet (Rain specialist)</option>
+        </select>
     </div>
 
     <div style="font-size:10px; color:#64748b; text-align:center; margin-top:4px; border-top:1px solid #334155; padding-top:8px;">Drive to feel changes instantly!</div>

@@ -3032,8 +3032,8 @@ window.executeSmartRoad = function() {
         }
         ctx.save();
         if(surface === 'GRAVEL') {
-            let gravelBase = '#B8A88A';
-            let stoneColor = '#7A7060';
+            let gravelBase = '#C2AF7C';
+            let stoneColor = '#9A8B60';
             let stoneDensity = (window._smartRoadStoneDensity || 50) / 100;
             traceRoadPoly(); ctx.fillStyle = gravelBase; ctx.fill();
             traceRoadPoly(); ctx.clip();
@@ -3076,9 +3076,9 @@ window.executeSmartRoad = function() {
                 ctx.putImageData(imgData, cMinX, cMinY);
             }
         } else if(surface === 'ASPHALT') {
-            traceRoadPoly(); ctx.fillStyle = '#555555'; ctx.fill();
+            traceRoadPoly(); ctx.fillStyle = '#7DB952'; ctx.fill();
         } else if(surface === 'DIRT') {
-            traceRoadPoly(); ctx.fillStyle = '#8B7355'; ctx.fill();
+            traceRoadPoly(); ctx.fillStyle = '#2D4C1A'; ctx.fill();
         }
         ctx.restore();
         window._arcadeMapTex.needsUpdate = true;

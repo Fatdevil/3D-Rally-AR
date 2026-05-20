@@ -116,4 +116,60 @@ window.resolveSurface = function(terrainType) {
 window.RALLY_SURFACES = SURFACES;
 window.RALLY_SURFACE_MAP = SURFACE_MAP;
 
+// === FAS3-K4: TRACK DEGRADATION SYSTEM ===
+// Spatial grid tracking how much each area has been driven on
+// Degradation reduces grip and increases rumble progressively
+const DEGRADE_GRID_SIZE = 10;  // meters per cell
+const DEGRADE_GRID_DIM = 100;  // 100×100 grid = 1000m terrain
+let degradeGrid = null;
+
+function initDegradeGrid() {
+    degradeGrid = new Float32Array(DEGRADE_GRID_DIM * DEGRADE_GRID_DIM);
+}
+
+// Called each frame while car is on ground
+function degradeSurface(worldX, worldZ, intensity, terrainSize) {
+    if (!degradeGrid) initDegradeGrid();
+    let half = terrainSize / 2;
+    let gx = Math.floor((worldX + half) / DEGRADE_GRID_SIZE);
+    let gz = Math.floor((worldZ + half) / DEGRADE_GRID_SIZE);
+    if (gx < 0 || gx >= DEGRADE_GRID_DIM || gz < 0 || gz >= DEGRADE_GRID_DIM) return;
+    let idx = gz * DEGRADE_GRID_DIM + gx;
+    degradeGrid[idx] = Math.min(1.0, degradeGrid[idx] + intensity);
+}
+
+// Get degradation at position (0..1, 0=fresh, 1=fully worn)
+function getDegradation(worldX, worldZ, terrainSize) {
+    if (!degradeGrid) return 0;
+    let half = terrainSize / 2;
+    let gx = Math.floor((worldX + half) / DEGRADE_GRID_SIZE);
+    let gz = Math.floor((worldZ + half) / DEGRADE_GRID_SIZE);
+    if (gx < 0 || gx >= DEGRADE_GRID_DIM || gz < 0 || gz >= DEGRADE_GRID_DIM) return 0;
+    return degradeGrid[gz * DEGRADE_GRID_DIM + gx];
+}
+
+// Resolve surface with degradation applied
+window.resolveSurfaceDegraded = function(terrainType, worldX, worldZ, terrainSize) {
+    let base = window.resolveSurface(terrainType);
+    let deg = getDegradation(worldX, worldZ, terrainSize || 900);
+    if (deg < 0.01) return base;
+
+    // Degraded surface: reduce grip, increase rumble, more drag
+    return Object.assign({}, base, {
+        grip: base.grip * (1.0 - deg * 0.25),           // up to 25% grip loss
+        longGrip: base.longGrip * (1.0 - deg * 0.20),
+        brake: base.brake * (1.0 - deg * 0.15),
+        rumble: Math.min(1.0, base.rumble + deg * 0.3),
+        dragAdd: base.dragAdd + deg * 0.003,
+        particleIntensity: Math.min(1.0, base.particleIntensity + deg * 0.2)
+    });
+};
+
+window.rallyTrackDegrade = {
+    degrade: degradeSurface,
+    getDegradation: getDegradation,
+    reset: function() { if (degradeGrid) degradeGrid.fill(0); },
+    init: initDegradeGrid
+};
+
 })();
