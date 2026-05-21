@@ -152,13 +152,13 @@ function createTouchJoysticks() {
             '<div id="heli-jbase-left" style="width:100%;height:100%;border-radius:50%;border:2px solid rgba(255,140,0,0.3);background:rgba(255,140,0,0.06);position:relative;">' +
                 '<div id="heli-jstick-left" style="width:52px;height:52px;border-radius:50%;background:rgba(255,140,0,0.25);border:2px solid rgba(255,140,0,0.6);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);"></div>' +
             '</div>' +
-            '<div style="position:absolute;bottom:-22px;width:100%;text-align:center;color:rgba(255,140,0,0.4);font-size:10px;font-family:monospace;">GAS ↑↓ · SVÄNG ←→</div>' +
+            '<div style="position:absolute;bottom:-22px;width:100%;text-align:center;color:rgba(255,140,0,0.4);font-size:10px;font-family:monospace;">THROTTLE ↑↓ · TURN ←→</div>' +
         '</div>' +
         '<div id="heli-jzone-right" style="position:absolute;bottom:24px;right:24px;width:150px;height:150px;pointer-events:all;">' +
             '<div id="heli-jbase-right" style="width:100%;height:100%;border-radius:50%;border:2px solid rgba(255,140,0,0.3);background:rgba(255,140,0,0.06);position:relative;">' +
                 '<div id="heli-jstick-right" style="width:52px;height:52px;border-radius:50%;background:rgba(255,140,0,0.25);border:2px solid rgba(255,140,0,0.6);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);"></div>' +
             '</div>' +
-            '<div style="position:absolute;bottom:-22px;width:100%;text-align:center;color:rgba(255,140,0,0.4);font-size:10px;font-family:monospace;">FLYGRIKTNING</div>' +
+            '<div style="position:absolute;bottom:-22px;width:100%;text-align:center;color:rgba(255,140,0,0.4);font-size:10px;font-family:monospace;">FLIGHT DIRECTION</div>' +
         '</div>';
     document.body.appendChild(joystickContainer);
     
@@ -451,7 +451,7 @@ function showCrashUI(show) {
             let d = document.createElement('div'); d.id = 'heli-crash';
             d.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10000;' +
                 'color:#ff4444;font-size:48px;font-family:monospace;text-align:center;text-shadow:0 0 20px #ff4444;pointer-events:none;';
-            d.innerHTML = 'KRASCH!<br><span style="font-size:18px">tryck R för omstart</span>';
+            d.innerHTML = 'CRASH!<br><span style="font-size:18px">press R to restart</span>';
             document.body.appendChild(d);
         }
     } else {

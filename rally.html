@@ -56,6 +56,81 @@
     <a href="arcade.html?autorun=edit_build">→ Open Builder</a>
 </div>
 
+<!-- PRE-RACE LOBBY — shown after terrain loads, before race starts -->
+<div id="pre-race-lobby" style="
+    position:fixed; inset:0; z-index:999;
+    background: radial-gradient(ellipse at center, rgba(10,14,26,0.85) 0%, rgba(10,14,26,0.97) 100%);
+    display:none; flex-direction:column;
+    align-items:center; justify-content:center;
+    font-family: 'Inter', 'Segoe UI', sans-serif;
+    backdrop-filter:blur(6px);
+">
+    <div style="
+        background:rgba(15,23,42,0.95); border:1px solid #334155;
+        border-radius:20px; padding:36px 44px; max-width:420px; width:90%;
+        box-shadow:0 25px 50px -12px rgba(0,0,0,0.6);
+    ">
+        <!-- Track name -->
+        <div style="text-align:center; margin-bottom:24px;">
+            <div style="font-size:11px; text-transform:uppercase; letter-spacing:3px; color:#64748b; font-weight:700;">RACE SETUP</div>
+            <h2 id="lobby-track-name" style="color:#e2e8f0; font-size:24px; font-weight:800; margin:8px 0 4px 0;">Rally Track</h2>
+            <div id="lobby-track-info" style="color:#64748b; font-size:12px;"></div>
+        </div>
+
+        <!-- CONDITIONS -->
+        <div style="margin-bottom:18px;">
+            <label style="font-size:11px; font-weight:700; color:#fb923c; text-transform:uppercase; letter-spacing:1px;">⛅ Conditions</label>
+            <div id="lobby-conditions" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-top:8px;">
+                <button class="lobby-cond-btn lobby-cond-active" data-cond="DRY" onclick="selectCondition('DRY')" style="background:#1e293b; border:2px solid #4ade80; border-radius:10px; color:#e2e8f0; padding:12px 8px; font-size:13px; font-weight:700; cursor:pointer; transition:all 0.2s;">
+                    ☀️ Dry
+                </button>
+                <button class="lobby-cond-btn" data-cond="WET" onclick="selectCondition('WET')" style="background:#1e293b; border:2px solid #334155; border-radius:10px; color:#94a3b8; padding:12px 8px; font-size:13px; font-weight:700; cursor:pointer; transition:all 0.2s;">
+                    🌧️ Wet
+                </button>
+                <button class="lobby-cond-btn" data-cond="SNOW" onclick="selectCondition('SNOW')" style="background:#1e293b; border:2px solid #334155; border-radius:10px; color:#94a3b8; padding:12px 8px; font-size:13px; font-weight:700; cursor:pointer; transition:all 0.2s;">
+                    ❄️ Snow
+                </button>
+            </div>
+        </div>
+
+        <!-- CAR PROFILE -->
+        <div style="margin-bottom:18px;">
+            <label style="font-size:11px; font-weight:700; color:#f472b6; text-transform:uppercase; letter-spacing:1px;">🏎️ Car</label>
+            <select id="lobby-car" style="width:100%; background:#1e293b; border:1px solid #334155; border-radius:10px; color:#e2e8f0; padding:10px 12px; font-size:13px; font-weight:600; cursor:pointer; margin-top:6px; outline:none;">
+                <option value="GROUP_A">🏎️ Group A (4WD balanced)</option>
+                <option value="WRC">🏁 WRC (Aggressive 4WD)</option>
+                <option value="RWD_DRIFT">💨 RWD Drift (Tail-happy)</option>
+                <option value="FWD_HOT">🚗 FWD Hot Hatch (Nimble)</option>
+                <option value="TROPHY_TRUCK">🛻 Trophy Truck (Offroad)</option>
+            </select>
+        </div>
+
+        <!-- TYRES -->
+        <div style="margin-bottom:24px;">
+            <label style="font-size:11px; font-weight:700; color:#ef4444; text-transform:uppercase; letter-spacing:1px;">🔴 Tyres</label>
+            <select id="lobby-tyres" style="width:100%; background:#1e293b; border:1px solid #334155; border-radius:10px; color:#e2e8f0; padding:10px 12px; font-size:13px; font-weight:600; cursor:pointer; margin-top:6px; outline:none;">
+                <option value="SOFT">🔴 Soft (Max grip, fast wear)</option>
+                <option value="MEDIUM">🟡 Medium (Balanced)</option>
+                <option value="HARD">⚪ Hard (Low grip, durable)</option>
+                <option value="WET">🔵 Wet (Rain specialist)</option>
+            </select>
+        </div>
+
+        <!-- START BUTTON -->
+        <button id="lobby-start-btn" onclick="startRaceFromLobby()" style="
+            width:100%; padding:16px; border:none; border-radius:12px;
+            background: linear-gradient(135deg, #10b981, #059669);
+            color:#fff; font-size:16px; font-weight:800; letter-spacing:1px;
+            text-transform:uppercase; cursor:pointer;
+            box-shadow:0 4px 15px rgba(16,185,129,0.4);
+            transition: all 0.2s;
+        " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(16,185,129,0.5)'"
+           onmouseout="this.style.transform=''; this.style.boxShadow='0 4px 15px rgba(16,185,129,0.4)'">
+            🏁 START RACE
+        </button>
+    </div>
+</div>
+
 <button id="back-btn" onclick="window.location.href='rally_hub.html'">← Hub</button>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -78,6 +153,7 @@
 <script src="terrain-shader-material.js"></script> <!-- PHASE 2 — GLSL + ShaderMaterial -->
 <script src="terrain-shader-geo.js"></script>       <!-- PHASE 2 — splat map, vertex colors -->
 <script src="road-decal.js"></script>              <!-- Road gravel overlay meshes -->
+<script src="arcade-particle-engine.js"></script>   <!-- Biome + weather particles -->
 
 <script>
 (function() {
@@ -111,6 +187,7 @@
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.maxPolarAngle = Math.PI / 2.1;
+    window.controls = controls;
 
     // Lighting
     const ambLight = new THREE.AmbientLight(0xffffff, 0.5);
@@ -137,6 +214,22 @@
         dir: dLight
     };
 
+    // ── Helper: sync lighting uniforms to road-decal materials ──
+    function syncRoadDecalLighting(ambientI, sunI, sunColor, sunDir, fogColor, fogNear, fogFar) {
+        if (!window.roadDecal || !window.roadDecal.materials) return;
+        for (let key in window.roadDecal.materials) {
+            let rmat = window.roadDecal.materials[key];
+            if (!rmat || !rmat.uniforms) continue;
+            rmat.uniforms.u_ambientIntensity.value = ambientI;
+            rmat.uniforms.u_sunIntensity.value     = sunI;
+            rmat.uniforms.u_sunColor.value.setHex(sunColor);
+            rmat.uniforms.u_sunDir.value.copy(sunDir);
+            rmat.uniforms.u_fogColor.value.setHex(fogColor);
+            rmat.uniforms.u_fogNear.value = fogNear;
+            rmat.uniforms.u_fogFar.value  = fogFar;
+        }
+    }
+
     window.setTimeOfDay = function(time) {
         if (!window.sceneLights || !window.scene) return;
         let lights = window.sceneLights;
@@ -160,15 +253,18 @@
             }
             headlightsOn = false;
 
+            let sd = new THREE.Vector3(0.6, 0.8, 0.4).normalize();
             if (mat && mat.uniforms) {
                 mat.uniforms.u_ambientIntensity.value = 0.38;
                 mat.uniforms.u_sunIntensity.value = 1.0;
                 mat.uniforms.u_sunColor.value.setHex(0xffffff);
-                mat.uniforms.u_sunDir.value.set(0.6, 0.8, 0.4).normalize();
+                mat.uniforms.u_sunDir.value.copy(sd);
                 mat.uniforms.u_fogColor.value.setHex(0x87ceeb);
                 mat.uniforms.u_fogNear.value = 400;
                 mat.uniforms.u_fogFar.value = 900;
             }
+            syncRoadDecalLighting(0.38, 1.0, 0xffffff, sd, 0x87ceeb, 400, 900);
+
         } else if (time === 'SUNSET') {
             lights.amb1.intensity = 0.25;
             lights.amb1.color.setHex(0xfdba74);
@@ -185,15 +281,18 @@
             }
             headlightsOn = true;
 
+            let sd = new THREE.Vector3(0.9, 0.3, 0.1).normalize();
             if (mat && mat.uniforms) {
                 mat.uniforms.u_ambientIntensity.value = 0.20;
                 mat.uniforms.u_sunIntensity.value = 0.6;
                 mat.uniforms.u_sunColor.value.setHex(0xf97316);
-                mat.uniforms.u_sunDir.value.set(0.9, 0.3, 0.1).normalize();
+                mat.uniforms.u_sunDir.value.copy(sd);
                 mat.uniforms.u_fogColor.value.setHex(0xfb923c);
                 mat.uniforms.u_fogNear.value = 300;
                 mat.uniforms.u_fogFar.value = 800;
             }
+            syncRoadDecalLighting(0.20, 0.6, 0xf97316, sd, 0xfb923c, 300, 800);
+
         } else if (time === 'NIGHT') {
             lights.amb1.intensity = 0.05;
             lights.amb1.color.setHex(0x1e1b4b);
@@ -209,15 +308,17 @@
             }
             headlightsOn = true;
 
+            let sd = new THREE.Vector3(-0.3, 0.9, -0.1).normalize();
             if (mat && mat.uniforms) {
                 mat.uniforms.u_ambientIntensity.value = 0.05;
                 mat.uniforms.u_sunIntensity.value = 0.08;
                 mat.uniforms.u_sunColor.value.setHex(0x93c5fd);
-                mat.uniforms.u_sunDir.value.set(-0.3, 0.9, -0.1).normalize();
+                mat.uniforms.u_sunDir.value.copy(sd);
                 mat.uniforms.u_fogColor.value.setHex(0x020617);
                 mat.uniforms.u_fogNear.value = 50;
                 mat.uniforms.u_fogFar.value = 250;
             }
+            syncRoadDecalLighting(0.05, 0.08, 0x93c5fd, sd, 0x020617, 50, 250);
         }
 
         if (window.setCarHeadlights) {
@@ -225,7 +326,7 @@
         }
     };
     
-    // VISUELL HJÄLP: Ett gigantiskt rutnät för att se att världen faktiskt roterar
+    // VISUAL DEBUG: Giant grid to verify world rotation
     // Eftersom himlen och gräset är solida färger blir det en synvilla annars.
     const gridHelper = new THREE.GridHelper(900, 100, 0x000000, 0x000000);
     gridHelper.position.y = 0.1; // Strax över marknivå
@@ -280,7 +381,23 @@
         { r:0x14, g:0x53, b:0x2d, type:'DEEP ROUGH'}, // Tät Skog -> Mud/Mud
         { r:0xd4, g:0xb4, b:0x83, type:'SAND' },      // Öken/Sand -> Dirt/Dirt
         { r:0x84, g:0xcc, b:0x16, type:'ROUGH' },     // Ljus Gräs -> Grass/Dirt
-        { r:0x1e, g:0x29, b:0x3b, type:'FAIRWAY' }    // Asfalt -> Tarmac/Asphalt
+        { r:0x1e, g:0x29, b:0x3b, type:'FAIRWAY' },   // Asfalt -> Tarmac/Asphalt
+        
+        // WINTER biome snow/ice colors -> SNOW/ICE surface types
+        { r:0xff, g:0xff, b:0xff, type:'SNOW_SURFACE' },   // Pure white snow
+        { r:0xee, g:0xee, b:0xee, type:'SNOW_SURFACE' },   // Light snow
+        { r:0xdd, g:0xdd, b:0xdd, type:'SNOW_SURFACE' },   // Grey snow
+        { r:0xcc, g:0xcc, b:0xcc, type:'SNOW_SURFACE' },   // Dirty snow
+        { r:0xaa, g:0xcc, b:0xdd, type:'ICE_SURFACE' },    // WINTER canopy tint (ice-blue)
+        { r:0x99, g:0xbb, b:0xcc, type:'ICE_SURFACE' },    // WINTER canopy secondary
+        { r:0xb0, g:0xc4, b:0xd4, type:'SNOW_SURFACE' },   // WINTER sky-tinted ground
+        
+        // AUTUMN biome warm tones -> normal surfaces (no physics change)
+        { r:0x9a, g:0x90, b:0x40, type:'FAIRWAY' },   // Golden fairway
+        { r:0x8a, g:0x9a, b:0x4a, type:'TEE' },       // Olive tee
+        { r:0x8b, g:0x75, b:0x35, type:'SEMI-ROUGH'}, // Amber semi-rough
+        { r:0x7a, g:0x65, b:0x30, type:'ROUGH' },     // Warm brown rough
+        { r:0x5a, g:0x40, b:0x20, type:'FESCUE' },    // Dark burnt sienna
     ];
     function classifyBiomeColor(r, g, b) {
         let best = 'ROUGH', bestDist = Infinity;
@@ -691,11 +808,12 @@
                         window.terrainShaderGeo.bakeRoadVertexColors(roads, planeGeo, TERRAIN_SIZE);
                     }
                     // Build road decal overlay meshes (photo-textured gravel/cobblestone)
-                    if (window.roadDecal) {
-                        window.roadDecal.rebuildAll(roads, scene);
-                        window.roadDecal.syncFog(scene);
-                    }
-                    console.log('🛣️ Roads loaded: ' + roads.length + ' road(s) with vertex colors + decals');
+                    // DISABLED: Layer 3 PBR decals clash with cartoon style — testing Layer 1+2 only
+                    // if (window.roadDecal) {
+                    //     window.roadDecal.rebuildAll(roads, scene);
+                    //     window.roadDecal.syncFog(scene);
+                    // }
+                    console.log('🛣️ Roads loaded: ' + roads.length + ' road(s) with vertex colors (decals disabled)');
                 }
 
                 // ── TREE PIPELINE FIX: render saved trees as procedural InstancedMesh ──
@@ -827,6 +945,33 @@
                 document.getElementById('loading').style.opacity = '0';
                 setTimeout(() => document.getElementById('loading').style.display = 'none', 500);
 
+                // Show Pre-Race Lobby (skip if ?debug=true auto-starts)
+                let isDebug = new URLSearchParams(window.location.search).get('debug') === 'true';
+                if (!isDebug) {
+                    // Pre-select condition based on saved environment
+                    let envLevel = ArcadeStorage.loadCustomLevel() || ArcadeStorage.loadCompressedLevel();
+                    if (envLevel && envLevel.rally && envLevel.rally.environment) {
+                        let biome = (envLevel.rally.environment.biomeId || '').toUpperCase();
+                        let weather = (envLevel.rally.environment.weather || '').toUpperCase();
+                        if (biome === 'WINTER') {
+                            selectCondition('SNOW');
+                        } else if (weather === 'RAIN' || weather === 'STORM' || weather === 'DRIZZLE') {
+                            selectCondition('WET');
+                        }
+                    }
+                    // Populate track info
+                    let rc = window.raceConfig;
+                    if (rc) {
+                        let cpCount = rc.checkpoints ? rc.checkpoints.length : 0;
+                        let laps = rc.laps || 1;
+                        let info = cpCount + ' checkpoints';
+                        if (laps > 1) info += ' · ' + laps + ' laps';
+                        document.getElementById('lobby-track-info').textContent = info;
+                    }
+                    setTimeout(() => { document.getElementById('pre-race-lobby').style.display = 'flex'; }, 600);
+                    return;
+                }
+
                 // Activate rally vehicle
                 controls.enabled = false;
                 window.rallyVehicle.activate(scene, camera, controls);
@@ -852,6 +997,97 @@
                     if (window.rallyCamera) window.rallyCamera.init(car);
                     if (window.rallyRespawn) window.rallyRespawn.init(car);
                     console.log('✅ Car spawned at tee:', spawnPos.x.toFixed(1), spawnPos.z.toFixed(1), 'heading:', car.heading.toFixed(2));
+                }
+
+                // ── ENVIRONMENT: restore builder atmosphere ──
+                let envLevel = currentLevel || ArcadeStorage.loadCustomLevel() || ArcadeStorage.loadCompressedLevel();
+                if (envLevel && envLevel.rally && envLevel.rally.environment) {
+                    let env = envLevel.rally.environment;
+                    
+                    // Sky background color
+                    if (env.skyColor) scene.background = new THREE.Color(env.skyColor);
+                    
+                    // Fog
+                    if (scene.fog && env.fogColor) {
+                        scene.fog.color.setHex(env.fogColor);
+                        if (env.fogNear) scene.fog.near = env.fogNear;
+                        if (env.fogFar) scene.fog.far = env.fogFar;
+                    }
+                    
+                    // Sync terrain + road shader fog uniforms
+                    let tMat = window._terrainMat;
+                    if (tMat && tMat.uniforms && env.fogColor) {
+                        tMat.uniforms.u_fogColor.value.setHex(env.fogColor);
+                        if (env.fogNear) tMat.uniforms.u_fogNear.value = env.fogNear;
+                        if (env.fogFar) tMat.uniforms.u_fogFar.value = env.fogFar;
+                    }
+                    if (window.roadDecal && window.roadDecal.materials) {
+                        for (let rk in window.roadDecal.materials) {
+                            let rm = window.roadDecal.materials[rk];
+                            if (rm && rm.uniforms && env.fogColor) {
+                                rm.uniforms.u_fogColor.value.setHex(env.fogColor);
+                                if (env.fogNear) rm.uniforms.u_fogNear.value = env.fogNear;
+                                if (env.fogFar) rm.uniforms.u_fogFar.value = env.fogFar;
+                            }
+                        }
+                    }
+                    
+                    // Particle Engine: biome + weather visuals
+                    if (window.ParticleEngine) {
+                        window.ParticleEngine.init(scene, camera);
+                        if (env.biomeId && env.biomeId !== 'ALL' && env.biomeId !== 'GLOBAL') {
+                            window.ParticleEngine.activateBiome(env.biomeId);
+                        }
+                        if (env.weather && env.weather !== 'CLEAR') {
+                            window.ParticleEngine.setWeather(env.weather);
+                            let wSel = document.getElementById('weather-select');
+                            if (wSel) wSel.value = env.weather;
+                        }
+                    }
+                    
+                    // Auto-sync biome + visual weather → rally-weather.js physics grip
+                    // This ensures the physics match what the player sees
+                    if (window.rallyWeather) {
+                        let biome = (env.biomeId || '').toUpperCase();
+                        let visualWeather = (env.weather || 'CLEAR').toUpperCase();
+                        
+                        // Biome-driven defaults
+                        if (biome === 'WINTER') {
+                            window.rallyWeather.setWeather('SNOW_FALL');
+                        } else if (visualWeather === 'STORM') {
+                            window.rallyWeather.setWeather('HEAVY_RAIN');
+                        } else if (visualWeather === 'RAIN') {
+                            window.rallyWeather.setWeather('HEAVY_RAIN');
+                        } else if (visualWeather === 'DRIZZLE') {
+                            window.rallyWeather.setWeather('LIGHT_RAIN');
+                        } else if (visualWeather === 'FOG') {
+                            window.rallyWeather.setWeather('FOG');
+                        }
+                        // Sync the Physics Tuner weather dropdown (rally-weather)
+                        let rwSel = document.getElementById('weather-condition');
+                        if (rwSel) rwSel.value = window.rallyWeather.getWeatherKey();
+                    }
+                    
+                    // Water plane
+                    if (env.waterTableLevel != null && env.waterTableLevel > -9) {
+                        let waterGeo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE);
+                        let waterMat = new THREE.MeshLambertMaterial({
+                            color: 0x1a6eb0,
+                            transparent: true,
+                            opacity: 0.55,
+                            side: THREE.DoubleSide
+                        });
+                        let waterMesh = new THREE.Mesh(waterGeo, waterMat);
+                        waterMesh.rotation.x = -Math.PI / 2;
+                        waterMesh.position.y = env.waterTableLevel;
+                        scene.add(waterMesh);
+                        console.log('🌊 Water plane at y=' + env.waterTableLevel);
+                    }
+                    
+                    console.log('🌅 Environment loaded:', JSON.stringify({sky: env.skyColor, weather: env.weather, biome: env.biomeId, water: env.waterTableLevel}));
+                } else {
+                    // No saved environment — init ParticleEngine anyway (for Physics Tuner weather control)
+                    if (window.ParticleEngine) window.ParticleEngine.init(scene, camera);
                 }
             } else {
                 setTimeout(waitForTerrainAndStart, 100);
@@ -1017,7 +1253,7 @@
         '</div></div></div>' +
         '<div id="race-start-msg" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10000;pointer-events:none;' +
         'color:#4ade80;font-size:28px;font-weight:900;font-family:\'Inter\',sans-serif;text-shadow:0 0 30px rgba(74,222,128,0.4);text-align:center">' +
-        'GAS FÖR ATT STARTA 🏁</div>';
+        'HIT THE GAS TO START 🏁</div>';
         document.body.appendChild(h);
     }
 
@@ -1123,7 +1359,7 @@
                         if (msg) msg.remove();
                         msg = document.createElement('div');
                         msg.id = 'race-missed-msg';
-                        msg.innerHTML = '⚠️ MISSADE CHECKPOINTS!<br><span style="font-size:16px;color:#fff">Kör tillbaka och passera alla markörer. Tryck Backspace för att starta om vid förra CP.</span>';
+                        msg.innerHTML = '⚠️ MISSED CHECKPOINTS!<br><span style="font-size:16px;color:#fff">Drive back and pass all markers. Press Backspace to restart from last CP.</span>';
                         msg.style.cssText = 'position:fixed;top:40%;left:50%;transform:translate(-50%,-50%);z-index:10000;pointer-events:none;' +
                         'color:#ef4444;font-size:28px;font-weight:900;font-family:\'Inter\',sans-serif;text-shadow:0 0 30px rgba(239,68,68,0.5);text-align:center;transition:opacity 1.5s ease;';
                         document.body.appendChild(msg);
@@ -1216,8 +1452,8 @@
         
         if (raceState.dnf) {
             d.innerHTML = '<div style="font-size:48px;font-weight:900;color:#ef4444">DNF</div>' +
-                '<div style="color:#94a3b8;font-size:14px;margin-top:8px">Missade checkpoints — diskvalificerad</div>' +
-                '<button onclick="location.reload()" style="margin-top:16px;background:#ef4444;color:#fff;border:none;padding:12px 28px;border-radius:10px;font-weight:800;font-size:14px;cursor:pointer">↻ Försök igen</button>';
+                '<div style="color:#94a3b8;font-size:14px;margin-top:8px">Missed checkpoints — disqualified</div>' +
+                '<button onclick="location.reload()" style="margin-top:16px;background:#ef4444;color:#fff;border:none;padding:12px 28px;border-radius:10px;font-weight:800;font-size:14px;cursor:pointer">↻ Try Again</button>';
         } else {
             let t = raceState.finalTime;
             let min = Math.floor(t / 60);
@@ -1289,7 +1525,7 @@
                 '<div style="font-size:56px;font-weight:900;color:#fff;letter-spacing:-2px;margin:8px 0;line-height:1">' + timeStr + '</div>' +
                 penStr + lapsHtml +
                 statusHtml +
-                '<button onclick="location.reload()" style="margin-top:16px;background:#4ade80;color:#0f172a;border:none;padding:12px 28px;border-radius:10px;font-weight:800;font-size:14px;cursor:pointer">↻ Kör igen</button>';
+                '<button onclick="location.reload()" style="margin-top:16px;background:#4ade80;color:#0f172a;border:none;padding:12px 28px;border-radius:10px;font-weight:800;font-size:14px;cursor:pointer">↻ Race Again</button>';
         }
         document.body.appendChild(d);
     }
@@ -1299,6 +1535,12 @@
         initRaceVisuals();
         createRaceHUD();
         updateRaceHUD();
+        // Hide HUD until race actually starts (lobby mode hides it)
+        let isDebugMode = new URLSearchParams(window.location.search).get('debug') === 'true';
+        if (!isDebugMode) {
+            let hud = document.getElementById('race-hud');
+            if (hud) hud.style.display = 'none';
+        }
     }
 
     // ── Animate Loop ──
@@ -1318,56 +1560,53 @@
                 updateRaceLogic(dt);
             }
             
-            // Dynamic headlights: calculate world space positions/vectors and update custom shaders
+            // Dynamic headlights: calculate world-space positions and direction
             let car = window.rallyVehicle.getCar ? window.rallyVehicle.getCar() : null;
             if (car && car.mesh) {
                 let active = car.headlightsOn ? 1.0 : 0.0;
                 
-                // Force update matrixWorld to get the exact position and orientation of this frame
+                // Force update matrixWorld so applyMatrix4 reads correct transform
                 car.mesh.updateMatrixWorld(true);
                 
                 // Headlight local offsets: Left (-0.7, -0.15, 2.08), Right (0.7, -0.15, 2.08)
-                let leftPos = new THREE.Vector3(-0.7, -0.15, 2.08);
-                let rightPos = new THREE.Vector3(0.7, -0.15, 2.08);
+                let leftPos = new THREE.Vector3(-0.7, -0.15, 2.08).applyMatrix4(car.mesh.matrixWorld);
+                let rightPos = new THREE.Vector3(0.7, -0.15, 2.08).applyMatrix4(car.mesh.matrixWorld);
                 
-                leftPos.applyMatrix4(car.mesh.matrixWorld);
-                rightPos.applyMatrix4(car.mesh.matrixWorld);
+                // Compute headlight direction directly from car.heading
+                // This avoids pitch/roll from matrixWorld column 2 corrupting the XZ direction.
+                // Headlights should sweep the ground plane, so we use the pure yaw-based
+                // forward vector with a slight downward tilt (-0.12 ≈ 7° down).
+                let fwdDir = new THREE.Vector3(
+                    Math.sin(car.heading),
+                    -0.12,
+                    Math.cos(car.heading)
+                ).normalize();
                 
-                // Extract exact world direction (+Z local direction) directly from matrixWorld column 2
-                let fwdDir = new THREE.Vector3();
-                fwdDir.setFromMatrixColumn(car.mesh.matrixWorld, 2);
-                
-                // Tilt headlights slightly downwards (3 degrees) so they sweep/illuminate the ground better
-                fwdDir.y -= 0.05;
-                fwdDir.normalize();
-                
-                // 1. Terrain shader
+                // Update all shader materials that use headlight uniforms
+                let allMats = [];
                 let terrainMat = window._terrainMat;
-                if (terrainMat && terrainMat.uniforms) {
-                    terrainMat.uniforms.u_headlight1Pos.value.copy(leftPos);
-                    terrainMat.uniforms.u_headlight1Dir.value.copy(fwdDir);
-                    terrainMat.uniforms.u_headlight2Pos.value.copy(rightPos);
-                    terrainMat.uniforms.u_headlight2Dir.value.copy(fwdDir);
-                    terrainMat.uniforms.u_headlightIntensity.value = active;
-                }
-                
-                // 2. Road decals shader
+                if (terrainMat && terrainMat.uniforms) allMats.push(terrainMat);
                 if (window.roadDecal && window.roadDecal.materials) {
                     for (let key in window.roadDecal.materials) {
                         let rmat = window.roadDecal.materials[key];
-                        if (rmat && rmat.uniforms) {
-                            rmat.uniforms.u_headlight1Pos.value.copy(leftPos);
-                            rmat.uniforms.u_headlight1Dir.value.copy(fwdDir);
-                            rmat.uniforms.u_headlight2Pos.value.copy(rightPos);
-                            rmat.uniforms.u_headlight2Dir.value.copy(fwdDir);
-                            rmat.uniforms.u_headlightIntensity.value = active;
-                        }
+                        if (rmat && rmat.uniforms) allMats.push(rmat);
                     }
+                }
+                for (let i = 0; i < allMats.length; i++) {
+                    let u = allMats[i].uniforms;
+                    u.u_headlight1Pos.value.copy(leftPos);
+                    u.u_headlight1Dir.value.copy(fwdDir);
+                    u.u_headlight2Pos.value.copy(rightPos);
+                    u.u_headlight2Dir.value.copy(fwdDir);
+                    u.u_headlightIntensity.value = active;
                 }
             }
         } else {
             controls.update();
         }
+
+        // Particle engine update (biome leaves, weather rain/snow)
+        if (window.ParticleEngine) window.ParticleEngine.update(dt);
 
         renderer.render(scene, camera);
     }
@@ -1431,8 +1670,148 @@
 })();
 </script>
 
-<!-- Physics Tuner Panel -->
-<div id="physics-tuner-btn" style="position:fixed; top:16px; right:16px; z-index:10001; background:rgba(15,23,42,0.85); border:1px solid #334155; border-radius:10px; color:#94a3b8; padding:8px 14px; font-size:12px; font-weight:bold; cursor:pointer; backdrop-filter:blur(8px); transition:all 0.2s;" onclick="toggleTuner()">🔧 Physics Tuner</div>
+<!-- PRE-RACE LOBBY LOGIC -->
+<script>
+(function() {
+    window._selectedCondition = 'DRY';
+
+    window.selectCondition = function(cond) {
+        window._selectedCondition = cond;
+        let btns = document.querySelectorAll('.lobby-cond-btn');
+        btns.forEach(function(btn) {
+            if (btn.getAttribute('data-cond') === cond) {
+                btn.style.borderColor = '#4ade80';
+                btn.style.color = '#e2e8f0';
+                btn.classList.add('lobby-cond-active');
+            } else {
+                btn.style.borderColor = '#334155';
+                btn.style.color = '#94a3b8';
+                btn.classList.remove('lobby-cond-active');
+            }
+        });
+        // Auto-suggest tyres based on condition
+        let tyreSel = document.getElementById('lobby-tyres');
+        if (tyreSel) {
+            if (cond === 'WET' || cond === 'SNOW') tyreSel.value = 'WET';
+            else tyreSel.value = 'SOFT';
+        }
+    };
+
+    window.startRaceFromLobby = function() {
+        let cond = window._selectedCondition || 'DRY';
+        let carProfile = document.getElementById('lobby-car').value;
+        let tyreCompound = document.getElementById('lobby-tyres').value;
+
+        // Store race setup for leaderboard submission
+        window._raceSetup = { condition: cond, car: carProfile, tyres: tyreCompound };
+
+        // Apply weather physics (rally-weather.js)
+        if (window.rallyWeather) {
+            if (cond === 'WET') window.rallyWeather.setWeather('HEAVY_RAIN');
+            else if (cond === 'SNOW') window.rallyWeather.setWeather('SNOW_FALL');
+            else window.rallyWeather.setWeather('DRY');
+        }
+
+        // Apply weather visuals (particle engine)
+        if (window.ParticleEngine) {
+            if (cond === 'WET') window.ParticleEngine.setWeather('RAIN');
+            else if (cond === 'SNOW') window.ParticleEngine.setWeather('CLEAR'); // snow biome already has particles
+            else window.ParticleEngine.setWeather('CLEAR');
+        }
+
+        // Apply car profile
+        if (window.rallyVehicle && window.rallyVehicle.applyProfile) {
+            window.rallyVehicle.applyProfile(carProfile);
+        }
+
+        // Apply tyre compound
+        if (window.rallyVehicle && window.rallyVehicle.setCompound) {
+            window.rallyVehicle.setCompound(tyreCompound);
+        }
+
+        // Hide lobby, show race HUD
+        document.getElementById('pre-race-lobby').style.display = 'none';
+        let hud = document.getElementById('race-hud');
+        if (hud) hud.style.display = '';
+
+        // Activate vehicle (same logic as debug-mode direct start)
+        let scene = window.scene;
+        let camera = window.camera;
+        let controls = window.controls;
+        if (window.rallyVehicle) {
+            controls.enabled = false;
+            window.rallyVehicle.activate(scene, camera, controls);
+
+            // Spawn at saved start
+            let level = ArcadeStorage.loadCustomLevel() || ArcadeStorage.loadCompressedLevel();
+            if (level && level.rally && level.rally.start && window.rallyVehicle.getCar) {
+                let car = window.rallyVehicle.getCar();
+                let s = level.rally.start;
+                let spawnPos = new THREE.Vector3(s.x || 0, (s.y || 2) + 0.5, s.z || 0);
+                if (typeof window.localGetTerrainAt === 'function') {
+                    let t = window.localGetTerrainAt(spawnPos.x, -spawnPos.z);
+                    spawnPos.y = t.z + 0.35 + 1.5;
+                }
+                car.position.copy(spawnPos);
+                car._spawnPosition = spawnPos.clone();
+                car._spawnGroundY = spawnPos.y - 1.5;
+                if (car.mesh) car.mesh.position.copy(spawnPos);
+                if (s.rotation !== undefined) {
+                    car.heading = s.rotation;
+                    if (car.mesh) car.mesh.rotation.y = car.heading;
+                }
+                if (window.rallyCamera) window.rallyCamera.init(car);
+                if (window.rallyRespawn) window.rallyRespawn.init(car);
+            }
+
+            // Apply saved environment (sky, fog, particles) after vehicle is active
+            if (level && level.rally && level.rally.environment) {
+                let env = level.rally.environment;
+                if (env.skyColor) scene.background = new THREE.Color(env.skyColor);
+                if (scene.fog && env.fogColor) {
+                    scene.fog.color.setHex(env.fogColor);
+                    if (env.fogNear) scene.fog.near = env.fogNear;
+                    if (env.fogFar) scene.fog.far = env.fogFar;
+                }
+                // Init particle engine with scene+camera
+                if (window.ParticleEngine) {
+                    window.ParticleEngine.init(scene, camera);
+                    if (env.biomeId && env.biomeId !== 'ALL' && env.biomeId !== 'GLOBAL') {
+                        window.ParticleEngine.activateBiome(env.biomeId);
+                    }
+                }
+                // Water plane
+                if (env.waterTableLevel != null && env.waterTableLevel > -9) {
+                    let waterGeo = new THREE.PlaneGeometry(window.TERRAIN_SIZE, window.TERRAIN_SIZE);
+                    let waterMat = new THREE.MeshLambertMaterial({ color: 0x1a6eb0, transparent: true, opacity: 0.55, side: THREE.DoubleSide });
+                    let waterMesh = new THREE.Mesh(waterGeo, waterMat);
+                    waterMesh.rotation.x = -Math.PI / 2;
+                    waterMesh.position.y = env.waterTableLevel;
+                    scene.add(waterMesh);
+                }
+            } else {
+                if (window.ParticleEngine) window.ParticleEngine.init(scene, camera);
+            }
+
+            // Apply WET visual override: if player chose WET, force rain particles
+            if (cond === 'WET' && window.ParticleEngine) {
+                window.ParticleEngine.setWeather('RAIN');
+            }
+        }
+
+        console.log('🏁 Race started — Condition:', cond, '| Car:', carProfile, '| Tyres:', tyreCompound);
+    };
+})();
+</script>
+
+<!-- Physics Tuner Panel (DEV ONLY — visible with ?debug=true) -->
+<div id="physics-tuner-btn" style="position:fixed; top:16px; right:16px; z-index:10001; background:rgba(15,23,42,0.85); border:1px solid #334155; border-radius:10px; color:#94a3b8; padding:8px 14px; font-size:12px; font-weight:bold; cursor:pointer; backdrop-filter:blur(8px); transition:all 0.2s; display:none;" onclick="toggleTuner()">🔧 Physics Tuner</div>
+<script>
+// Only show Physics Tuner in debug mode (?debug=true)
+if (new URLSearchParams(window.location.search).get('debug') === 'true') {
+    document.getElementById('physics-tuner-btn').style.display = 'block';
+}
+</script>
 
 <div id="physics-tuner-panel" style="position:fixed; top:60px; right:16px; z-index:10001; width:300px; background:rgba(15,23,42,0.92); border:1px solid #334155; border-radius:12px; color:#e2e8f0; padding:16px; font-family:sans-serif; backdrop-filter:blur(10px); display:none; flex-direction:column; gap:12px; box-shadow:0 10px 25px -5px rgba(0,0,0,0.5);">
     <h3 style="margin:0 0 4px 0; font-size:14px; text-transform:uppercase; letter-spacing:1px; color:#4ade80;">Physics Tuner</h3>
@@ -1468,7 +1847,7 @@
     <!-- Drift Target Grip Slider -->
     <div style="display:flex; flex-direction:column; gap:4px;">
         <div style="display:flex; justify-content:space-between; font-size:11px;">
-            <span>Drift Target Grip (sliding fäste)</span>
+            <span>Drift Target Grip (sliding hold)</span>
             <span id="val-targetgrip" style="font-weight:bold; color:#4ade80;">-</span>
         </div>
         <input type="range" id="slide-targetgrip" min="0.05" max="0.40" step="0.01" style="width:100%; accent-color:#4ade80;" oninput="updateTunedPhysics()" onchange="this.blur()">
@@ -1477,7 +1856,7 @@
     <!-- Drift Steer Bonus Slider -->
     <div style="display:flex; flex-direction:column; gap:4px;">
         <div style="display:flex; justify-content:space-between; font-size:11px;">
-            <span>Drift Steer Bonus (motstyrning)</span>
+            <span>Drift Steer Bonus (countersteer)</span>
             <span id="val-steerbonus" style="font-weight:bold; color:#4ade80;">-</span>
         </div>
         <input type="range" id="slide-steerbonus" min="1.0" max="2.5" step="0.1" style="width:100%; accent-color:#4ade80;" oninput="updateTunedPhysics()" onchange="this.blur()">
@@ -1502,6 +1881,18 @@
             <option value="DAY">☀️ Day</option>
             <option value="SUNSET">🌅 Sunset</option>
             <option value="NIGHT">🌙 Night</option>
+        </select>
+    </div>
+
+    <!-- WEATHER Selector -->
+    <div style="border-top:1px solid #334155; padding-top:10px; margin-top:8px;">
+        <div style="font-size:11px; font-weight:bold; color:#38bdf8; margin-bottom:4px;">🌧️ WEATHER</div>
+        <select id="weather-select" style="width:100%; background:#1e293b; border:1px solid #334155; border-radius:6px; color:#e2e8f0; padding:6px 8px; font-size:12px; cursor:pointer;" onchange="if(window.ParticleEngine) window.ParticleEngine.setWeather(this.value); this.blur();">
+            <option value="CLEAR">☀️ Clear</option>
+            <option value="DRIZZLE">🌦️ Drizzle</option>
+            <option value="RAIN">🌧️ Rain</option>
+            <option value="STORM">⛈️ Storm</option>
+            <option value="FOG">🌫️ Dense Fog</option>
         </select>
     </div>
 

@@ -27,6 +27,7 @@
 <script src="rally-respawn.js"></script>
 <script src="rally-jump-tool.js"></script>
 <script src="smart-builder.js"></script>
+<script src="arcade-scan-builder.js"></script>
 <script src="terrain-auto-paint.js"></script>
 </head>
 <body>
@@ -5193,6 +5194,16 @@
                         material: r.material
                     };
                 }),
+                // ENVIRONMENT: save visual atmosphere so rally.html can match the builder
+                environment: {
+                    biomeId: window.ACTIVE_BIOME || 'ALL',
+                    weather: window.ParticleEngine ? window.ParticleEngine.getWeather() : 'CLEAR',
+                    skyColor: (window.CURRENT_BIOME_CONFIG && window.CURRENT_BIOME_CONFIG.skyColor) ? window.CURRENT_BIOME_CONFIG.skyColor : 0x87ceeb,
+                    fogColor: scene.fog ? scene.fog.color.getHex() : 0x87ceeb,
+                    fogNear: scene.fog ? scene.fog.near : 400,
+                    fogFar: scene.fog ? scene.fog.far : 900,
+                    waterTableLevel: window.waterTableLevel != null ? window.waterTableLevel : -10,
+                },
             };
             ArcadeStorage.saveCustomLevel({ targets: dumpTargets, holes: dumpHoles, rally: rallyData, trees: dumpTrees, _saveId: _saveId, share_code: currentEditCode || window._loadedCourseShareCode || null });
         } else {
@@ -5412,15 +5423,15 @@
 
     window.validateRallyTrack = function(showErrorFn) {
         if (!window._builtRoads || window._builtRoads.length === 0) {
-            showErrorFn("Rally bana kräver en väg (Road Spline). Dra en väg först.");
+            showErrorFn("Rally track requires a road (Road Spline). Draw a road first.");
             return false;
         }
         if (!raceConfig.start) {
-            showErrorFn("Placera ut START på vägen.");
+            showErrorFn("Place a START gate on the road.");
             return false;
         }
         if (!raceConfig.finish) {
-            showErrorFn("Placera ut MÅL på vägen.");
+            showErrorFn("Place a FINISH gate on the road.");
             return false;
         }
         
@@ -5428,12 +5439,12 @@
         let sIdx = raceConfig.start.splineIndex;
         let fIdx = raceConfig.finish.splineIndex;
         if (sIdx === undefined || fIdx === undefined) {
-            showErrorFn("Start och Mål är gamla/friflygande. Placera om dem så de snäpper fast på vägen.");
+            showErrorFn("Start and Finish gates have outdated positions. Re-place them so they snap to the road.");
             return false;
         }
         
         if (raceConfig.start.roadId !== raceConfig.finish.roadId) {
-             showErrorFn("Start och Mål måste sitta på samma väg.");
+             showErrorFn("Start and Finish must be on the same road.");
              return false;
         }
         
@@ -5442,11 +5453,11 @@
         for (let i = 0; i < raceConfig.checkpoints.length; i++) {
             let cp = raceConfig.checkpoints[i];
             if (cp.roadId !== raceConfig.start.roadId) {
-                showErrorFn("Checkpoint " + (i+1) + " sitter på fel väg.");
+                showErrorFn("Checkpoint " + (i+1) + " is on the wrong road.");
                 checkpointsValid = false; break;
             }
             if (cp.splineIndex === undefined || cp.splineIndex <= lastIdx) {
-                showErrorFn("Checkpoint " + (i+1) + " är placerad före föregående markör längs vägen. Ta bort den och placera i rätt ordning.");
+                showErrorFn("Checkpoint " + (i+1) + " is placed before the previous marker along the road. Remove it and place in correct order.");
                 checkpointsValid = false; break;
             }
             lastIdx = cp.splineIndex;
@@ -5460,12 +5471,12 @@
             let dz = raceConfig.start.z - raceConfig.finish.z;
             let dist = Math.sqrt(dx*dx + dz*dz);
             if (dist > 30) {
-                showErrorFn("Circuit (" + raceConfig.laps + " varv) kräver att Start och Mål sitter på varandra (Loop).");
+                showErrorFn("Circuit (" + raceConfig.laps + " laps) requires Start and Finish to overlap (Loop).");
                 return false;
             }
         } else {
             if (fIdx <= lastIdx && lastIdx !== sIdx) { // lastIdx !== sIdx protects track with no checkpoints
-                showErrorFn("Mållinjen måste sitta efter sista checkpointen.");
+                showErrorFn("Finish line must be placed after the last checkpoint.");
                 return false;
             }
         }
@@ -6120,6 +6131,73 @@
         
         let savedStr = null;
         let isCloud = false;
+        
+        // ── SCAN-TO-BUILD: Auto-build from AI drawing scan ──
+        if (params.get('scan') === 'true' && sessionStorage.getItem('scan_build_plan')) {
+            let scanPlan;
+            try { scanPlan = JSON.parse(sessionStorage.getItem('scan_build_plan')); } catch(e) { scanPlan = null; }
+            let autoPlay = params.get('auto_play') === 'true' || sessionStorage.getItem('scan_auto_play') === 'true';
+            let scanMode = sessionStorage.getItem('scan_build_mode') || 'rally';
+            
+            // Clean up sessionStorage
+            sessionStorage.removeItem('scan_build_plan');
+            sessionStorage.removeItem('scan_build_mode');
+            sessionStorage.removeItem('scan_auto_play');
+            
+            if (scanPlan && window.ScanBuilder) {
+                // Force rally editor mode
+                if (scanMode === 'rally' && typeof window.setEditorMode === 'function') {
+                    window.setEditorMode('rally');
+                } else if (scanMode === 'rally') {
+                    window.EDITOR_MODE = 'rally';
+                }
+                
+                // Clear any existing content
+                if (typeof executeClear === 'function') executeClear();
+                else ArcadeStorage.removeCustomLevel();
+                
+                setMode('BUILD');
+                
+                // Show scan-build progress overlay
+                let loader = document.getElementById('global-loader');
+                if (loader) {
+                    loader.querySelector('div:last-child').textContent = autoPlay ? 'Building your world...' : 'Building your world...';
+                    loader.classList.remove('hidden');
+                }
+                
+                // Wait for terrain to initialize
+                await new Promise(r => setTimeout(r, 1500));
+                
+                // Execute the build
+                await window.ScanBuilder.build(scanPlan, function(done, total, msg) {
+                    console.log('🎨 Build progress:', done + '/' + total, msg);
+                    if (loader) {
+                        let pct = Math.round((done / total) * 100);
+                        loader.querySelector('div:last-child').textContent = msg + ' (' + pct + '%)';
+                    }
+                });
+                
+                // Save the level
+                if (typeof saveLevel === 'function') {
+                    setTimeout(function() { saveLevel(); }, 200);
+                }
+                
+                if (autoPlay) {
+                    // Auto-play: save and redirect to rally.html
+                    setTimeout(function() {
+                        window.location.href = 'rally.html';
+                    }, 1000);
+                    return;
+                } else {
+                    // Stay in builder
+                    setTimeout(function() {
+                        if (loader) loader.classList.add('hidden');
+                        if (window.showBuildToast) window.showBuildToast('🎨 World built from drawing! Edit freely.', '#4ade80');
+                    }, 500);
+                    return;
+                }
+            }
+        }
         
         if (autoRun === 'new_build') {
             if (typeof executeClear === 'function') executeClear();
@@ -8178,6 +8256,15 @@
     window.snapObjectsToGround = snapObjectsToGround;
     window.splinePoints = splinePoints;
     window.showBuildToast = showBuildToast;
+    window.createTree = createTree;
+    window.raceConfig = raceConfig;
+    // Expose for scan-builder bridge
+    window._injectSmartGreenPoints = function(pts) {
+        if (typeof smartGreenPoints !== 'undefined') {
+            smartGreenPoints.length = 0;
+            pts.forEach(function(p) { smartGreenPoints.push(p); });
+        }
+    };
     Object.defineProperty(window, "currentHoleIndex", {
         get: function() { return currentHoleIndex; },
         set: function(v) { currentHoleIndex = v; },

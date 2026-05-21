@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Draw-to-World — Sketch Your World</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #0a0e1a;
+            color: #e2e8f0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        /* ── Header ── */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 16px;
+            background: rgba(15,23,42,0.95);
+            border-bottom: 1px solid #1e293b;
+            z-index: 100;
+            flex-shrink: 0;
+        }
+        .header h1 {
+            font-size: 16px;
+            font-weight: 900;
+            background: linear-gradient(135deg, #4ade80, #38bdf8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .header-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        /* ── Mode Toggle ── */
+        .mode-toggle {
+            display: flex;
+            background: #1e293b;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #334155;
+        }
+        .mode-btn {
+            padding: 6px 14px;
+            font-size: 11px;
+            font-weight: 700;
+            border: none;
+            cursor: pointer;
+            background: transparent;
+            color: #64748b;
+            transition: all 0.2s;
+        }
+        .mode-btn.active {
+            background: #4ade80;
+            color: #0f172a;
+        }
+
+        /* ── Toolbar ── */
+        .toolbar {
+            display: flex;
+            gap: 4px;
+            padding: 6px 12px;
+            background: rgba(15,23,42,0.9);
+            border-bottom: 1px solid #1e293b;
+            flex-shrink: 0;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+        }
+        .tool-btn {
+            width: 44px;
+            height: 44px;
+            border: 2px solid #334155;
+            border-radius: 10px;
+            background: #1e293b;
+            color: #94a3b8;
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s;
+            position: relative;
+        }
+        .tool-btn:hover { border-color: #4ade80; color: #fff; }
+        .tool-btn.active { border-color: #4ade80; background: #166534; color: #fff; box-shadow: 0 0 12px rgba(74,222,128,0.3); }
+        .tool-btn .label {
+            position: absolute;
+            bottom: -14px;
+            font-size: 7px;
+            font-weight: 700;
+            color: #64748b;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+        .tool-sep {
+            width: 1px;
+            height: 32px;
+            background: #334155;
+            margin: 0 4px;
+        }
+
+        /* ── Color/Size Bar ── */
+        .options-bar {
+            display: flex;
+            gap: 8px;
+            padding: 6px 12px;
+            background: rgba(15,23,42,0.85);
+            border-bottom: 1px solid #1e293b;
+            flex-shrink: 0;
+            align-items: center;
+            justify-content: center;
+        }
+        .color-swatch {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 2px solid #334155;
+            cursor: pointer;
+            transition: transform 0.15s, border-color 0.15s;
+        }
+        .color-swatch:hover { transform: scale(1.15); }
+        .color-swatch.active { border-color: #fff; transform: scale(1.2); box-shadow: 0 0 8px rgba(255,255,255,0.3); }
+
+        .size-slider {
+            width: 100px;
+            accent-color: #4ade80;
+        }
+        .size-label {
+            font-size: 10px;
+            color: #64748b;
+            font-weight: 700;
+        }
+
+        /* ── Canvas Area ── */
+        .canvas-wrap {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px;
+            position: relative;
+            background: #0d1117;
+        }
+        #draw-canvas {
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 0 40px rgba(74,222,128,0.08), 0 4px 20px rgba(0,0,0,0.4);
+            cursor: crosshair;
+            touch-action: none;
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        /* ── Bottom Actions ── */
+        .bottom-bar {
+            display: flex;
+            gap: 8px;
+            padding: 10px 16px;
+            background: rgba(15,23,42,0.95);
+            border-top: 1px solid #1e293b;
+            flex-shrink: 0;
+            align-items: center;
+            justify-content: center;
+        }
+        .action-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 10px;
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-secondary {
+            background: #1e293b;
+            color: #94a3b8;
+            border: 1px solid #334155;
+        }
+        .btn-secondary:hover { background: #334155; color: #fff; }
+        .btn-primary {
+            background: linear-gradient(135deg, #4ade80, #22d3ee);
+            color: #0f172a;
+            font-size: 15px;
+            padding: 12px 28px;
+        }
+        .btn-primary:hover { transform: scale(1.03); box-shadow: 0 0 20px rgba(74,222,128,0.4); }
+        .btn-danger {
+            background: #ef4444;
+            color: #fff;
+        }
+        .btn-upload {
+            background: #8b5cf6;
+            color: #fff;
+        }
+
+        /* ── Style Selector ── */
+        .style-select {
+            padding: 8px 12px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            color: #e2e8f0;
+            font-family: 'Inter', sans-serif;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        /* ── Processing Overlay ── */
+        .processing-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(10,14,26,0.92);
+            backdrop-filter: blur(16px);
+            z-index: 1000;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+        }
+        .processing-overlay.visible { display: flex; }
+        .spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid #1e293b;
+            border-top: 4px solid #4ade80;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .process-text {
+            font-size: 18px;
+            font-weight: 800;
+            color: #4ade80;
+        }
+        .process-sub {
+            font-size: 13px;
+            color: #94a3b8;
+            text-align: center;
+            max-width: 300px;
+        }
+
+        /* ── Result Overlay ── */
+        .result-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(10,14,26,0.95);
+            backdrop-filter: blur(16px);
+            z-index: 1000;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+        }
+        .result-overlay.visible { display: flex; }
+        .result-card {
+            background: rgba(30,41,59,0.95);
+            border: 1px solid #334155;
+            border-radius: 16px;
+            padding: 28px 36px;
+            text-align: center;
+            max-width: 400px;
+        }
+        .result-title {
+            font-size: 24px;
+            font-weight: 900;
+            margin-bottom: 16px;
+        }
+        .result-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+        .stat-item {
+            background: #0f172a;
+            border-radius: 10px;
+            padding: 10px;
+        }
+        .stat-value {
+            font-size: 28px;
+            font-weight: 900;
+            color: #4ade80;
+        }
+        .stat-label {
+            font-size: 9px;
+            color: #64748b;
+            text-transform: uppercase;
+            font-weight: 700;
+        }
+
+        /* ── Upload Modal ── */
+        .upload-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(10,14,26,0.92);
+            backdrop-filter: blur(16px);
+            z-index: 1000;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+        }
+        .upload-overlay.visible { display: flex; }
+        .upload-zone {
+            width: 320px;
+            height: 240px;
+            border: 3px dashed #334155;
+            border-radius: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+        .upload-zone:hover, .upload-zone.dragover { border-color: #4ade80; }
+        .upload-zone .icon { font-size: 48px; }
+        .upload-zone .text { font-size: 14px; color: #94a3b8; font-weight: 600; }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <div class="header">
+        <h1>🎨 DRAW-TO-WORLD</h1>
+        <div class="header-actions">
+            <div class="mode-toggle">
+                <button class="mode-btn active" onclick="setMode('rally')" id="mode-rally">🏎️ Rally</button>
+                <button class="mode-btn" onclick="setMode('golf')" id="mode-golf">⛳ Golf</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+        <button class="tool-btn active" onclick="setTool('pen')" id="tool-pen" title="Draw Road">🛣️<span class="label">Road</span></button>
+        <button class="tool-btn" onclick="setTool('line')" id="tool-line" title="Straight Road">📏<span class="label">Straight</span></button>
+        <div class="tool-sep"></div>
+        <button class="tool-btn" onclick="setTool('mountain')" id="tool-mountain" title="Mountain Stamp">🏔️<span class="label">Mountain</span></button>
+        <button class="tool-btn" onclick="setTool('tree')" id="tool-tree" title="Tree Stamp">🌳<span class="label">Tree</span></button>
+        <button class="tool-btn" onclick="setTool('water')" id="tool-water" title="Draw Water / Lake">🌊<span class="label">Water</span></button>
+        <button class="tool-btn" onclick="setTool('house')" id="tool-house" title="House Stamp">🏠<span class="label">House</span></button>
+        <div class="tool-sep"></div>
+        <button class="tool-btn" onclick="setTool('start')" id="tool-start" title="Start Flag">🏁<span class="label">Start</span></button>
+        <button class="tool-btn" onclick="setTool('checkpoint')" id="tool-checkpoint" title="Checkpoint">⭕<span class="label">Check</span></button>
+        <div class="tool-sep"></div>
+        <button class="tool-btn" onclick="setTool('eraser')" id="tool-eraser" title="Eraser">🧹<span class="label">Erase</span></button>
+    </div>
+
+    <!-- Brush Size -->
+    <div class="options-bar">
+        <span class="size-label">✏️ ROAD WIDTH</span>
+        <input type="range" class="size-slider" id="brush-size" min="2" max="20" value="5" oninput="brushSize=parseInt(this.value)">
+        <span class="size-label" id="size-val">5</span>
+    </div>
+
+    <!-- Canvas -->
+    <div class="canvas-wrap" id="canvas-wrap">
+        <canvas id="draw-canvas"></canvas>
+    </div>
+
+    <!-- Bottom Bar -->
+    <div class="bottom-bar">
+        <button class="action-btn btn-secondary" onclick="undo()">↩️ Undo</button>
+        <button class="action-btn btn-secondary btn-danger" onclick="clearCanvas()">🗑️ Clear</button>
+        <button class="action-btn btn-upload" onclick="showUpload()">📷 Photo</button>
+        <select class="style-select" id="style-select">
+            <option value="enhance">✨ Enhance (AI improves)</option>
+            <option value="trace">📋 Trace (copy exact)</option>
+            <option value="generate">🚀 Generate (AI creates)</option>
+        </select>
+        <button class="action-btn btn-primary" onclick="buildWorld()">🔮 BUILD MY WORLD</button>
+    </div>
+
+    <!-- Processing Overlay -->
+    <div class="processing-overlay" id="processing">
+        <div class="spinner"></div>
+        <div class="process-text" id="process-text">AI is reading your drawing...</div>
+        <div class="process-sub" id="process-sub">This takes 3-5 seconds. The AI interprets every element you drew.</div>
+    </div>
+
+    <!-- Result Overlay -->
+    <div class="result-overlay" id="result">
+        <div class="result-card">
+            <div class="result-title" id="result-title">✅ World Ready!</div>
+            <div class="result-stats" id="result-stats"></div>
+            <div style="display:flex; flex-direction:column; gap:10px; align-items:center; margin-top:4px;">
+                <button class="action-btn btn-primary" onclick="playNow()" style="width:100%; justify-content:center; font-size:17px; padding:14px 28px;">🏎️ PLAY NOW</button>
+                <div style="display:flex; gap:8px;">
+                    <button class="action-btn btn-secondary" onclick="openInBuilder()" style="font-size:12px;">🏗️ Edit in Builder</button>
+                    <button class="action-btn btn-secondary" onclick="hideResult()" style="font-size:12px;">✏️ Keep Drawing</button>
+                </div>
+            </div>
+            <div id="result-json-preview" style="margin-top:12px; text-align:left; max-height:120px; overflow-y:auto; background:#0f172a; border-radius:8px; padding:8px; font-size:9px; color:#64748b; font-family:monospace; display:none;"></div>
+            <button class="action-btn btn-secondary" style="margin-top:8px; font-size:10px;" onclick="toggleJsonPreview()">👁️ Show JSON</button>
+        </div>
+    </div>
+
+    <!-- Upload Photo Overlay -->
+    <div class="upload-overlay" id="upload-overlay">
+        <div style="font-size:20px; font-weight:900; margin-bottom:8px;">📷 Upload a Photo</div>
+        <div style="font-size:12px; color:#94a3b8; margin-bottom:16px;">Take a photo of your paper drawing</div>
+        <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
+            <div class="icon">📄</div>
+            <div class="text">Tap to take photo or select file</div>
+            <div style="font-size:10px; color:#475569;">Supports JPG, PNG</div>
+        </div>
+        <input type="file" id="file-input" accept="image/*" capture="environment" style="display:none">
+        <img id="upload-preview" style="display:none; max-width:300px; max-height:200px; border-radius:12px; margin-top:8px; border:2px solid #334155;">
+        <div style="display:flex; gap:8px; margin-top:12px;">
+            <button class="action-btn btn-primary" onclick="buildFromUpload()" id="btn-build-upload" style="display:none;">🔮 BUILD THIS</button>
+            <button class="action-btn btn-secondary" onclick="hideUpload()">✕ Cancel</button>
+        </div>
+    </div>
+
+<script>
+// ── State ──
+let currentTool = 'pen';
+let currentColor = '#4a3728';  // Dark road brown
+let brushSize = 5;
+let currentMode = 'rally';
+let isDrawing = false;
+let lastX = 0, lastY = 0;
+let undoStack = [];
+let maxUndo = 30;
+let lastBuildPlan = null;
+let uploadedImageBase64 = null;
+let waterPath = null;
+
+// ── Canvas Setup ──
+const canvas = document.getElementById('draw-canvas');
+const ctx = canvas.getContext('2d');
+
+function resizeCanvas() {
+    let wrap = document.getElementById('canvas-wrap');
+    let w = wrap.clientWidth - 16;
+    let h = wrap.clientHeight - 16;
+    // Keep aspect ratio close to A4 (landscape)
+    let aspect = 1.414;
+    if (w / h > aspect) {
+        canvas.height = h;
+        canvas.width = Math.floor(h * aspect);
+    } else {
+        canvas.width = w;
+        canvas.height = Math.floor(w / aspect);
+    }
+    // Set internal resolution higher for quality
+    let dpr = Math.min(window.devicePixelRatio || 1, 2);
+    let cw = canvas.width, ch = canvas.height;
+    canvas.width = cw * dpr;
+    canvas.height = ch * dpr;
+    canvas.style.width = cw + 'px';
+    canvas.style.height = ch + 'px';
+    ctx.scale(dpr, dpr);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, cw, ch);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+}
+resizeCanvas();
+window.addEventListener('resize', function() {
+    saveUndo();
+    let imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    resizeCanvas();
+    ctx.putImageData(imgData, 0, 0);
+});
+saveUndo();
+
+// ── Drawing ──
+function getPos(e) {
+    let rect = canvas.getBoundingClientRect();
+    let scaleX = canvas.width / (Math.min(window.devicePixelRatio || 1, 2)) / rect.width;
+    let scaleY = canvas.height / (Math.min(window.devicePixelRatio || 1, 2)) / rect.height;
+    if (e.touches && e.touches.length > 0) {
+        return { x: (e.touches[0].clientX - rect.left) * scaleX, y: (e.touches[0].clientY - rect.top) * scaleY };
+    }
+    return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
+}
+
+function startDraw(e) {
+    e.preventDefault();
+    isDrawing = true;
+    let p = getPos(e);
+    lastX = p.x; lastY = p.y;
+    
+    // Stamps: place on click
+    if (['mountain', 'tree', 'house', 'start', 'checkpoint'].includes(currentTool)) {
+        placeStamp(p.x, p.y, currentTool);
+        isDrawing = false;
+        return;
+    }
+    
+    // Water brush: freehand fill with blue
+    if (currentTool === 'water') {
+        saveUndo();
+        waterPath = [{ x: p.x, y: p.y }];
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        return;
+    }
+    
+    if (currentTool === 'line') {
+        saveUndo();
+        return;
+    }
+    
+    saveUndo();
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+}
+
+function moveDraw(e) {
+    e.preventDefault();
+    if (!isDrawing) return;
+    let p = getPos(e);
+    
+    if (currentTool === 'pen') {
+        ctx.strokeStyle = currentColor;
+        ctx.lineWidth = brushSize;
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+    } else if (currentTool === 'water') {
+        if (waterPath) waterPath.push({ x: p.x, y: p.y });
+        ctx.lineTo(p.x, p.y);
+    } else if (currentTool === 'eraser') {
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.lineWidth = brushSize * 3;
+        ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.globalCompositeOperation = 'source-over';
+    }
+}
+
+function endDraw(e) {
+    if (!isDrawing) return;
+    isDrawing = false;
+    
+    if (currentTool === 'water' && waterPath && waterPath.length > 2) {
+        // Close path and fill with water color
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(56, 189, 248, 0.55)';  // Semi-transparent cyan-blue
+        ctx.fill();
+        // Add a subtle border
+        ctx.strokeStyle = 'rgba(14, 116, 144, 0.7)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        // Add wave emoji in center for AI clarity
+        if (waterPath.length > 0) {
+            let cx = 0, cy = 0;
+            for (let wp of waterPath) { cx += wp.x; cy += wp.y; }
+            cx /= waterPath.length; cy /= waterPath.length;
+            ctx.font = '28px serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = 'rgba(255,255,255,0.8)';
+            ctx.fillText('🌊', cx, cy);
+        }
+        waterPath = null;
+    } else if (currentTool === 'line') {
+        let p = getPos(e);
+        ctx.strokeStyle = currentColor;
+        ctx.lineWidth = brushSize;
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.beginPath();
+        ctx.moveTo(lastX, lastY);
+        ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+    }
+    
+    ctx.beginPath();
+}
+
+// ── Stamps ──
+function placeStamp(x, y, type) {
+    saveUndo();
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+    let s = Math.max(20, brushSize * 4);
+    
+    ctx.font = s + 'px serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    
+    const stamps = {
+        mountain: '🏔️',
+        tree: '🌳',
+        water: '💧',
+        house: '🏠',
+        start: '🏁',
+        checkpoint: '⭕'
+    };
+    
+    ctx.fillText(stamps[type] || '❓', x, y);
+    ctx.restore();
+}
+
+// ── Events ──
+canvas.addEventListener('mousedown', startDraw);
+canvas.addEventListener('mousemove', moveDraw);
+canvas.addEventListener('mouseup', endDraw);
+canvas.addEventListener('mouseleave', endDraw);
+canvas.addEventListener('touchstart', startDraw, { passive: false });
+canvas.addEventListener('touchmove', moveDraw, { passive: false });
+canvas.addEventListener('touchend', endDraw, { passive: false });
+
+// ── Tools ──
+function setTool(tool) {
+    currentTool = tool;
+    document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+    let el = document.getElementById('tool-' + tool);
+    if (el) el.classList.add('active');
+    canvas.style.cursor = tool === 'eraser' ? 'cell' : tool === 'water' ? 'pointer' : 'crosshair';
+}
+
+function setColor(color) {
+    currentColor = color;
+    document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.color-swatch').forEach(s => {
+        if (s.getAttribute('data-color') === color) s.classList.add('active');
+    });
+}
+
+function setMode(mode) {
+    currentMode = mode;
+    document.getElementById('mode-rally').classList.toggle('active', mode === 'rally');
+    document.getElementById('mode-golf').classList.toggle('active', mode === 'golf');
+}
+
+document.getElementById('brush-size').addEventListener('input', function() {
+    document.getElementById('size-val').textContent = this.value;
+});
+
+// ── Undo / Clear ──
+function saveUndo() {
+    undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+    if (undoStack.length > maxUndo) undoStack.shift();
+}
+
+function undo() {
+    if (undoStack.length > 1) {
+        undoStack.pop();
+        ctx.putImageData(undoStack[undoStack.length - 1], 0, 0);
+    }
+}
+
+function clearCanvas() {
+    saveUndo();
+    let dpr = Math.min(window.devicePixelRatio || 1, 2);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width / dpr, canvas.height / dpr);
+}
+
+// ── Upload Photo ──
+function showUpload() {
+    document.getElementById('upload-overlay').classList.add('visible');
+    uploadedImageBase64 = null;
+    document.getElementById('upload-preview').style.display = 'none';
+    document.getElementById('btn-build-upload').style.display = 'none';
+}
+
+function hideUpload() {
+    document.getElementById('upload-overlay').classList.remove('visible');
+}
+
+document.getElementById('file-input').addEventListener('change', function(e) {
+    let file = e.target.files[0];
+    if (!file) return;
+    let reader = new FileReader();
+    reader.onload = function(ev) {
+        uploadedImageBase64 = ev.target.result;
+        document.getElementById('upload-preview').src = uploadedImageBase64;
+        document.getElementById('upload-preview').style.display = 'block';
+        document.getElementById('btn-build-upload').style.display = 'flex';
+    };
+    reader.readAsDataURL(file);
+});
+
+// Drag-drop
+let uploadZone = document.getElementById('upload-zone');
+uploadZone.addEventListener('dragover', function(e) { e.preventDefault(); this.classList.add('dragover'); });
+uploadZone.addEventListener('dragleave', function() { this.classList.remove('dragover'); });
+uploadZone.addEventListener('drop', function(e) {
+    e.preventDefault();
+    this.classList.remove('dragover');
+    let file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) {
+        let reader = new FileReader();
+        reader.onload = function(ev) {
+            uploadedImageBase64 = ev.target.result;
+            document.getElementById('upload-preview').src = uploadedImageBase64;
+            document.getElementById('upload-preview').style.display = 'block';
+            document.getElementById('btn-build-upload').style.display = 'flex';
+        };
+        reader.readAsDataURL(file);
+    }
+});
+
+function buildFromUpload() {
+    if (!uploadedImageBase64) return;
+    hideUpload();
+    sendToAI(uploadedImageBase64);
+}
+
+// ── Build World ──
+function buildWorld() {
+    let imageData = canvas.toDataURL('image/png');
+    sendToAI(imageData);
+}
+
+async function sendToAI(imageBase64) {
+    let style = document.getElementById('style-select').value;
+    
+    document.getElementById('processing').classList.add('visible');
+    document.getElementById('process-text').textContent = 'AI is reading your drawing...';
+    document.getElementById('process-sub').textContent = 'This takes 3-5 seconds. The AI interprets every element you drew.';
+    
+    try {
+        let response = await fetch('/api/scan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                image_base64: imageBase64,
+                mode: currentMode,
+                style: style
+            })
+        });
+        
+        if (!response.ok) {
+            let err = await response.json();
+            throw new Error(err.error || 'Server error');
+        }
+        
+        let data = await response.json();
+        lastBuildPlan = data.plan;
+        
+        document.getElementById('processing').classList.remove('visible');
+        showResult(data.summary, data.plan);
+        
+    } catch (err) {
+        document.getElementById('processing').classList.remove('visible');
+        alert('Error: ' + err.message);
+    }
+}
+
+function showResult(summary, plan) {
+    document.getElementById('result').classList.add('visible');
+    
+    let title = currentMode === 'golf' ? '⛳ Golf Course Ready!' : '🏎️ Rally Track Ready!';
+    document.getElementById('result-title').textContent = title;
+    
+    let statsHtml = '';
+    if (summary.roads > 0) statsHtml += '<div class="stat-item"><div class="stat-value">' + summary.roads + '</div><div class="stat-label">Roads</div></div>';
+    if (summary.sculpts > 0) statsHtml += '<div class="stat-item"><div class="stat-value">' + summary.sculpts + '</div><div class="stat-label">Mountains</div></div>';
+    if (summary.trees > 0) statsHtml += '<div class="stat-item"><div class="stat-value">' + summary.trees + '</div><div class="stat-label">Trees</div></div>';
+    if (summary.water > 0) statsHtml += '<div class="stat-item"><div class="stat-value">' + summary.water + '</div><div class="stat-label">Water</div></div>';
+    if (summary.checkpoints > 0) statsHtml += '<div class="stat-item"><div class="stat-value">' + summary.checkpoints + '</div><div class="stat-label">Checkpoints</div></div>';
+    if (summary.holes > 0) statsHtml += '<div class="stat-item"><div class="stat-value">' + summary.holes + '</div><div class="stat-label">Holes</div></div>';
+    
+    document.getElementById('result-stats').innerHTML = statsHtml;
+    document.getElementById('result-json-preview').textContent = JSON.stringify(plan, null, 2);
+}
+
+function hideResult() {
+    document.getElementById('result').classList.remove('visible');
+}
+
+function toggleJsonPreview() {
+    let el = document.getElementById('result-json-preview');
+    el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+function playNow() {
+    // Auto-build + auto-play: builder builds silently, then redirects to rally.html
+    if (lastBuildPlan) {
+        sessionStorage.setItem('scan_build_plan', JSON.stringify(lastBuildPlan));
+        sessionStorage.setItem('scan_build_mode', currentMode);
+        sessionStorage.setItem('scan_auto_play', 'true');
+        window.location.href = 'arcade.html?autorun=edit_build&scan=true&auto_play=true';
+    }
+}
+
+function openInBuilder() {
+    // Build terrain, then stay in builder for manual editing
+    if (lastBuildPlan) {
+        sessionStorage.setItem('scan_build_plan', JSON.stringify(lastBuildPlan));
+        sessionStorage.setItem('scan_build_mode', currentMode);
+        sessionStorage.removeItem('scan_auto_play');
+        window.location.href = 'arcade.html?autorun=edit_build&scan=true';
+    }
+}
+
+// ── Keyboard shortcuts ──
+document.addEventListener('keydown', function(e) {
+    if (e.ctrlKey && e.key === 'z') { e.preventDefault(); undo(); }
+    if (e.key === 'p' || e.key === '1') setTool('pen');
+    if (e.key === 'l' || e.key === '2') setTool('line');
+    if (e.key === 'e') setTool('eraser');
+    if (e.key === 'm') setTool('mountain');
+    if (e.key === 't') setTool('tree');
+    if (e.key === 'w') setTool('water');
+});
+</script>
+</body>
+</html>

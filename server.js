@@ -828,6 +828,164 @@ app.post('/api/biomes', requireDB, async (req, res) => {
 });
 
 
+// --- SCAN-TO-BUILD (Draw-to-World) API ---
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+
+const RALLY_SCAN_PROMPT = `You are a WRC rally stage designer analyzing a hand-drawn map.
+
+INTERPRETATION RULES:
+- Any line or path drawn = road. Follow the drawn path precisely as a sequence of coordinate points.
+- Large shapes, circles, or mountain-like drawings = hills/mountains. Bigger shape = taller hill (10-30m).
+- Small dots, tree-like drawings, or cluster marks = trees. Group them naturally.
+- Arrows or car drawings = start position + direction the arrow points.
+- Wavy lines, blue marks, or water-like drawings = water features (lakes, rivers).
+- Houses, buildings, animals, rainbows, or ANY creative element = interpret as decoration or ignore gracefully.
+- If you see text/labels written on the drawing, use them as hints (e.g. "big mountain", "forest", "lake").
+
+CRITICAL ROAD RULE:
+- Output exactly ONE road in the "roads" array. Never split a continuous drawn path into multiple roads.
+- If the drawing shows one continuous path, output it as a single road with many nodes.
+- If the drawing shows a loop/circuit, the first and last node should be near each other.
+- Use 15-30 nodes to capture the shape accurately. More nodes for complex paths.
+
+COORDINATE SYSTEM:
+- Map the ENTIRE drawing to a 900x900 meter grid centered at (0,0).
+- Paper/canvas edges map to approximately -400..+400 in both X and Z.
+- X axis = left-right on the paper. Z axis = top-bottom on the paper (top = negative Z, bottom = positive Z).
+
+MANDATORY RACE SETUP (always do this, even if not drawn):
+- ALWAYS place a start gate at the beginning of the road.
+- ALWAYS place a finish gate at the end of the road (or at start if it's a loop).
+- ALWAYS place 4-8 checkpoints evenly spaced along the road between start and finish.
+- Set "heading" to the road direction angle in radians at that point.
+
+RALLY EXPERT ENHANCEMENTS (apply automatically):
+1. BANKING: On curves tighter than 40m radius, add a terrain sculpt raising the outer edge by 1-2m.
+2. JUMPS: On long straight sections (>80m), add a 3-5m crest with a 15m flat landing zone after it.
+3. HAIRPINS: At very tight turns, widen the road to 12m and lower the inner edge by -2m.
+4. TREES: Auto-fill trees 5-15m from road edges wherever the drawing suggests vegetation. Space trees 4-8m apart.
+5. SURFACE: Vary road material — use "asphalt" near start/finish, "gravel" in open areas, "dirt" in forest sections.
+6. DIFFICULTY: Make the first third easier (gentle curves), middle technical (hairpins), final third fast (crests, straights).
+
+OUTPUT: Return ONLY valid JSON (no markdown fences, no explanations). Use this exact schema:
+{
+  "biome": "GENERIC",
+  "sculpts": [{"x":0,"z":0,"radius":30,"height":15,"falloff":"smooth","label":"Hill"}],
+  "roads": [{"width":8,"material":"gravel","nodes":[{"x":0,"z":0}]}],
+  "trees": [{"x":0,"z":0,"type":"oak","scale":1.0}],
+  "water": [{"x":0,"z":0,"radius":20,"depth":3,"label":"Lake"}],
+  "race": {"start":{"x":0,"z":0,"heading":0},"finish":{"x":0,"z":0,"heading":0},"checkpoints":[{"x":0,"z":0}],"laps":1}
+}`;
+
+const GOLF_SCAN_PROMPT = `You are a professional golf course architect analyzing a hand-drawn course layout.
+
+INTERPRETATION RULES:
+- Ovals or circles = greens. The size determines green radius (8-15m).
+- Paths or corridors between elements = fairways (path of play).
+- Dots inside circles or flag drawings = pin/hole positions on the green.
+- Arrows, rectangles near edges, or tee-like marks = tee boxes. Arrow direction = aim direction.
+- Hatched areas, filled shapes, or sandy-colored areas = bunkers.
+- Wavy marks, blue areas = water hazards.
+- Tree drawings, dots along borders = trees/vegetation.
+- Numbers written = hole numbers. Follow the numbered sequence.
+- If no numbers, interpret left-to-right, top-to-bottom as hole order.
+
+COORDINATE SYSTEM:
+- Map the ENTIRE drawing to a 900x900 meter grid centered at (0,0).
+- Paper/canvas edges map to approximately -400..+400 in both X and Z.
+
+GOLF EXPERT ENHANCEMENTS:
+1. GREEN CONTOURING: Add subtle 0.3-0.8m sculpt undulation near greens.
+2. STRATEGIC BUNKERS: Place greenside bunkers on the approach side if not explicitly drawn.
+3. PAR CALCULATION: Auto-calculate par from tee-to-pin distance (<180m=3, 180-380m=4, >380m=5).
+4. TREE LINING: Add trees along fairway borders for definition, 8-15m from centerline.
+5. ELEVATION: Add gentle rolling hills (2-5m) between holes for visual interest.
+
+OUTPUT: Return ONLY valid JSON (no markdown fences, no explanations). Use this exact schema:
+{
+  "biome": "GENERIC",
+  "sculpts": [{"x":0,"z":0,"radius":30,"height":5,"falloff":"smooth","label":"Hill between holes"}],
+  "trees": [{"x":0,"z":0,"type":"oak","scale":1.0}],
+  "water": [{"x":0,"z":0,"radius":20,"depth":3,"label":"Pond"}],
+  "holes": [{"number":1,"par":4,"tee":{"x":0,"z":0,"heading":0},"green":{"x":0,"z":0,"radius":12},"pin":{"x":0,"z":0},"fairway_path":[{"x":0,"z":0}],"bunkers":[{"x":0,"z":0,"radius":6}]}],
+  "paint_zones": [{"type":"SAND","center":{"x":0,"z":0},"radius":8}]
+}`;
+
+app.post('/api/scan', async (req, res) => {
+    try {
+        const { image_base64, mode, style } = req.body;
+        if (!image_base64) return res.status(400).json({ error: 'Missing image data' });
+        if (!process.env.GEMINI_API_KEY) return res.status(503).json({ error: 'AI not configured — add GEMINI_API_KEY to .env' });
+
+        console.log('🎨 Scan-to-Build request received — mode:', mode || 'rally', ', style:', style || 'enhance');
+
+        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+
+        // Select prompt based on mode
+        let prompt = (mode === 'golf') ? GOLF_SCAN_PROMPT : RALLY_SCAN_PROMPT;
+
+        // Add style modifier
+        if (style === 'trace') {
+            prompt += '\n\nSTYLE: TRACE MODE — Copy the drawing as precisely as possible. Minimal enhancements. Do NOT add elements that are not in the drawing.';
+        } else if (style === 'generate') {
+            prompt += '\n\nSTYLE: GENERATE MODE — Use the drawing as loose inspiration. Create a complete, professional-quality course/track. Add many more elements than drawn. Be creative and generous with details.';
+        }
+        // Default 'enhance' uses the base prompt as-is
+
+        // Strip data URI prefix if present
+        let imageData = image_base64;
+        if (imageData.startsWith('data:')) {
+            imageData = imageData.split(',')[1];
+        }
+
+        const result = await model.generateContent([
+            { text: prompt },
+            { inlineData: { mimeType: 'image/png', data: imageData } }
+        ]);
+
+        const text = result.response.text();
+        
+        // Extract JSON — handle various AI response formats
+        let buildPlan;
+        try {
+            // Try direct parse first
+            buildPlan = JSON.parse(text);
+        } catch(e) {
+            // Try extracting from markdown code fences
+            const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+            if (jsonMatch) {
+                buildPlan = JSON.parse(jsonMatch[1].trim());
+            } else {
+                // Try finding the first { to last }
+                const start = text.indexOf('{');
+                const end = text.lastIndexOf('}');
+                if (start >= 0 && end > start) {
+                    buildPlan = JSON.parse(text.substring(start, end + 1));
+                } else {
+                    throw new Error('Could not extract JSON from AI response');
+                }
+            }
+        }
+
+        // Count elements for preview
+        const summary = {
+            sculpts: (buildPlan.sculpts || []).length,
+            roads: (buildPlan.roads || []).length,
+            trees: (buildPlan.trees || []).length,
+            water: (buildPlan.water || []).length,
+            holes: (buildPlan.holes || []).length,
+            checkpoints: buildPlan.race ? (buildPlan.race.checkpoints || []).length : 0
+        };
+
+        console.log('🎨 Scan result:', JSON.stringify(summary));
+        res.json({ success: true, plan: buildPlan, summary: summary });
+    } catch (err) {
+        console.error('🎨 Scan error:', err.message);
+        res.status(500).json({ error: 'AI processing failed: ' + err.message });
+    }
+});
+
 // --- SERVING STATIC FILES (För Railway Deploy) ---
 // Disable cache for HTML files during development
 app.use((req, res, next) => {

@@ -1719,6 +1719,14 @@ window.rallyVehicle = {
         dust_cloud: {
             colors: [0xf59e0b, 0xd97706, 0xb45309],
             size: [2.0, 4.5], life: [0.6, 1.2], gravity: -0.5 // Sand hangs in air
+        },
+        grass_spray: {
+            colors: [0x22c55e, 0x16a34a, 0x4ade80, 0x15803d, 0x86efac],
+            size: [1.2, 2.8], life: [0.4, 0.9], gravity: 2.5
+        },
+        ice_crystals: {
+            colors: [0xbfdbfe, 0xdbeafe, 0xeff6ff],
+            size: [1.0, 2.0], life: [0.3, 0.7], gravity: 1.0
         }
     };
     

@@ -50,7 +50,7 @@ const SURFACES = {
         grip: 0.55, longGrip: 0.60, brake: 0.65,
         maxSpeed: 0.82, accel: 0.78, dragAdd: 0.003, // Rejält sänkt
         driftThreshold: 10, driftSustain: 1.4, driftRecovery: 0.65,
-        particle: 'dust_cloud', particleIntensity: 0.75,
+        particle: 'grass_spray', particleIntensity: 0.75,
         rumble: 0.35, depthVariance: 0.18, landing: 0.65,
         color: '#fbbf24', label: 'DIRT'
     },
@@ -103,7 +103,10 @@ const SURFACE_MAP = {
     'WASTE':      'GRAVEL',
     'BUNKER':     'DIRT',
     'WATER':      'WATER',
-    'OB':         'BARRIER'
+    'OB':         'BARRIER',
+    // WINTER biome surface types
+    'SNOW_SURFACE': 'SNOW',
+    'ICE_SURFACE':  'ICE'
 };
 
 // Resolve terrain type to SurfaceMaterial
