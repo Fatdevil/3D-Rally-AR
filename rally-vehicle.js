@@ -591,7 +591,9 @@ function updateVehicle(dt) {
             let speedFactor = clamp(Math.abs(car.speed) / 40, 0, 1);
             let phase = performance.now() * 0.013 + i * 2.3 + car.position.x * 0.7;
             let noise = (Math.sin(phase) * 0.6 + Math.sin(phase * 2.7) * 0.4);
-            groundTarget += noise * surface.depthVariance * speedFactor * 0.15;
+            // Multiplier increased from 0.15 to 0.80 to restore physical bumping on offroad surfaces
+            // now that pixel-staircasing is resolved by bilinear interpolation.
+            groundTarget += noise * surface.depthVariance * speedFactor * 0.80;
         }
         let error = groundTarget - (car.position.y - CFG.CAR_HEIGHT);
 

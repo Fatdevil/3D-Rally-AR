@@ -10,6 +10,12 @@ var smartGreenPoints = [];
 var smartGreenSpheres = [];
 var smartGreenLineMesh = null;
 
+// Injection bridge for arcade-scan-builder.js → allows scan-built roads
+// to use the full executeSmartRoad() pipeline (terrain sculpting, barriers, paint)
+window._injectSmartGreenPoints = function(points) {
+    smartGreenPoints = points.slice();
+};
+
 // === MOWING PATTERN PAINTER ===
 // Paints stripe/checker/diamond patterns inside a polygon on the terrain canvas
 // Called after the solid base fill for both greens and fairways
@@ -1370,14 +1376,14 @@ window.executeSmartTee = function() {
 // ── Helper: Create a gate mesh (start=green, finish=checkered) ──
 function createRallyGate(x, y, z, type) {
     let gate = new THREE.Group();
-    gate.name = type === 'start' ? 'RallyStart' : 'RallyFinish';
+    gate.name = type === 'start' ? 'RallyStart' : (type === 'start_finish' ? 'RallyStartFinish' : 'RallyFinish');
     
     let roadW = window._smartRoadWidth || 10;
     let halfW = roadW / 2;
     let poleH = 5;
     
     // Pole color
-    let poleColor = type === 'start' ? 0x22cc44 : 0xeeeeee;
+    let poleColor = (type === 'start' || type === 'start_finish') ? 0x22cc44 : 0xeeeeee;
     let poleMat = new THREE.MeshLambertMaterial({ color: poleColor });
     let poleGeo = new THREE.CylinderGeometry(0.15, 0.15, poleH, 8);
     
@@ -1390,7 +1396,7 @@ function createRallyGate(x, y, z, type) {
     gate.add(rightPole);
     
     // Top beam
-    let beamMat = type === 'start' 
+    let beamMat = (type === 'start' || type === 'start_finish') 
         ? new THREE.MeshLambertMaterial({ color: 0x22cc44 })
         : new THREE.MeshLambertMaterial({ color: 0x111111 });
     let beam = new THREE.Mesh(
@@ -1400,7 +1406,7 @@ function createRallyGate(x, y, z, type) {
     beam.position.set(0, poleH, 0);
     gate.add(beam);
     
-    // Banner (start=green with START text, finish=checkered)
+    // Banner (start=green with START text, finish=checkered, start_finish=split green/checkered)
     let bannerGeo = new THREE.PlaneGeometry(roadW * 0.8, 1.2);
     let bannerCanvas = document.createElement('canvas');
     bannerCanvas.width = 256; bannerCanvas.height = 64;
@@ -1413,6 +1419,33 @@ function createRallyGate(x, y, z, type) {
         bCtx.font = 'bold 40px Arial';
         bCtx.textAlign = 'center';
         bCtx.fillText('START', 128, 46);
+    } else if (type === 'start_finish') {
+        // Left half green
+        bCtx.fillStyle = '#22cc44';
+        bCtx.fillRect(0, 0, 128, 64);
+        
+        // Right half checkered
+        let sq = 8;
+        for (let row = 0; row < 64 / sq; row++) {
+            for (let col = 128 / sq; col < 256 / sq; col++) {
+                bCtx.fillStyle = (row + col) % 2 === 0 ? '#fff' : '#111';
+                bCtx.fillRect(col * sq, row * sq, sq, sq);
+            }
+        }
+        
+        // Text on left half
+        bCtx.fillStyle = '#fff';
+        bCtx.font = 'bold 28px Arial';
+        bCtx.textAlign = 'center';
+        bCtx.fillText('START', 64, 44);
+        
+        // Text on right half
+        bCtx.fillStyle = '#fff';
+        bCtx.strokeStyle = '#111';
+        bCtx.lineWidth = 4;
+        bCtx.font = 'bold 26px Arial';
+        bCtx.strokeText('FINISH', 192, 44);
+        bCtx.fillText('FINISH', 192, 44);
     } else {
         // Checkered pattern
         let sq = 16;
@@ -1591,6 +1624,61 @@ window.executeSmartFinishClick = function(cx, cy, cz, angle) {
     
     window.saveLevel();
     if (window.showBuildToast) window.showBuildToast('🏁 FINISH placed!', '#111111');
+};
+
+// ── RALLY START/FINISH: Single click to place combined start/finish gate ──
+window.executeSmartStartFinishClick = function(cx, cy, cz, angle) {
+    window.saveUndoState();
+    
+    let roadId = null, splineIndex = -1;
+    let snapData = window.getNearestRoadPoint(new THREE.Vector3(cx, cy, cz));
+    if (snapData) {
+        cx = snapData.point.x;
+        cy = snapData.point.y;
+        cz = snapData.point.z;
+        if (!window._rallyGateManualRotation) {
+            angle = Math.atan2(snapData.tangent.x, snapData.tangent.z);
+        }
+        roadId = snapData.roadId;
+        splineIndex = snapData.splineIndex;
+    } else {
+        if (typeof window.localGetTerrainAt === 'function') {
+            let t = window.localGetTerrainAt(cx, -cz);
+            cy = t ? t.z : cy;
+        }
+    }
+    
+    // Clear any existing start and finish meshes
+    if (window.raceConfig.startMesh) {
+        window._arcadeScene.remove(window.raceConfig.startMesh);
+        window.raceConfig.startMesh = null;
+    }
+    if (window.raceConfig.finishMesh) {
+        window._arcadeScene.remove(window.raceConfig.finishMesh);
+        window.raceConfig.finishMesh = null;
+    }
+    
+    let gate = createRallyGate(cx, cy, cz, 'start_finish');
+    gate.rotation.y = angle || 0;
+    window._arcadeScene.add(gate);
+    
+    // Save the same details to both start and finish
+    let gateConfig = { x: cx, y: cy, z: cz, rotation: angle || 0, roadId: roadId, splineIndex: splineIndex };
+    window.raceConfig.start = gateConfig;
+    window.raceConfig.finish = JSON.parse(JSON.stringify(gateConfig)); // unique copy
+    
+    window.raceConfig.startMesh = gate;
+    window.raceConfig.finishMesh = null; // Rebuilt from loader as combined
+    
+    let hole = window.courseHoles[0];
+    if (hole) {
+        hole.tees.yellow = { x: cx, y: cy, z: cz };
+        if (angle) hole.tees.yellow.rot = angle;
+        hole.flag = { x: cx, y: cy, z: cz };
+    }
+    
+    window.saveLevel();
+    if (window.showBuildToast) window.showBuildToast('🏁 START / FINISH placed!', '#8b5cf6');
 };
 
 // ── RALLY CHECKPOINT: Single click → place checkpoint ring ──
@@ -2688,8 +2776,8 @@ window.executeSmartRoad = function() {
     let roadH;
     if(doFoundation) {
         // Variable grade: downhill allows steeper (gravity helps), uphill stricter
-        let gradeDown = 0.35;   // 35% max downhill (~19°) — aggressive rally terrain
-        let gradeUp   = 0.12;   // 12% max uphill — engine+traction limit
+        let gradeDown = typeof window._smartRoadGradeDown === 'number' ? window._smartRoadGradeDown : 0.70;   // 70% max downhill (~35°) — aggressive rally terrain
+        let gradeUp   = typeof window._smartRoadGradeUp === 'number' ? window._smartRoadGradeUp : 0.55;   // 55% max uphill (~29°) — engine+traction limit
         
         roadH = new Float32Array(rawTerrainH); // Start from RAW terrain (no pre-smoothing!)
         
@@ -2698,6 +2786,12 @@ window.executeSmartRoad = function() {
         
         // 2 rounds of constraint → smooth for stable convergence
         for (let round = 0; round < 2; round++) {
+            if (window._smartShapeClosed) {
+                let avg = (roadH[0] + roadH[roadH.length - 1]) / 2;
+                roadH[0] = avg;
+                roadH[roadH.length - 1] = avg;
+            }
+
             // Forward pass: enforce max grade start → end
             for(let i = 1; i < roadH.length; i++) {
                 let dist = arcLens[i] - arcLens[i-1];
@@ -2709,6 +2803,13 @@ window.executeSmartRoad = function() {
                 if(diff > maxRise) { roadH[i] = roadH[i-1] + maxRise; displaced[i] = 1; }
                 else if(diff < -maxRise) { roadH[i] = roadH[i-1] - maxRise; displaced[i] = 1; }
             }
+
+            if (window._smartShapeClosed) {
+                let avg = (roadH[0] + roadH[roadH.length - 1]) / 2;
+                roadH[0] = avg;
+                roadH[roadH.length - 1] = avg;
+            }
+
             // Backward pass: enforce max grade end → start
             for(let i = roadH.length - 2; i >= 0; i--) {
                 let dist = arcLens[i+1] - arcLens[i];
@@ -2735,9 +2836,24 @@ window.executeSmartRoad = function() {
             }
         }
         
-        // Pin endpoints to actual terrain (road starts/ends at real ground level)
-        roadH[0] = rawTerrainH[0];
-        roadH[roadH.length-1] = rawTerrainH[rawTerrainH.length-1];
+        if (!window._smartShapeClosed) {
+            // Blend pinning to raw terrain over the first and last N nodes to avoid sudden cliffs
+            let blendCount = Math.min(15, Math.floor(roadH.length / 10));
+            for (let i = 0; i < blendCount; i++) {
+                let t = i / blendCount; // 0 at endpoint, 1 at blend boundary
+                // First points blend between rawTerrainH and solved roadH
+                roadH[i] = rawTerrainH[i] * (1 - t) + roadH[i] * t;
+                
+                // Last points blend between rawTerrainH and solved roadH
+                let idx = roadH.length - 1 - i;
+                roadH[idx] = rawTerrainH[idx] * (1 - t) + roadH[idx] * t;
+            }
+        } else {
+            // Keep loop endpoints exactly matched
+            let avg = (roadH[0] + roadH[roadH.length - 1]) / 2;
+            roadH[0] = avg;
+            roadH[roadH.length - 1] = avg;
+        }
     } else {
         roadH = rawTerrainH;
     }
@@ -3381,14 +3497,20 @@ window.executeSmartRoad = function() {
     let materialMap = { GRAVEL: 'GRAVEL', ASPHALT: 'TARMAC', DIRT: 'MUD' };
     let rsMaterial = materialMap[surface] || 'GRAVEL';
     if (surface !== 'GAP') {
-        window._builtRoads.push({
+        let roadEntry = {
             id: 'road_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 6),
             nodes: smartGreenPoints.map(function(p) { return { worldX: p.x, worldY: p.y, worldZ: p.z }; }),
             width: roadWidth,
             material: rsMaterial,
             closed: !!window._smartShapeClosed,
             sampledPoints: splinePts.map(function(p) { return { x: p.x, y: p.y || 0, z: p.z }; })
-        });
+        };
+        window._builtRoads.push(roadEntry);
+        
+        // Sync with rally-roads.js road system (if loaded)
+        if (window.roadSystem && typeof window.roadSystem.registerExternalRoad === 'function') {
+            window.roadSystem.registerExternalRoad(roadEntry);
+        }
     }
 
     let surfMsg = surface !== 'NONE' ? ' | ' + surface : '';
@@ -3400,6 +3522,149 @@ window.executeSmartRoad = function() {
         window._lastRoadEndPoint = { x: lastPt.x, y: lastPt.y, z: lastPt.z };
     }
     clearSmartGreen();
+};
+
+window.executeSplineMountain = function() {
+    if (!window.splinePoints || window.splinePoints.length < 3) {
+        if (window.showBuildToast) {
+            window.showBuildToast('⚠️ Draw at least 3 points to create a mountain!', '#f59e0b');
+        } else {
+            alert('Draw at least 3 points to create a mountain!');
+        }
+        return;
+    }
+
+    // Spara undo-tillstånd
+    if (typeof window.saveUndoState === 'function') {
+        window.saveUndoState();
+    }
+
+    let mtnHeight = parseFloat(document.getElementById('mtn-spline-height').value) || 25;
+
+    // Skapa en stängd kurva och sampla tätt
+    let curve = new THREE.CatmullRomCurve3(window.splinePoints, true);
+    let numSamples = Math.max(150, window.splinePoints.length * 30);
+    let densePts = curve.getPoints(numSamples);
+
+    // Hitta 2D bounding box
+    let minX = Infinity, maxX = -Infinity;
+    let minZ = Infinity, maxZ = -Infinity;
+    densePts.forEach(pt => {
+        if (pt.x < minX) minX = pt.x;
+        if (pt.x > maxX) maxX = pt.x;
+        if (pt.z < minZ) minZ = pt.z;
+        if (pt.z > maxZ) maxZ = pt.z;
+    });
+
+    let segs = window.TERRAIN_SEGS;
+    let size = window.TERRAIN_SIZE;
+    let step = size / segs;
+    let gxMin = Math.max(0, Math.floor((minX + (size / 2)) / step) - 2);
+    let gxMax = Math.min(segs, Math.ceil((maxX + (size / 2)) / step) + 2);
+    let gzMin = Math.max(0, Math.floor((minZ + (size / 2)) / step) - 2);
+    let gzMax = Math.min(segs, Math.ceil((maxZ + (size / 2)) / step) + 2);
+
+    // Hjälpfunktioner för point-in-polygon och avstånd
+    function pointInPolygon(x, z, polygon) {
+        let inside = false;
+        for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+            let xi = polygon[i].x, zi = polygon[i].z;
+            let xj = polygon[j].x, zj = polygon[j].z;
+            let intersect = ((zi > z) !== (zj > z))
+                && (x < (xj - xi) * (z - zi) / (zj - zi + 0.00001) + xi);
+            if (intersect) inside = !inside;
+        }
+        return inside;
+    }
+
+    function distanceToSegmentSq(px, pz, ax, az, bx, bz) {
+        let dx = bx - ax;
+        let dz = bz - az;
+        let l2 = dx * dx + dz * dz;
+        if (l2 === 0) return (px - ax) * (px - ax) + (pz - az) * (pz - az);
+        let t = ((px - ax) * dx + (pz - az) * dz) / l2;
+        t = Math.max(0, Math.min(1, t));
+        let projX = ax + t * dx;
+        let projZ = az + t * dz;
+        let rx = px - projX;
+        let rz = pz - projZ;
+        return rx * rx + rz * rz;
+    }
+
+    function minDistanceToPolygon(x, z, polygon) {
+        let minDistSq = Infinity;
+        for (let i = 0; i < polygon.length; i++) {
+            let next = (i + 1) % polygon.length;
+            let dSq = distanceToSegmentSq(x, z, polygon[i].x, polygon[i].z, polygon[next].x, polygon[next].z);
+            if (dSq < minDistSq) minDistSq = dSq;
+        }
+        return Math.sqrt(minDistSq);
+    }
+
+    // Samla vertexer inuti
+    let insideVertices = [];
+    let maxD = 0;
+    let positions = window._arcadePlaneGeo.attributes.position.array;
+    let stride = segs + 1;
+
+    for (let gz = gzMin; gz <= gzMax; gz++) {
+        for (let gx = gxMin; gx <= gxMax; gx++) {
+            let idx = gz * stride + gx;
+            let vx = positions[idx * 3];
+            let vz = -positions[idx * 3 + 1];
+            let origH = positions[idx * 3 + 2];
+
+            if (pointInPolygon(vx, vz, densePts)) {
+                let d = minDistanceToPolygon(vx, vz, densePts);
+                if (d > maxD) maxD = d;
+                insideVertices.push({ idx: idx, x: vx, z: vz, origH: origH, d: d });
+            }
+        }
+    }
+
+    if (insideVertices.length === 0 || maxD === 0) {
+        if (window.showBuildToast) window.showBuildToast('⚠️ No terrain found inside the shape!', '#f59e0b');
+        return;
+    }
+
+    let fbm = window.fbm || function(x, y) { return 0; };
+
+    let jaggedMultiplier = 1.0;
+    let jaggedSlider = document.getElementById('mtn-spline-jagged');
+    if (jaggedSlider) {
+        jaggedMultiplier = parseFloat(jaggedSlider.value) / 50.0;
+    }
+
+    // Höj terrängen inuti formen
+    insideVertices.forEach(v => {
+        let t = v.d / maxD;
+        // Smoothstep falloff
+        let falloff = t * t * (3 - 2 * t);
+        
+        // FBM noise med frekvens och dämpning, skalat med jaggedMultiplier
+        let noiseVal = fbm(v.x * 0.1, v.z * 0.1, 3, 2.0, 0.5) * (mtnHeight * 0.15) * jaggedMultiplier;
+        
+        // Slutlig höjdändring
+        let targetH = v.origH + (mtnHeight + noiseVal) * falloff;
+        positions[v.idx * 3 + 2] = targetH;
+    });
+
+    // Uppdatera geometri
+    window._arcadePlaneGeo.attributes.position.needsUpdate = true;
+    window._arcadePlaneGeo.computeVertexNormals();
+    window._arcadePlaneGeo.computeBoundingBox();
+    window._arcadePlaneGeo.computeBoundingSphere();
+
+    // Uppdatera skuggor/snäppning/vatten
+    if (typeof window.snapObjectsToGround === 'function') window.snapObjectsToGround();
+    if (typeof window.rebuildWaterMask === 'function') window.rebuildWaterMask(true);
+
+    // Rensa spline-punkter
+    if (typeof window.clearSpline === 'function') {
+        window.clearSpline();
+    }
+
+    if (window.showBuildToast) window.showBuildToast('⛰️ Mountain built!', '#38bdf8');
 };
 
 })();

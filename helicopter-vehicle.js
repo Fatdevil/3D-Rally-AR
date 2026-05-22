@@ -11,16 +11,16 @@ function clamp(v,lo,hi){ return Math.max(lo,Math.min(hi,v)); }
 const PHYS = {
     gravity:        9.8,
     mass:           1.0,
-    maxLift:        18.5,
-    hoverThrottle:  0.53,   // gravity / maxLift ≈ 0.53
-    linearDamping:  0.984,
-    pitchAccel:     1.4,
-    rollAccel:      1.2,
+    maxLift:        22.0,
+    hoverThrottle:  0.45,   // gravity / maxLift ≈ 0.45
+    linearDamping:  0.991,
+    pitchAccel:     1.7,
+    rollAccel:      1.5,
     yawAccel:       0.9,
     angularDamping: 0.87,
     autoLevel:      0.08,   // Auto-stabilization strength
-    maxPitch:       32,     // degrees
-    maxRoll:        28,     // degrees
+    maxPitch:       40,     // degrees
+    maxRoll:        35,     // degrees
     skidHeight:     1.3,    // Height from ground to heli center (landing gear)
     crashSpeed:     12,     // m/s vertical impact = crash
 };
@@ -130,11 +130,12 @@ const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navig
 let joy = { left: {x:0, y:0}, right: {x:0, y:0} };
 let joystickContainer = null;
 
-const HELI_KEYS = new Set(['Space','ShiftLeft','ShiftRight','KeyI','KeyK','KeyJ','KeyL','KeyU','KeyO']);
+const HELI_KEYS = new Set(['Space','ShiftLeft','ShiftRight','KeyI','KeyK','KeyJ','KeyL','KeyU','KeyO','KeyW','KeyS','KeyA','KeyD','KeyQ','KeyE']);
 window.addEventListener('keydown', function(e) {
     if (heli.active) {
         keys[e.code] = true;
         if (e.code === 'KeyR' && heli.crashed) resetHelicopter();
+        if (HELI_KEYS.has(e.code)) e.preventDefault();
     }
 });
 window.addEventListener('keyup', function(e) { keys[e.code] = false; });
@@ -220,36 +221,62 @@ function readInput() {
     input.throttle = 0; input.pitch = 0; input.roll = 0; input.yaw = 0;
     
     if (isMobile) {
-        // Touch joysticks: Left = throttle+yaw, Right = pitch+roll
+        // Touch joysticks: 
+        // Left stick = throttle + coordinated turn (yaw + 65% bank)
+        // Right stick = pitch + pure roll (strafe)
         input.throttle = -joy.left.y;   // push up = more gas
-        input.yaw      =  joy.left.x;   // left/right = turn
-        input.pitch    = -joy.right.y;   // push up = fly forward
-        input.roll     =  joy.right.x;   // left/right = tilt
+        input.yaw      = -joy.left.x;   // Left = positive yaw, Right = negative yaw
+        input.roll     = -joy.left.x * 0.65 - joy.right.x; // Coordinated bank (65%) + Strafe roll (100%)
+        input.pitch    = -joy.right.y;  // push up = fly forward
     } else {
-        // Keyboard: Throttle = Space/Shift, Flight = IKJL, Turn = U/O
+        // Keyboard: Throttle = Space/Shift, Flight = WASD or IKJL, Turn/Strafe = QE or UO
         if (keys['Space']) input.throttle = 1;
         if (keys['ShiftLeft'] || keys['ShiftRight']) input.throttle = -1;
-        if (keys['KeyI']) input.pitch = 1;
-        if (keys['KeyK']) input.pitch = -1;
-        if (keys['KeyJ']) input.roll = -1;
-        if (keys['KeyL']) input.roll = 1;
-        if (keys['KeyU']) input.yaw = -1;
-        if (keys['KeyO']) input.yaw = 1;
+        
+        // Pitch (Forward/Backward)
+        if (keys['KeyI'] || keys['KeyW']) input.pitch = 1;
+        if (keys['KeyK'] || keys['KeyS']) input.pitch = -1;
+        
+        // Coordinated Turn (A/D or U/O for legacy): 100% Yaw + 65% Roll for visible coordinated bank
+        let turnInput = 0;
+        if (keys['KeyA'] || keys['KeyU']) turnInput += 1.0;
+        if (keys['KeyD'] || keys['KeyO']) turnInput -= 1.0;
+        
+        // Pure Strafe Roll (Q/E or J/L for legacy): 100% Roll
+        let strafeInput = 0;
+        if (keys['KeyQ'] || keys['KeyJ']) strafeInput += 1.0;
+        if (keys['KeyE'] || keys['KeyL']) strafeInput -= 1.0;
+        
+        input.yaw = turnInput;
+        input.roll = turnInput * 0.65 + strafeInput;
     }
-    // Gamepad (works on both mobile+desktop)
+    
+    // Gamepad (works on both mobile+desktop) - add to keyboard inputs with clamp
     let gps = navigator.getGamepads ? navigator.getGamepads() : [];
     for (let gp of gps) {
         if (!gp || !gp.connected) continue;
         let lx = gp.axes[0] || 0, ly = gp.axes[1] || 0;
         let rx = gp.axes[2] || 0, ry = gp.axes[3] || 0;
-        if (Math.abs(lx) > 0.12 || Math.abs(ly) > 0.12 || Math.abs(rx) > 0.12 || Math.abs(ry) > 0.12) {
-            input.yaw = Math.abs(lx) > 0.12 ? lx : 0;
-            input.throttle = Math.abs(ly) > 0.12 ? -ly : 0;
-            input.roll = Math.abs(rx) > 0.12 ? rx : 0;
-            input.pitch = Math.abs(ry) > 0.12 ? -ry : 0;
+        
+        let gpYaw = Math.abs(lx) > 0.12 ? -lx : 0;
+        let gpRoll = (Math.abs(lx) > 0.12 ? -lx * 0.65 : 0) + (Math.abs(rx) > 0.12 ? -rx : 0);
+        let gpThrottle = Math.abs(ly) > 0.12 ? -ly : 0;
+        let gpPitch = Math.abs(ry) > 0.12 ? -ry : 0;
+ 
+        if (gpYaw !== 0 || gpRoll !== 0 || gpThrottle !== 0 || gpPitch !== 0) {
+            input.yaw = input.yaw + gpYaw;
+            input.roll = input.roll + gpRoll;
+            input.throttle = input.throttle + gpThrottle;
+            input.pitch = input.pitch + gpPitch;
         }
         break;
     }
+    
+    // Secure bounds [-1, 1] for all final outputs
+    input.yaw = clamp(input.yaw, -1, 1);
+    input.roll = clamp(input.roll, -1, 1);
+    input.throttle = clamp(input.throttle, -1, 1);
+    input.pitch = clamp(input.pitch, -1, 1);
 }
 
 // ── Physics Update ──
@@ -270,23 +297,30 @@ function updateHelicopter(dt) {
     heli.rollVel  += input.roll  * PHYS.rollAccel  * dt;
     heli.yawVel   += input.yaw   * PHYS.yawAccel   * dt;
 
-    // Auto-leveling (return to neutral when no input)
-    heli.pitchVel -= heli.pitch * PHYS.autoLevel;
-    heli.rollVel  -= heli.roll  * PHYS.autoLevel;
+    // Auto-leveling (return to neutral when no input, frame-rate independent)
+    heli.pitchVel -= heli.pitch * PHYS.autoLevel * (dt * 60);
+    heli.rollVel  -= heli.roll  * PHYS.autoLevel * (dt * 60);
 
-    // Angular damping
-    heli.pitchVel *= PHYS.angularDamping;
-    heli.rollVel  *= PHYS.angularDamping;
-    heli.yawVel   *= PHYS.angularDamping;
+    // Angular damping (frame-rate independent)
+    let angDamp = Math.pow(PHYS.angularDamping, dt * 60);
+    heli.pitchVel *= angDamp;
+    heli.rollVel  *= angDamp;
+    heli.yawVel   *= angDamp;
 
-    // Integrate angles
-    heli.pitch += heli.pitchVel;
-    heli.roll  += heli.rollVel;
-    heli.yaw   += heli.yawVel;
+    // Integrate angles (frame-rate independent, scaled to feel identical to 60 FPS)
+    heli.pitch += heli.pitchVel * (dt * 60);
+    heli.roll  += heli.rollVel * (dt * 60);
+    heli.yaw   += heli.yawVel * (dt * 60);
 
     // Clamp tilt
     heli.pitch = clamp(heli.pitch, -maxPR, maxPR);
     heli.roll  = clamp(heli.roll,  -maxRR, maxRR);
+
+    // Lock/damp angles on ground to prevent visual clipping
+    if (heli.onGround) {
+        heli.pitch *= Math.pow(0.08, dt * 60);
+        heli.roll  *= Math.pow(0.08, dt * 60);
+    }
 
     // === Forces ===
     // Rotor lift direction = local Y, decomposed through pitch/roll/yaw into world
@@ -294,7 +328,7 @@ function updateHelicopter(dt) {
 
     let local_lx = Math.sin(heli.roll) * liftMag;
     let local_ly = Math.cos(heli.pitch) * Math.cos(heli.roll) * liftMag;
-    let local_lz = -Math.sin(heli.pitch) * liftMag;
+    let local_lz = Math.sin(heli.pitch) * Math.cos(heli.roll) * liftMag; // Corrected sign for forward force
 
     let cosY = Math.cos(heli.yaw), sinY = Math.sin(heli.yaw);
     let fx = local_lx * cosY + local_lz * sinY;
@@ -319,7 +353,7 @@ function updateHelicopter(dt) {
     let groundY = 0;
     if (typeof window.localGetTerrainAt === 'function') {
         let terrain = window.localGetTerrainAt(heli.position.x, -heli.position.z);
-        groundY = terrain.z;
+        groundY = terrain ? terrain.z : 0; // Null-check fix
     } else if (typeof window.getTerrainHeight === 'function') {
         groundY = window.getTerrainHeight(heli.position.x, heli.position.z);
     }
@@ -374,8 +408,9 @@ function updateCamera(camera) {
     if (!heli.mesh) return;
 
     let cosY = Math.cos(heli.yaw), sinY = Math.sin(heli.yaw);
-    let ox = camOffset.x * cosY - camOffset.z * sinY;
-    let oz = camOffset.x * sinY + camOffset.z * cosY;
+    // Camera is positioned behind the helicopter's heading (negative relative Z)
+    let ox = -sinY * camOffset.z;
+    let oz = -cosY * camOffset.z;
 
     let targetCam = new THREE.Vector3(
         heli.position.x + ox,
@@ -415,7 +450,7 @@ function createHUD() {
     'font-family:\'Inter\',sans-serif;transition:opacity 2s ease">' +
     '<div style="color:#e2e8f0;font-size:13px;font-weight:bold;text-align:center">🚁 HELICOPTER MODE</div>' +
     '<div style="color:#94a3b8;font-size:11px;margin-top:4px;text-align:center">' +
-    '<b>SPACE</b> Up &nbsp; <b>SHIFT</b> Down &nbsp; <b>IKJL</b> Fly &nbsp; <b>U/O</b> Turn &nbsp; <b>H</b> Switch to Car</div></div>';
+    '<b>SPACE</b> Up &nbsp; <b>SHIFT</b> Down &nbsp; <b>WASD / IKJL</b> Fly &nbsp; <b>Q/E / U/O</b> Turn &nbsp; <b>H</b> Switch to Car</div></div>';
     document.body.appendChild(h);
     setTimeout(function() {
         let c = document.getElementById('heli-controls-hint');
@@ -464,7 +499,7 @@ function resetHelicopter() {
     let groundY = 0;
     if (typeof window.localGetTerrainAt === 'function') {
         let t = window.localGetTerrainAt(heli.position.x, -heli.position.z);
-        groundY = t.z;
+        groundY = t ? t.z : 0;
     }
     heli.position.set(heli.position.x, groundY + PHYS.skidHeight, heli.position.z);
     heli.velocity.set(0, 0, 0);
@@ -497,7 +532,7 @@ window.rallyHelicopter = {
         // Spawn on terrain
         if (typeof window.localGetTerrainAt === 'function') {
             let t = window.localGetTerrainAt(0, 0);
-            heli.position.y = t.z + PHYS.skidHeight;
+            heli.position.y = (t ? t.z : 0) + PHYS.skidHeight;
         }
 
         scene.add(heli.mesh);

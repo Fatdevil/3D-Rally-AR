@@ -91,6 +91,7 @@
             justify-content: center;
             transition: all 0.15s;
             position: relative;
+            flex-shrink: 0;
         }
         .tool-btn:hover { border-color: #4ade80; color: #fff; }
         .tool-btn.active { border-color: #4ade80; background: #166534; color: #fff; box-shadow: 0 0 12px rgba(74,222,128,0.3); }
@@ -108,6 +109,7 @@
             height: 32px;
             background: #334155;
             margin: 0 4px;
+            flex-shrink: 0;
         }
 
         /* ── Color/Size Bar ── */
@@ -335,9 +337,73 @@
         .upload-zone:hover, .upload-zone.dragover { border-color: #4ade80; }
         .upload-zone .icon { font-size: 48px; }
         .upload-zone .text { font-size: 14px; color: #94a3b8; font-weight: 600; }
+
+        /* ── Template Picker ── */
+        .template-picker {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            z-index: 1000; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; gap: 24px;
+            overflow-y: auto; padding: 20px;
+        }
+        .picker-header { text-align: center; color: #fff; }
+        .picker-header h1 { font-size: 2em; margin: 0; }
+        .picker-header p { opacity: 0.6; margin: 8px 0 0; }
+        .picker-category { margin: 16px 0; }
+        .picker-category h2 { color: #94a3b8; font-size: 1em; margin: 0 0 8px; text-transform: uppercase; }
+        .picker-cards { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+        .picker-card {
+            width: 160px; cursor: pointer; border-radius: 16px;
+            overflow: hidden; border: 2px solid #334155;
+            transition: all 0.2s; background: linear-gradient(135deg, #1e293b, #0f172a);
+            display: flex; flex-direction: column; align-items: center;
+            padding: 20px 12px 14px; gap: 6px;
+        }
+        .picker-card:hover { border-color: #4ade80; transform: scale(1.05); box-shadow: 0 0 20px rgba(74,222,128,0.3); }
+        .picker-card .card-emoji { font-size: 48px; }
+        .picker-card .card-name { text-align: center; color: #fff; font-size: 14px; font-weight: 700; }
+        .picker-card .card-hint { text-align: center; color: #64748b; font-size: 10px; font-weight: 600; }
+        .picker-blank {
+            padding: 12px 24px; background: #334155; color: #fff; border: 2px dashed #64748b;
+            border-radius: 12px; font-size: 14px; cursor: pointer; margin-top: 8px;
+            transition: all 0.2s;
+        }
+        .picker-blank:hover { border-color: #94a3b8; background: #475569; }
+        /* ── Mobile (<600px) ── */
+        @media (max-width: 600px) {
+            .toolbar {
+                flex-wrap: nowrap;
+                overflow-x: auto;
+                justify-content: flex-start;
+                padding: 6px 8px;
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: none;
+            }
+            .toolbar::-webkit-scrollbar { display: none; }
+            .tool-btn .label { display: none; }
+            .tool-btn { width: 40px; height: 40px; font-size: 18px; }
+            .bottom-bar { gap: 4px; padding: 8px 8px; flex-wrap: wrap; }
+            .bottom-bar .action-btn { font-size: 11px; padding: 8px 12px; }
+            .bottom-bar .btn-primary { font-size: 13px; padding: 10px 16px; }
+            .bottom-bar .style-select { font-size: 10px; padding: 6px 8px; }
+            .options-bar { gap: 4px; padding: 4px 8px; }
+            .header h1 { font-size: 14px; }
+        }
     </style>
 </head>
 <body>
+
+    <!-- Template Picker (shown on load) -->
+    <div id="template-picker" class="template-picker">
+        <div class="picker-header">
+            <h1>🎲 CHOOSE YOUR ADVENTURE</h1>
+            <p>Pick a theme — the world is a surprise!</p>
+        </div>
+        <div class="picker-grid" id="picker-grid">
+            <!-- Categories will be populated by JS -->
+        </div>
+        <button class="picker-blank" onclick="selectTemplate(null)">📄 Blank Canvas (free draw)</button>
+    </div>
 
     <!-- Header -->
     <div class="header">
@@ -353,8 +419,6 @@
     <!-- Toolbar -->
     <div class="toolbar">
         <button class="tool-btn active" onclick="setTool('pen')" id="tool-pen" title="Draw Road">🛣️<span class="label">Road</span></button>
-        <button class="tool-btn" onclick="setTool('line')" id="tool-line" title="Straight Road">📏<span class="label">Straight</span></button>
-        <div class="tool-sep"></div>
         <button class="tool-btn" onclick="setTool('mountain')" id="tool-mountain" title="Mountain Stamp">🏔️<span class="label">Mountain</span></button>
         <button class="tool-btn" onclick="setTool('tree')" id="tool-tree" title="Tree Stamp">🌳<span class="label">Tree</span></button>
         <button class="tool-btn" onclick="setTool('water')" id="tool-water" title="Draw Water / Lake">🌊<span class="label">Water</span></button>
@@ -362,15 +426,25 @@
         <div class="tool-sep"></div>
         <button class="tool-btn" onclick="setTool('start')" id="tool-start" title="Start Flag">🏁<span class="label">Start</span></button>
         <button class="tool-btn" onclick="setTool('checkpoint')" id="tool-checkpoint" title="Checkpoint">⭕<span class="label">Check</span></button>
+        <button class="tool-btn" onclick="setTool('jump')" id="tool-jump" title="Place Jump Ramp">🚀<span class="label">Jump</span></button>
         <div class="tool-sep"></div>
         <button class="tool-btn" onclick="setTool('eraser')" id="tool-eraser" title="Eraser">🧹<span class="label">Erase</span></button>
+        <button class="tool-btn" onclick="setTool('line')" id="tool-line" title="Straight Line (L)">📏<span class="label">Line</span></button>
+    </div>
+
+    <!-- Jump Size Picker (shown when JUMP tool active) -->
+    <div class="options-bar" id="jump-size-bar" style="display:none;">
+        <span class="size-label">🚀 JUMP SIZE</span>
+        <button class="tool-btn" id="jump-s" onclick="setJumpSize('S')" style="padding:4px 12px; font-size:11px; font-weight:800;">S</button>
+        <button class="tool-btn active" id="jump-m" onclick="setJumpSize('M')" style="padding:4px 12px; font-size:11px; font-weight:800;">M</button>
+        <button class="tool-btn" id="jump-l" onclick="setJumpSize('L')" style="padding:4px 12px; font-size:11px; font-weight:800;">L</button>
     </div>
 
     <!-- Brush Size -->
     <div class="options-bar">
         <span class="size-label">✏️ ROAD WIDTH</span>
-        <input type="range" class="size-slider" id="brush-size" min="2" max="20" value="5" oninput="brushSize=parseInt(this.value)">
-        <span class="size-label" id="size-val">5</span>
+        <input type="range" class="size-slider" id="brush-size" min="6" max="30" value="10" oninput="brushSize=parseInt(this.value)">
+        <span class="size-label" id="size-val">10</span>
     </div>
 
     <!-- Canvas -->
@@ -432,23 +506,53 @@
         </div>
     </div>
 
+    <!-- Crossing Warning Modal -->
+    <div class="result-overlay" id="crossing-modal">
+        <div class="result-card" style="max-width:460px;">
+            <div style="font-size:48px; margin-bottom:8px;">⚠️</div>
+            <div style="font-size:20px; font-weight:900; margin-bottom:4px;">Oops! Your roads cross!</div>
+            <div style="font-size:13px; color:#94a3b8; margin-bottom:16px;">
+                We found <span id="crossing-count" style="color:#ef4444; font-weight:900;">0</span> place(s) where your road crosses itself. 
+                Racing is more fun without crossings!
+            </div>
+            <canvas id="crossing-preview" style="width:100%; border-radius:10px; border:2px solid #334155; margin-bottom:16px;"></canvas>
+            <div style="display:flex; flex-direction:column; gap:8px;">
+                <button class="action-btn btn-primary" onclick="hideCrossingModal()" style="width:100%; justify-content:center;">
+                    ✏️ Fix My Drawing
+                </button>
+                <button class="action-btn btn-secondary" onclick="hideCrossingModal(); buildWorldForce();" style="width:100%; justify-content:center; font-size:12px;">
+                    🏗️ Build Anyway (chaos mode!)
+                </button>
+            </div>
+        </div>
+    </div>
+
 <script>
 // ── State ──
 let currentTool = 'pen';
 let currentColor = '#4a3728';  // Dark road brown
-let brushSize = 5;
+let brushSize = 10;
 let currentMode = 'rally';
 let isDrawing = false;
 let lastX = 0, lastY = 0;
+let jumpSize = 'M';  // S, M, L
 let undoStack = [];
-let maxUndo = 30;
+let roadUndoStack = [];
+let placedStamps = [];
+let stampsUndoStack = [];
+let maxUndo = 15;
 let lastBuildPlan = null;
 let uploadedImageBase64 = null;
-let waterPath = null;
+let selectedTemplateId = null;
+let templateMaskData = null;    // ImageData of the loaded mask
+let templateMaskCanvas = null;
+let templateMaskCtx = null;
 
 // ── Canvas Setup ──
 const canvas = document.getElementById('draw-canvas');
 const ctx = canvas.getContext('2d');
+const roadCanvas = document.createElement('canvas');
+const roadCtx = roadCanvas.getContext('2d');
 
 function resizeCanvas() {
     let wrap = document.getElementById('canvas-wrap');
@@ -475,13 +579,37 @@ function resizeCanvas() {
     ctx.fillRect(0, 0, cw, ch);
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
+
+    // Synchronize roadCanvas dimensions
+    roadCanvas.width = canvas.width;
+    roadCanvas.height = canvas.height;
+    roadCtx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform
+    roadCtx.scale(dpr, dpr);
+    roadCtx.fillStyle = '#ffffff';
+    roadCtx.fillRect(0, 0, cw, ch);
+    roadCtx.lineCap = 'round';
+    roadCtx.lineJoin = 'round';
 }
 resizeCanvas();
 window.addEventListener('resize', function() {
     saveUndo();
-    let imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    // Save as temporary images to properly scale across DPR changes
+    let tmpCanvas = document.createElement('canvas');
+    tmpCanvas.width = canvas.width;
+    tmpCanvas.height = canvas.height;
+    tmpCanvas.getContext('2d').drawImage(canvas, 0, 0);
+    let tmpRoad = document.createElement('canvas');
+    tmpRoad.width = roadCanvas.width;
+    tmpRoad.height = roadCanvas.height;
+    tmpRoad.getContext('2d').drawImage(roadCanvas, 0, 0);
     resizeCanvas();
-    ctx.putImageData(imgData, 0, 0);
+    // Redraw using drawImage which respects the new DPR transform
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(tmpCanvas, 0, 0, tmpCanvas.width, tmpCanvas.height, 0, 0, canvas.width, canvas.height);
+    ctx.restore();
+    roadCtx.save(); roadCtx.setTransform(1, 0, 0, 1, 0, 0);
+    roadCtx.drawImage(tmpRoad, 0, 0, tmpRoad.width, tmpRoad.height, 0, 0, roadCanvas.width, roadCanvas.height);
+    roadCtx.restore();
 });
 saveUndo();
 
@@ -490,6 +618,9 @@ function getPos(e) {
     let rect = canvas.getBoundingClientRect();
     let scaleX = canvas.width / (Math.min(window.devicePixelRatio || 1, 2)) / rect.width;
     let scaleY = canvas.height / (Math.min(window.devicePixelRatio || 1, 2)) / rect.height;
+    if (e.changedTouches && e.changedTouches.length > 0) {
+        return { x: (e.changedTouches[0].clientX - rect.left) * scaleX, y: (e.changedTouches[0].clientY - rect.top) * scaleY };
+    }
     if (e.touches && e.touches.length > 0) {
         return { x: (e.touches[0].clientX - rect.left) * scaleX, y: (e.touches[0].clientY - rect.top) * scaleY };
     }
@@ -502,21 +633,17 @@ function startDraw(e) {
     let p = getPos(e);
     lastX = p.x; lastY = p.y;
     
+    // Template mask check — block drawing in forbidden zones (eraser always allowed)
+    if (currentTool !== 'eraser' && !canDrawAt(p.x, p.y)) { isDrawing = false; return; }
+    
     // Stamps: place on click
-    if (['mountain', 'tree', 'house', 'start', 'checkpoint'].includes(currentTool)) {
+    if (['tree', 'house', 'start', 'checkpoint', 'jump'].includes(currentTool)) {
         placeStamp(p.x, p.y, currentTool);
         isDrawing = false;
         return;
     }
     
-    // Water brush: freehand fill with blue
-    if (currentTool === 'water') {
-        saveUndo();
-        waterPath = [{ x: p.x, y: p.y }];
-        ctx.beginPath();
-        ctx.moveTo(p.x, p.y);
-        return;
-    }
+    // Water: same as pen but with blue color (handled in moveDraw)
     
     if (currentTool === 'line') {
         saveUndo();
@@ -526,6 +653,11 @@ function startDraw(e) {
     saveUndo();
     ctx.beginPath();
     ctx.moveTo(p.x, p.y);
+    
+    if (currentTool === 'pen' || currentTool === 'eraser') {
+        roadCtx.beginPath();
+        roadCtx.moveTo(p.x, p.y);
+    }
 }
 
 function moveDraw(e) {
@@ -533,25 +665,53 @@ function moveDraw(e) {
     if (!isDrawing) return;
     let p = getPos(e);
     
-    if (currentTool === 'pen') {
-        ctx.strokeStyle = currentColor;
-        ctx.lineWidth = brushSize;
+    // Template mask check — block drawing in forbidden zones (eraser always allowed)
+    if (currentTool !== 'eraser' && !canDrawAt(p.x, p.y)) return;
+    
+    if (currentTool === 'pen' || currentTool === 'water' || currentTool === 'mountain') {
+        var colors = { pen: currentColor, water: 'rgba(56, 189, 248, 0.7)', mountain: 'rgba(74, 140, 60, 0.7)' };
+        var widths = { pen: brushSize, water: brushSize * 2, mountain: brushSize * 2.5 };
+        ctx.strokeStyle = colors[currentTool];
+        ctx.lineWidth = widths[currentTool];
         ctx.globalCompositeOperation = 'source-over';
         ctx.lineTo(p.x, p.y);
         ctx.stroke();
         ctx.beginPath();
         ctx.moveTo(p.x, p.y);
-    } else if (currentTool === 'water') {
-        if (waterPath) waterPath.push({ x: p.x, y: p.y });
-        ctx.lineTo(p.x, p.y);
+        
+        if (currentTool === 'pen') {
+            roadCtx.strokeStyle = currentColor;
+            roadCtx.lineWidth = brushSize;
+            roadCtx.globalCompositeOperation = 'source-over';
+            roadCtx.lineTo(p.x, p.y);
+            roadCtx.stroke();
+            roadCtx.beginPath();
+            roadCtx.moveTo(p.x, p.y);
+        }
     } else if (currentTool === 'eraser') {
-        ctx.globalCompositeOperation = 'destination-out';
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = brushSize * 3;
         ctx.lineTo(p.x, p.y);
         ctx.stroke();
         ctx.beginPath();
         ctx.moveTo(p.x, p.y);
-        ctx.globalCompositeOperation = 'source-over';
+        
+        roadCtx.globalCompositeOperation = 'source-over';
+        roadCtx.strokeStyle = '#ffffff';
+        roadCtx.lineWidth = brushSize * 3;
+        roadCtx.lineTo(p.x, p.y);
+        roadCtx.stroke();
+        roadCtx.beginPath();
+        roadCtx.moveTo(p.x, p.y);
+
+        // Remove stamps under the eraser
+        let eraseRadius = brushSize * 1.5;
+        placedStamps = placedStamps.filter(s => {
+            let dx = s.x - p.x;
+            let dy = s.y - p.y;
+            return Math.sqrt(dx*dx + dy*dy) > eraseRadius;
+        });
     }
 }
 
@@ -559,28 +719,7 @@ function endDraw(e) {
     if (!isDrawing) return;
     isDrawing = false;
     
-    if (currentTool === 'water' && waterPath && waterPath.length > 2) {
-        // Close path and fill with water color
-        ctx.closePath();
-        ctx.fillStyle = 'rgba(56, 189, 248, 0.55)';  // Semi-transparent cyan-blue
-        ctx.fill();
-        // Add a subtle border
-        ctx.strokeStyle = 'rgba(14, 116, 144, 0.7)';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        // Add wave emoji in center for AI clarity
-        if (waterPath.length > 0) {
-            let cx = 0, cy = 0;
-            for (let wp of waterPath) { cx += wp.x; cy += wp.y; }
-            cx /= waterPath.length; cy /= waterPath.length;
-            ctx.font = '28px serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillStyle = 'rgba(255,255,255,0.8)';
-            ctx.fillText('🌊', cx, cy);
-        }
-        waterPath = null;
-    } else if (currentTool === 'line') {
+    if (currentTool === 'line') {
         let p = getPos(e);
         ctx.strokeStyle = currentColor;
         ctx.lineWidth = brushSize;
@@ -589,14 +728,25 @@ function endDraw(e) {
         ctx.moveTo(lastX, lastY);
         ctx.lineTo(p.x, p.y);
         ctx.stroke();
+        
+        roadCtx.strokeStyle = currentColor;
+        roadCtx.lineWidth = brushSize;
+        roadCtx.globalCompositeOperation = 'source-over';
+        roadCtx.beginPath();
+        roadCtx.moveTo(lastX, lastY);
+        roadCtx.lineTo(p.x, p.y);
+        roadCtx.stroke();
     }
     
     ctx.beginPath();
+    roadCtx.beginPath();
+
+    // Clean up stamps and redraw them on top after drawing is done
+    cleanupStamps();
 }
 
 // ── Stamps ──
-function placeStamp(x, y, type) {
-    saveUndo();
+function drawSingleStamp(x, y, type, jSize) {
     ctx.save();
     ctx.globalCompositeOperation = 'source-over';
     let s = Math.max(20, brushSize * 4);
@@ -614,8 +764,64 @@ function placeStamp(x, y, type) {
         checkpoint: '⭕'
     };
     
-    ctx.fillText(stamps[type] || '❓', x, y);
+    if (type === 'jump') {
+        // Draw a ramp shape sized by jumpSize
+        let currentJSize = jSize || 'M';
+        var rampH = currentJSize === 'S' ? 14 : currentJSize === 'M' ? 22 : 32;
+        var rampW = rampH * 1.8;
+        var label = currentJSize === 'S' ? 'S' : currentJSize === 'M' ? 'M' : 'L';
+        
+        // Ramp triangle
+        ctx.fillStyle = '#f59e0b';
+        ctx.beginPath();
+        ctx.moveTo(x - rampW/2, y + rampH/2);
+        ctx.lineTo(x + rampW/2, y + rampH/2);
+        ctx.lineTo(x, y - rampH/2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = '#92400e';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Arrow up
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold ' + (rampH * 0.6) + 'px sans-serif';
+        ctx.fillText('↗', x, y);
+        
+        // Size label
+        ctx.font = 'bold ' + (rampH * 0.35) + 'px sans-serif';
+        ctx.fillStyle = '#92400e';
+        ctx.fillText(label, x, y + rampH/2 + rampH * 0.3);
+    } else {
+        ctx.fillText(stamps[type] || '❓', x, y);
+    }
     ctx.restore();
+}
+
+function cleanupStamps() {
+    // Redraw all stamps on top
+    placedStamps.forEach(s => {
+        drawSingleStamp(s.x, s.y, s.type, s.jumpSize);
+    });
+}
+
+function placeStamp(x, y, type) {
+    saveUndo();
+    placedStamps.push({
+        x: x,
+        y: y,
+        type: type,
+        jumpSize: type === 'jump' ? jumpSize : null
+    });
+    cleanupStamps();
+}
+
+function setJumpSize(size) {
+    jumpSize = size;
+    ['S','M','L'].forEach(function(s) {
+        var el = document.getElementById('jump-' + s.toLowerCase());
+        if (el) el.classList.toggle('active', s === size);
+    });
 }
 
 // ── Events ──
@@ -630,10 +836,12 @@ canvas.addEventListener('touchend', endDraw, { passive: false });
 // ── Tools ──
 function setTool(tool) {
     currentTool = tool;
-    document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.toolbar .tool-btn').forEach(b => b.classList.remove('active'));
     let el = document.getElementById('tool-' + tool);
     if (el) el.classList.add('active');
-    canvas.style.cursor = tool === 'eraser' ? 'cell' : tool === 'water' ? 'pointer' : 'crosshair';
+    canvas.style.cursor = tool === 'eraser' ? 'cell' : (tool === 'water' || tool === 'mountain') ? 'pointer' : 'crosshair';
+    // Show/hide jump size picker
+    document.getElementById('jump-size-bar').style.display = tool === 'jump' ? 'flex' : 'none';
 }
 
 function setColor(color) {
@@ -658,12 +866,28 @@ document.getElementById('brush-size').addEventListener('input', function() {
 function saveUndo() {
     undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
     if (undoStack.length > maxUndo) undoStack.shift();
+    
+    roadUndoStack.push(roadCtx.getImageData(0, 0, roadCanvas.width, roadCanvas.height));
+    if (roadUndoStack.length > maxUndo) roadUndoStack.shift();
+
+    stampsUndoStack.push(JSON.parse(JSON.stringify(placedStamps)));
+    if (stampsUndoStack.length > maxUndo) stampsUndoStack.shift();
 }
 
 function undo() {
     if (undoStack.length > 1) {
         undoStack.pop();
         ctx.putImageData(undoStack[undoStack.length - 1], 0, 0);
+        
+        if (roadUndoStack.length > 1) {
+            roadUndoStack.pop();
+            roadCtx.putImageData(roadUndoStack[roadUndoStack.length - 1], 0, 0);
+        }
+
+        if (stampsUndoStack.length > 1) {
+            stampsUndoStack.pop();
+            placedStamps = JSON.parse(JSON.stringify(stampsUndoStack[stampsUndoStack.length - 1]));
+        }
     }
 }
 
@@ -673,6 +897,12 @@ function clearCanvas() {
     ctx.globalCompositeOperation = 'source-over';
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width / dpr, canvas.height / dpr);
+    
+    roadCtx.globalCompositeOperation = 'source-over';
+    roadCtx.fillStyle = '#ffffff';
+    roadCtx.fillRect(0, 0, roadCanvas.width / dpr, roadCanvas.height / dpr);
+
+    placedStamps = [];
 }
 
 // ── Upload Photo ──
@@ -728,8 +958,212 @@ function buildFromUpload() {
 
 // ── Build World ──
 function buildWorld() {
+    // Check for road crossings first
+    if (currentMode === 'rally') {
+        let crossings = detectRoadCrossings();
+        if (crossings.length > 0) {
+            showCrossingWarning(crossings);
+            return;
+        }
+    }
     let imageData = canvas.toDataURL('image/png');
+    sessionStorage.setItem('scan_canvas_image', imageData);
     sendToAI(imageData);
+}
+
+function buildWorldForce() {
+    // Skip crossing check — build anyway
+    let imageData = canvas.toDataURL('image/png');
+    sessionStorage.setItem('scan_canvas_image', imageData);
+    sendToAI(imageData);
+}
+
+// ── Road Crossing Detection ──
+function detectRoadCrossings() {
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var w = Math.floor(canvas.width / dpr);
+    var h = Math.floor(canvas.height / dpr);
+    
+    // Draw roadCanvas to temp at display resolution
+    var tmp = document.createElement('canvas');
+    tmp.width = w; tmp.height = h;
+    var tc = tmp.getContext('2d');
+    tc.drawImage(roadCanvas, 0, 0, w, h);
+    var imgData = tc.getImageData(0, 0, w, h).data;
+    
+    // Downsample for performance
+    var S = 3; // scale factor
+    var sw = Math.floor(w / S);
+    var sh = Math.floor(h / S);
+    var mask = new Uint8Array(sw * sh);
+    
+    // Step 1: Binary road mask (specifically detect the road brown #4a3728)
+    for (var y = 0; y < sh; y++) {
+        for (var x = 0; x < sw; x++) {
+            var sx = x * S + 1, sy = y * S + 1;
+            if (sx >= w || sy >= h) continue;
+            var i = (sy * w + sx) * 4;
+            var r = imgData[i], g = imgData[i+1], b = imgData[i+2], a = imgData[i+3];
+            
+            // Check for road color (#4a3728 -> rgb(74,55,40)) with tolerance
+            var isRoad = (r > g && g > b && r >= 40 && r <= 120 && g >= 30 && g <= 90 && b >= 20 && b <= 70);
+            mask[y * sw + x] = (isRoad && a > 128) ? 1 : 0;
+        }
+    }
+    
+    // Step 2: Zhang-Suen thinning
+    zhangSuenThin(mask, sw, sh);
+    
+    // Step 3: Find junction points (crossing number >= 3)
+    var junctions = [];
+    for (var y = 1; y < sh - 1; y++) {
+        for (var x = 1; x < sw - 1; x++) {
+            if (mask[y * sw + x] === 0) continue;
+            
+            // Get 8 neighbors clockwise: P2(N), P3(NE), P4(E), P5(SE), P6(S), P7(SW), P8(W), P9(NW)
+            var p2 = mask[(y-1)*sw + x];
+            var p3 = mask[(y-1)*sw + x+1];
+            var p4 = mask[y*sw + x+1];
+            var p5 = mask[(y+1)*sw + x+1];
+            var p6 = mask[(y+1)*sw + x];
+            var p7 = mask[(y+1)*sw + x-1];
+            var p8 = mask[y*sw + x-1];
+            var p9 = mask[(y-1)*sw + x-1];
+            
+            // Count 0→1 transitions in circular sequence
+            var nb = [p2,p3,p4,p5,p6,p7,p8,p9,p2];
+            var transitions = 0;
+            for (var k = 0; k < 8; k++) {
+                if (nb[k] === 0 && nb[k+1] === 1) transitions++;
+            }
+            
+            // 3+ transitions = junction (crossing point)
+            if (transitions >= 3) {
+                junctions.push({ x: x * S, y: y * S });
+            }
+        }
+    }
+    
+    // Step 4: Cluster nearby junctions (within 20px)
+    var clustered = clusterPoints(junctions, 20);
+    
+    return clustered;
+}
+
+function zhangSuenThin(mask, w, h) {
+    var changed = true;
+    var maxIter = 200;
+    var iter = 0;
+    
+    while (changed && iter < maxIter) {
+        changed = false;
+        iter++;
+        
+        // Sub-iteration 1
+        var toRemove = [];
+        for (var y = 1; y < h - 1; y++) {
+            for (var x = 1; x < w - 1; x++) {
+                if (mask[y*w + x] === 0) continue;
+                var p2 = mask[(y-1)*w+x], p3 = mask[(y-1)*w+x+1], p4 = mask[y*w+x+1];
+                var p5 = mask[(y+1)*w+x+1], p6 = mask[(y+1)*w+x], p7 = mask[(y+1)*w+x-1];
+                var p8 = mask[y*w+x-1], p9 = mask[(y-1)*w+x-1];
+                var B = p2+p3+p4+p5+p6+p7+p8+p9;
+                if (B < 2 || B > 6) continue;
+                var nb = [p2,p3,p4,p5,p6,p7,p8,p9,p2];
+                var A = 0;
+                for (var k = 0; k < 8; k++) { if (nb[k]===0 && nb[k+1]===1) A++; }
+                if (A !== 1) continue;
+                if (p2*p4*p6 !== 0) continue;
+                if (p4*p6*p8 !== 0) continue;
+                toRemove.push(y*w + x);
+            }
+        }
+        for (var i = 0; i < toRemove.length; i++) { mask[toRemove[i]] = 0; changed = true; }
+        
+        // Sub-iteration 2
+        toRemove = [];
+        for (var y = 1; y < h - 1; y++) {
+            for (var x = 1; x < w - 1; x++) {
+                if (mask[y*w + x] === 0) continue;
+                var p2 = mask[(y-1)*w+x], p3 = mask[(y-1)*w+x+1], p4 = mask[y*w+x+1];
+                var p5 = mask[(y+1)*w+x+1], p6 = mask[(y+1)*w+x], p7 = mask[(y+1)*w+x-1];
+                var p8 = mask[y*w+x-1], p9 = mask[(y-1)*w+x-1];
+                var B = p2+p3+p4+p5+p6+p7+p8+p9;
+                if (B < 2 || B > 6) continue;
+                var nb = [p2,p3,p4,p5,p6,p7,p8,p9,p2];
+                var A = 0;
+                for (var k = 0; k < 8; k++) { if (nb[k]===0 && nb[k+1]===1) A++; }
+                if (A !== 1) continue;
+                if (p2*p4*p8 !== 0) continue;
+                if (p2*p6*p8 !== 0) continue;
+                toRemove.push(y*w + x);
+            }
+        }
+        for (var i = 0; i < toRemove.length; i++) { mask[toRemove[i]] = 0; changed = true; }
+    }
+}
+
+function clusterPoints(points, radius) {
+    var used = new Array(points.length).fill(false);
+    var clusters = [];
+    for (var i = 0; i < points.length; i++) {
+        if (used[i]) continue;
+        var cx = points[i].x, cy = points[i].y, count = 1;
+        used[i] = true;
+        for (var j = i + 1; j < points.length; j++) {
+            if (used[j]) continue;
+            var dx = points[j].x - cx / count, dy = points[j].y - cy / count;
+            if (Math.sqrt(dx*dx + dy*dy) < radius) {
+                cx += points[j].x; cy += points[j].y; count++;
+                used[j] = true;
+            }
+        }
+        clusters.push({ x: Math.round(cx / count), y: Math.round(cy / count) });
+    }
+    return clusters;
+}
+
+// ── Crossing Warning Modal ──
+function showCrossingWarning(crossings) {
+    var modal = document.getElementById('crossing-modal');
+    var previewCanvas = document.getElementById('crossing-preview');
+    var pc = previewCanvas.getContext('2d');
+    
+    // Draw current canvas to preview
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var cw = canvas.width / dpr, ch = canvas.height / dpr;
+    previewCanvas.width = 400;
+    previewCanvas.height = Math.round(400 / (cw / ch));
+    pc.drawImage(canvas, 0, 0, previewCanvas.width, previewCanvas.height);
+    
+    // Draw red circles at crossing points
+    var scaleX = previewCanvas.width / cw;
+    var scaleY = previewCanvas.height / ch;
+    
+    crossings.forEach(function(c) {
+        pc.beginPath();
+        pc.arc(c.x * scaleX, c.y * scaleY, 12, 0, Math.PI * 2);
+        pc.strokeStyle = '#ef4444';
+        pc.lineWidth = 3;
+        pc.stroke();
+        pc.beginPath();
+        pc.arc(c.x * scaleX, c.y * scaleY, 12, 0, Math.PI * 2);
+        pc.fillStyle = 'rgba(239, 68, 68, 0.25)';
+        pc.fill();
+        // X mark
+        pc.font = 'bold 16px sans-serif';
+        pc.fillStyle = '#ef4444';
+        pc.textAlign = 'center';
+        pc.textBaseline = 'middle';
+        pc.fillText('✕', c.x * scaleX, c.y * scaleY);
+    });
+    
+    document.getElementById('crossing-count').textContent = crossings.length;
+    modal.classList.add('visible');
+}
+
+function hideCrossingModal() {
+    document.getElementById('crossing-modal').classList.remove('visible');
 }
 
 async function sendToAI(imageBase64) {
@@ -739,20 +1173,32 @@ async function sendToAI(imageBase64) {
     document.getElementById('process-text').textContent = 'AI is reading your drawing...';
     document.getElementById('process-sub').textContent = 'This takes 3-5 seconds. The AI interprets every element you drew.';
     
+    // Capture road-only canvas for cleaner road detection
+    let roadImageBase64 = roadCanvas.toDataURL('image/png');
+    
     try {
+        let controller = new AbortController();
+        let timeoutId = setTimeout(() => controller.abort(), 120000); // 120s timeout
+        
         let response = await fetch('/api/scan', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            signal: controller.signal,
             body: JSON.stringify({
                 image_base64: imageBase64,
+                road_image_base64: roadImageBase64,
                 mode: currentMode,
-                style: style
+                style: style,
+                aspectRatio: canvas.getBoundingClientRect().width / canvas.getBoundingClientRect().height
             })
         });
+        clearTimeout(timeoutId);
         
         if (!response.ok) {
-            let err = await response.json();
-            throw new Error(err.error || 'Server error');
+            let errText = await response.text();
+            let errMsg = 'Server error';
+            try { errMsg = JSON.parse(errText).error || errMsg; } catch(e) {}
+            throw new Error(errMsg);
         }
         
         let data = await response.json();
@@ -763,7 +1209,11 @@ async function sendToAI(imageBase64) {
         
     } catch (err) {
         document.getElementById('processing').classList.remove('visible');
-        alert('Error: ' + err.message);
+        if (err.name === 'AbortError') {
+            alert('AI request timed out after 120 seconds. Please try again.');
+        } else {
+            alert('Error: ' + err.message);
+        }
     }
 }
 
@@ -800,6 +1250,11 @@ function playNow() {
         sessionStorage.setItem('scan_build_plan', JSON.stringify(lastBuildPlan));
         sessionStorage.setItem('scan_build_mode', currentMode);
         sessionStorage.setItem('scan_auto_play', 'true');
+        if (selectedTemplateId) {
+            sessionStorage.setItem('scan_template_id', selectedTemplateId);
+        } else {
+            sessionStorage.removeItem('scan_template_id');
+        }
         window.location.href = 'arcade.html?autorun=edit_build&scan=true&auto_play=true';
     }
 }
@@ -810,12 +1265,151 @@ function openInBuilder() {
         sessionStorage.setItem('scan_build_plan', JSON.stringify(lastBuildPlan));
         sessionStorage.setItem('scan_build_mode', currentMode);
         sessionStorage.removeItem('scan_auto_play');
+        if (selectedTemplateId) {
+            sessionStorage.setItem('scan_template_id', selectedTemplateId);
+        } else {
+            sessionStorage.removeItem('scan_template_id');
+        }
         window.location.href = 'arcade.html?autorun=edit_build&scan=true';
     }
 }
 
+// ── Template Picker ──
+async function loadTemplatePicker() {
+    try {
+        let resp = await fetch('/api/templates');
+        let templates = await resp.json();
+        let grid = document.getElementById('picker-grid');
+        
+        if (!templates || templates.length === 0) {
+            selectTemplate(null);
+            return;
+        }
+        
+        // Group by category
+        let categories = {};
+        let categoryConfig = {
+            desert:  { emoji: '🏜️', hint: 'Sandy dunes & canyons' },
+            grass:   { emoji: '🌿', hint: 'Rolling green hills' },
+            snow:    { emoji: '❄️',  hint: 'Frozen peaks & ice' },
+            island:  { emoji: '🏖️', hint: 'Tropical shores & reefs' },
+            pirate:  { emoji: '🏴‍☠️', hint: 'Treasure & danger!' },
+            volcano: { emoji: '🌋', hint: 'Fire & lava flows' },
+            jungle:  { emoji: '🌴', hint: 'Dense & wild' },
+            space:   { emoji: '🚀', hint: 'Zero gravity racing' },
+            city:    { emoji: '🏙️', hint: 'Urban streets & rooftops' }
+        };
+        templates.forEach(t => {
+            let cat = t.category || 'grass';
+            if (!categories[cat]) categories[cat] = [];
+            categories[cat].push(t);
+        });
+        
+        grid.innerHTML = '';
+        for (let [cat, tmpls] of Object.entries(categories)) {
+            if (tmpls.length === 0) continue;
+            let conf = categoryConfig[cat] || { emoji: '🌍', hint: 'Explore!' };
+            let section = document.createElement('div');
+            section.className = 'picker-section';
+            section.innerHTML = '<h3>' + conf.emoji + ' ' + cat.toUpperCase() + '</h3>';
+            let cards = document.createElement('div');
+            cards.className = 'picker-cards';
+            tmpls.forEach(t => {
+                let card = document.createElement('div');
+                card.className = 'picker-card';
+                card.onclick = () => selectTemplate(t.id);
+                card.innerHTML = '<div class="card-emoji">' + conf.emoji + '</div>' +
+                    '<div class="card-name">' + t.name + '</div>' +
+                    '<div class="card-hint">' + conf.hint + '</div>';
+                cards.appendChild(card);
+            });
+            section.appendChild(cards);
+            grid.appendChild(section);
+        }
+    } catch (err) {
+        console.error('Failed to load templates:', err);
+        // Fallback: skip picker
+        selectTemplate(null);
+    }
+}
+
+async function selectTemplate(id) {
+    selectedTemplateId = id;
+    document.getElementById('template-picker').style.display = 'none';
+    
+    if (id) {
+        // NO thumbnail preview — it's a SURPRISE!
+        // Only load mask to restrict drawing zones
+        try {
+            let maskImg = new Image();
+            maskImg.crossOrigin = 'anonymous';
+            maskImg.onload = () => {
+                templateMaskCanvas = document.createElement('canvas');
+                templateMaskCanvas.width = canvas.width;
+                templateMaskCanvas.height = canvas.height;
+                templateMaskCtx = templateMaskCanvas.getContext('2d');
+                templateMaskCtx.drawImage(maskImg, 0, 0, canvas.width, canvas.height);
+                templateMaskData = templateMaskCtx.getImageData(0, 0, canvas.width, canvas.height);
+                
+                // Draw mysterious blocked zone overlay
+                let dpr = Math.min(window.devicePixelRatio || 1, 2);
+                let cw = canvas.width / dpr, ch = canvas.height / dpr;
+                ctx.save();
+                ctx.globalCompositeOperation = 'source-over';
+                for (let y = 0; y < ch; y += 3) {
+                    for (let x = 0; x < cw; x += 3) {
+                        let mx = Math.floor(x * dpr), my = Math.floor(y * dpr);
+                        let mi = (my * canvas.width + mx) * 4;
+                        if (templateMaskData.data[mi + 1] < 128) {
+                            let noise = Math.random() * 0.15;
+                            ctx.fillStyle = 'rgba(30, 41, 59, ' + (0.35 + noise) + ')';
+                            ctx.fillRect(x, y, 3, 3);
+                        }
+                    }
+                }
+                // Add "?" markers in blocked zones for mystery
+                ctx.globalAlpha = 0.15;
+                ctx.font = '20px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = '#94a3b8';
+                let step = 60;
+                for (let y = step; y < ch; y += step) {
+                    for (let x = step; x < cw; x += step) {
+                        let mx = Math.floor(x * dpr), my = Math.floor(y * dpr);
+                        let mi = (my * canvas.width + mx) * 4;
+                        if (mi < templateMaskData.data.length && templateMaskData.data[mi + 1] < 128) {
+                            ctx.fillText('?', x, y);
+                        }
+                    }
+                }
+                ctx.restore();
+                saveUndo();
+            };
+            maskImg.src = '/templates/' + id + '/mask.png';
+        } catch (err) {
+            console.error('Failed to load template assets:', err);
+        }
+    }
+}
+
+function canDrawAt(x, y) {
+    if (!templateMaskData) return true; // No mask = draw anywhere
+    let dpr = Math.min(window.devicePixelRatio || 1, 2);
+    let px = Math.floor(x * dpr);
+    let py = Math.floor(y * dpr);
+    if (px < 0 || px >= canvas.width || py < 0 || py >= canvas.height) return false;
+    let idx = (py * canvas.width + px) * 4;
+    return templateMaskData.data[idx + 1] > 128; // Green channel > 128 = allowed
+}
+
+// Load picker on startup
+loadTemplatePicker();
+
 // ── Keyboard shortcuts ──
 document.addEventListener('keydown', function(e) {
+    // Skip shortcuts when typing in input fields
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
     if (e.ctrlKey && e.key === 'z') { e.preventDefault(); undo(); }
     if (e.key === 'p' || e.key === '1') setTool('pen');
     if (e.key === 'l' || e.key === '2') setTool('line');

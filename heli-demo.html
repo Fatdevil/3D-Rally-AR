@@ -276,19 +276,19 @@ const PHYS = {
   // Grundkrafter
   gravity:       9.8,
   mass:          1.0,
-  maxLift:       18.5,
+  maxLift:       22.0,
 
   // Hover-throttle = gravity / maxLift (för att hålla höjden neutralt)
-  // 9.8 / 18.5 ≈ 0.53
-  hoverThrottle: 0.53,
+  // 9.8 / 22.0 ≈ 0.45
+  hoverThrottle: 0.45,
 
   // Luftmotstånd (linjärt, per sekund)
-  // 0.985 = mjuk drift, 0.95 = snabb bromsning
-  linearDamping:  0.984,
+  // 0.991 = mjuk drift, 0.95 = snabb bromsning
+  linearDamping:  0.991,
 
   // Vinkelfysik
-  pitchAccel:    1.4,   // hur snabbt man kan luta sig framåt/bakåt
-  rollAccel:     1.2,   // hur snabbt man kan luta sig åt sidan
+  pitchAccel:    1.7,   // hur snabbt man kan luta sig framåt/bakåt
+  rollAccel:     1.5,   // hur snabbt man kan luta sig åt sidan
   yawAccel:      0.9,   // hur snabbt man svänger
 
   angularDamping: 0.87,  // bromsning av rotationshastigheten
@@ -298,11 +298,12 @@ const PHYS = {
   autoLevel: 0.08,
 
   // Max lutningsvinklar (grader)
-  maxPitch: 32,
-  maxRoll:  28,
+  maxPitch: 40,
+  maxRoll:  35,
 
   // Markhöjd för helikopterns centrum
   groundLevel: 1.3,
+  crashSpeed: 12,
 };
 
 // ─── State ───────────────────────────────────
@@ -337,22 +338,37 @@ function heliUpdate(dt) {
   let throttleIn = 0, pitchIn = 0, rollIn = 0, yawIn = 0;
 
   if (isMobile) {
-    // Vänster joystick: Y = gas, X = sväng
+    // Vänster joystick: Y = gas, X = coordinated turn (yaw + 65% bank)
+    // Höger joystick: Y = pitch (framåt/bakåt), X = pure roll (strafe)
     throttleIn = -joy.left.y;
-    yawIn      =  joy.left.x;
-    // Höger joystick: Y = pitch (framåt/bakåt), X = roll (sidled)
-    pitchIn    = -joy.right.y;   // push up = fly forward
-    rollIn     =  joy.right.x;
+    yawIn      = -joy.left.x;
+    rollIn     = -joy.left.x * 0.65 - joy.right.x;
+    pitchIn    = -joy.right.y;
   } else {
     if (keys['Space'])                         throttleIn =  1;
     if (keys['ShiftLeft']||keys['ShiftRight']) throttleIn = -1;
     if (keys['KeyW']) pitchIn =  1;   // framåt
     if (keys['KeyS']) pitchIn = -1;   // bakåt
-    if (keys['KeyA']) rollIn  = -1;   // vänster
-    if (keys['KeyD']) rollIn  =  1;   // höger
-    if (keys['KeyQ']) yawIn   = -1;   // sväng vänster
-    if (keys['KeyE']) yawIn   =  1;   // sväng höger
+    
+    // Coordinated Turn (A/D): 100% Yaw + 65% Roll for coordinated bank
+    let turnInput = 0;
+    if (keys['KeyA']) turnInput += 1.0;
+    if (keys['KeyD']) turnInput -= 1.0;
+    
+    // Pure Strafe Roll (Q/E)
+    let strafeInput = 0;
+    if (keys['KeyQ']) strafeInput += 1.0;
+    if (keys['KeyE']) strafeInput -= 1.0;
+
+    yawIn = turnInput;
+    rollIn = turnInput * 0.65 + strafeInput;
   }
+
+  // Säkra gränser [-1, 1] för alla samlade värden
+  yawIn = Math.max(-1, Math.min(1, yawIn));
+  rollIn = Math.max(-1, Math.min(1, rollIn));
+  pitchIn = Math.max(-1, Math.min(1, pitchIn));
+  throttleIn = Math.max(-1, Math.min(1, throttleIn));
 
   // ── 2. Gas (throttle) ───────────────────────
   throttle += throttleIn * 1.6 * dt;
@@ -367,23 +383,30 @@ function heliUpdate(dt) {
   rollVel  += rollIn  * PHYS.rollAccel  * dt;
   yawVel   += yawIn   * PHYS.yawAccel   * dt;
 
-  // Auto-nivellering: drar tillbaka mot 0 när inget input
-  pitchVel -= pitch * PHYS.autoLevel;
-  rollVel  -= roll  * PHYS.autoLevel;
+  // Auto-nivellering (skalat med dt)
+  pitchVel -= pitch * PHYS.autoLevel * (dt * 60);
+  rollVel  -= roll  * PHYS.autoLevel * (dt * 60);
 
-  // Vinkelbromsning (luftmotstånd på rotation)
-  pitchVel *= PHYS.angularDamping;
-  rollVel  *= PHYS.angularDamping;
-  yawVel   *= PHYS.angularDamping;
+  // Vinkelbromsning (skalat med dt för oberoende av FPS)
+  const angDamp = Math.pow(PHYS.angularDamping, dt * 60);
+  pitchVel *= angDamp;
+  rollVel  *= angDamp;
+  yawVel   *= angDamp;
 
-  // Integrera vinklar
-  pitch += pitchVel;
-  roll  += rollVel;
-  yaw   += yawVel;
+  // Integrera vinklar (korrekt tidsintegrering med * dt, skalad till 60 FPS känslan)
+  pitch += pitchVel * (dt * 60);
+  roll  += rollVel * (dt * 60);
+  yaw   += yawVel * (dt * 60);
 
   // Begränsa max-lutning
   pitch = Math.max(-maxPR, Math.min(maxPR, pitch));
   roll  = Math.max(-maxRR, Math.min(maxRR, roll));
+
+  // Lock/damp angles on ground to prevent visual clipping
+  if (onGround) {
+    pitch *= Math.pow(0.08, dt * 60);
+    roll  *= Math.pow(0.08, dt * 60);
+  }
 
   // ── 4. Krafter ──────────────────────────────
   //
@@ -392,7 +415,7 @@ function heliUpdate(dt) {
   //
   //   local up = (0, 1, 0)
   //   → efter pitch & roll →
-  //   world_lift = (sin(roll), cos(pitch)*cos(roll), -sin(pitch)) * liftMag
+  //   world_lift = (sin(roll), cos(pitch)*cos(roll), sin(pitch)*cos(roll)) * liftMag
   //   → sedan roteras X/Z-planet med yaw:
   //   world_lx = local_lx * cos(yaw) + local_lz * sin(yaw)
   //   world_lz =-local_lx * sin(yaw) + local_lz * cos(yaw)
@@ -401,7 +424,7 @@ function heliUpdate(dt) {
 
   const local_lx = Math.sin(roll)  * liftMag;
   const local_ly = Math.cos(pitch) * Math.cos(roll) * liftMag;
-  const local_lz =-Math.sin(pitch) * liftMag;
+  const local_lz = Math.sin(pitch) * Math.cos(roll) * liftMag; // Korrigerad tecken för framåtdriv
 
   const cosY = Math.cos(yaw), sinY = Math.sin(yaw);
   const fx = local_lx * cosY + local_lz * sinY;
@@ -425,7 +448,7 @@ function heliUpdate(dt) {
   if (pos.y <= PHYS.groundLevel) {
     // Krascha om man landar för hårt
     const impactSpeed = -vel.y;
-    if (impactSpeed > 12) {
+    if (impactSpeed > PHYS.crashSpeed) {
       crashed = true;
       document.getElementById('crash').style.display = 'block';
       return;
@@ -481,10 +504,10 @@ const camTarget  = new THREE.Vector3();
 const camCurrent = new THREE.Vector3();
 
 function updateCamera() {
-  // Kamera roterar med yaw men inte pitch/roll
+  // Kamera roterar med yaw men inte pitch/roll (placeras bakom stjärten)
   const cosY = Math.cos(yaw), sinY = Math.sin(yaw);
-  const ox = camOffset.x * cosY - camOffset.z * sinY;
-  const oz = camOffset.x * sinY + camOffset.z * cosY;
+  const ox = -sinY * camOffset.z;
+  const oz = -cosY * camOffset.z;
 
   camCurrent.set(pos.x + ox, pos.y + camOffset.y, pos.z + oz);
   camera.position.lerp(camCurrent, 0.055);

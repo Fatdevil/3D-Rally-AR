@@ -29,6 +29,7 @@
 <script src="smart-builder.js"></script>
 <script src="arcade-scan-builder.js"></script>
 <script src="terrain-auto-paint.js"></script>
+<script src="template-mask.js"></script>
 </head>
 <body>
 <div id="global-loader">
@@ -280,7 +281,7 @@
         <div class="top-left">
             <button id="btn-hamburger" class="sys-btn" onclick="toggleMenu()">☰</button>
             <button id="btn-mode-build" class="sys-btn" onclick="setMode('BUILD')" style="border-color:#38bdf8; color:#38bdf8;">🔨 BUILD</button>
-            <button id="btn-mode-play" class="sys-btn" onclick="if(window.EDITOR_MODE === 'rally') launchRally(); else window.location.href='rally.html';" style="background:#dc2626; border-color:#dc2626; color:#fff;">🏎️ KÖR</button>
+            <button id="btn-mode-play" class="sys-btn" onclick="if(window.EDITOR_MODE === 'rally') launchRally(); else window.location.href='rally.html';" style="background:#dc2626; border-color:#dc2626; color:#fff;">🏎️ DRIVE</button>
         </div>
         <!-- CENTER: Asset Budget removed (Managed by Admin) -->
         <div class="top-center">
@@ -367,21 +368,21 @@
         
         <button id="tool-paint" onclick="setTool('PAINT')"><span style="font-size:16px;">🖌️</span> PAINT</button>
         <button id="tool-water" onclick="setTool('WATER')" class="pro-tool"><span style="font-size:16px;">💧</span> WATER</button>
-        <button id="tool-spline" onclick="setTool('SPLINE')" class="pro-tool"><span style="font-size:16px;">〰️</span> PATH</button>
-        <button id="tool-smartbuilder" onclick="setTool('SMART_BUILDER')" class="pro-tool"><span style="font-size:16px;">🏗️</span> SMART</button>
+        <button id="tool-spline" onclick="setTool('SPLINE')"><span style="font-size:16px;">🚧</span> FENCE</button>
+        <button id="tool-smartbuilder" onclick="setTool('SMART_BUILDER')"><span style="font-size:16px;">🏗️</span> TRACK</button>
         
         <div style="height:1px; background:#475569; width:100%; margin:4px 0; grid-column:1 / -1;"></div>
         
         <button id="tool-props" onclick="setTool('PROPS')"><span style="font-size:16px;">🌴</span> PROPS</button>
         <button id="tool-block" onclick="setTool('BLOCK')"><span style="font-size:16px;">🧱</span> BLOCK</button>
-        <div style="visibility:hidden;"></div> <!-- Placeholder -->
+        <button id="tool-mask-lock" onclick="setTool('MASK_LOCK')" class="pro-tool" title="Click polygon around areas kids cannot draw on"><span style="font-size:16px;">🔒</span> LOCK</button>
         <div style="visibility:hidden;"></div> <!-- Placeholder -->
         
         <div style="height:1px; background:#475569; width:100%; margin:4px 0; grid-column:1 / -1;"></div>
         
         <button id="tool-jump" onclick="setTool('JUMP')" class="pro-tool"><span style="font-size:16px;">🚀</span> JUMP</button>
         <button id="tool-measure" onclick="setTool('MEASURE')"><span style="font-size:16px;">📏</span> MEASURE</button>
-        <button id="tool-eraser" onclick="setTool('ERASER')" class="pro-tool"><span style="font-size:16px;">🗑️</span> ERASER</button>
+        <button id="tool-eraser" onclick="setTool('ERASER')"><span style="font-size:16px;">🗑️</span> ERASER</button>
         <button id="tool-colorize" onclick="setTool('COLORIZE')" class="pro-tool"><span style="font-size:16px;">🎨</span> COLORIZE</button>
         <div style="height:1px; background:#475569; width:100%; margin:4px 0; grid-column:1 / -1;"></div>
         <button onclick="performUndo()" style="color:#f87171; grid-column:1 / -1;"><span style="font-size:16px;">↩️</span> UNDO</button>
@@ -665,6 +666,7 @@
             <div style="display:flex; gap:4px; margin-bottom:6px;">
                 <button id="mtn-mode-paint" onclick="setMtnMode('PAINT')" style="flex:1; background:#4ade80; color:#0f172a; border:none; padding:6px 4px; font-size:10px; border-radius:5px; font-weight:bold; cursor:pointer;">🎨 AUTO-PAINT</button>
                 <button id="mtn-mode-stamp" onclick="setMtnMode('STAMP')" style="flex:1; background:#334155; color:#94a3b8; border:none; padding:6px 4px; font-size:10px; border-radius:5px; font-weight:bold; cursor:pointer;">🔨 STAMP</button>
+                <button id="mtn-mode-spline" onclick="setMtnMode('SPLINE')" style="flex:1; background:#334155; color:#94a3b8; border:none; padding:6px 4px; font-size:10px; border-radius:5px; font-weight:bold; cursor:pointer;">〰️ BOUNDARY</button>
             </div>
             <div id="mtn-paint-content">
             <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">🏔️ Terrain Colors</label>
@@ -678,7 +680,7 @@
                         <span style="width:14px;height:14px;border-radius:3px;background:#656059;display:inline-block;" title="Cliff"></span>
                         <span style="width:14px;height:14px;border-radius:3px;background:#95908A;display:inline-block;" title="Peak"></span>
                     </div>
-                    <div style="color:#e2e8f0; font-size:10px; font-weight:bold;">🌲 Nordisk</div>
+                    <div style="color:#e2e8f0; font-size:10px; font-weight:bold;">🌲 Nordic</div>
                 </div>
                 <!-- ALPINE -->
                 <div class="terrain-style-card" data-preset="ALPINE" onclick="window._selectTerrainPreset('ALPINE', this)" style="cursor:pointer; padding:6px; border-radius:6px; border:2px solid #334155; background:#1e293b; text-align:center;">
@@ -688,7 +690,7 @@
                         <span style="width:14px;height:14px;border-radius:3px;background:#706860;display:inline-block;" title="Cliff"></span>
                         <span style="width:14px;height:14px;border-radius:3px;background:#C0B8A8;display:inline-block;" title="Peak"></span>
                     </div>
-                    <div style="color:#e2e8f0; font-size:10px; font-weight:bold;">🏔️ Alpin</div>
+                    <div style="color:#e2e8f0; font-size:10px; font-weight:bold;">🏔️ Alpine</div>
                 </div>
                 <!-- DESERT -->
                 <div class="terrain-style-card" data-preset="DESERT" onclick="window._selectTerrainPreset('DESERT', this)" style="cursor:pointer; padding:6px; border-radius:6px; border:2px solid #334155; background:#1e293b; text-align:center;">
@@ -698,7 +700,7 @@
                         <span style="width:14px;height:14px;border-radius:3px;background:#8B7355;display:inline-block;" title="Cliff"></span>
                         <span style="width:14px;height:14px;border-radius:3px;background:#D4C4A0;display:inline-block;" title="Peak"></span>
                     </div>
-                    <div style="color:#e2e8f0; font-size:10px; font-weight:bold;">🏜️ Öken</div>
+                    <div style="color:#e2e8f0; font-size:10px; font-weight:bold;">🏜️ Desert</div>
                 </div>
                 <!-- VOLCANO -->
                 <div class="terrain-style-card" data-preset="VOLCANO" onclick="window._selectTerrainPreset('VOLCANO', this)" style="cursor:pointer; padding:6px; border-radius:6px; border:2px solid #334155; background:#1e293b; text-align:center;">
@@ -708,7 +710,7 @@
                         <span style="width:14px;height:14px;border-radius:3px;background:#2D2825;display:inline-block;" title="Cliff"></span>
                         <span style="width:14px;height:14px;border-radius:3px;background:#5A5550;display:inline-block;" title="Peak"></span>
                     </div>
-                    <div style="color:#e2e8f0; font-size:10px; font-weight:bold;">🌋 Vulkan</div>
+                    <div style="color:#e2e8f0; font-size:10px; font-weight:bold;">🌋 Volcano</div>
                 </div>
             </div>
             <script>
@@ -750,6 +752,43 @@
             </div>
             </div> <!-- End mtn-paint-content -->
             <div id="mtn-stamp-content" style="display:none;"></div>
+            <div id="mtn-spline-content" style="display:none; flex-direction:column; gap:6px;">
+                <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; display:flex; justify-content:space-between;">
+                    🏔️ Mountain Height
+                    <span id="mtn-spline-height-val" style="color:#e2e8f0;">25m</span>
+                </label>
+                <input type="range" id="mtn-spline-height" min="2" max="290" value="25" step="1"
+                    oninput="document.getElementById('mtn-spline-height-val').textContent = this.value + 'm';"
+                    style="width:100%; accent-color:#38bdf8; cursor:pointer; margin-top:2px;" title="Height of the mountain's highest point">
+                
+                <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; display:flex; justify-content:space-between; margin-top:4px;">
+                    ⚡ Jaggedness
+                    <span id="mtn-spline-jagged-val" style="color:#e2e8f0;">50%</span>
+                </label>
+                <input type="range" id="mtn-spline-jagged" min="0" max="100" value="50" step="5"
+                    oninput="document.getElementById('mtn-spline-jagged-val').textContent = this.value + '%';"
+                    style="width:100%; accent-color:#38bdf8; cursor:pointer; margin-top:2px;" title="Control how rough or smooth the mountain surface is">
+                <div style="display:flex; justify-content:space-between; color:#64748b; font-size:8px; margin-top:-2px; margin-bottom:4px;">
+                    <span>Smooth & Round</span>
+                    <span>Rough & Jagged</span>
+                </div>
+                
+                <div style="display:flex; gap:6px; margin-top:8px;">
+                    <button onclick="if(typeof window.executeSplineMountain === 'function') window.executeSplineMountain();" 
+                            style="flex:1; background:#38bdf8; color:#0f172a; border:none; padding:8px 6px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:4px;">
+                        ⛰️ Build Mountain
+                    </button>
+                    <button onclick="if(typeof window.clearSpline === 'function') window.clearSpline();" 
+                            style="background:#ef4444; color:#ffffff; border:none; padding:8px 10px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer;" 
+                            title="Clear line">
+                        ❌ Clear
+                    </button>
+                </div>
+                
+                <div style="color:#64748b; font-size:9px; line-height:1.3; margin-top:8px; padding:6px; background:#1e293b; border-radius:5px; border:1px dashed #334155;">
+                    💡 <b>How to:</b> Left-click on the ground to draw a closed shape (at least 3 points). The hill/mountain is built inside the shape and slopes smoothly down to the edges. Right-click to undo the last point.
+                </div>
+            </div>
             <script>
                 window._mtnToolMode = 'PAINT';
                 function setMtnMode(mode) {
@@ -758,8 +797,15 @@
                     document.getElementById('mtn-mode-paint').style.color = mode === 'PAINT' ? '#0f172a' : '#94a3b8';
                     document.getElementById('mtn-mode-stamp').style.background = mode === 'STAMP' ? '#f59e0b' : '#334155';
                     document.getElementById('mtn-mode-stamp').style.color = mode === 'STAMP' ? '#0f172a' : '#94a3b8';
+                    document.getElementById('mtn-mode-spline').style.background = mode === 'SPLINE' ? '#38bdf8' : '#334155';
+                    document.getElementById('mtn-mode-spline').style.color = mode === 'SPLINE' ? '#0f172a' : '#94a3b8';
                     document.getElementById('mtn-paint-content').style.display = mode === 'PAINT' ? 'block' : 'none';
                     document.getElementById('mtn-stamp-content').style.display = mode === 'STAMP' ? 'block' : 'none';
+                    document.getElementById('mtn-spline-content').style.display = mode === 'SPLINE' ? 'block' : 'none';
+                    
+                    if (typeof window.clearSpline === 'function') {
+                        window.clearSpline();
+                    }
                     
                     let el = document.getElementById('sb-stamp-controls');
                     if(el) {
@@ -795,10 +841,10 @@
             
             <div id="props-polygon-actions" style="display:none; margin-bottom:10px;">
                 <div style="display:flex; gap:4px; margin-bottom:4px;">
-                    <button onclick="if(window.undoPolygonPoint) window.undoPolygonPoint();" style="flex:1; background:#334155; color:#94a3b8; border:none; padding:8px 4px; border-radius:5px; font-weight:bold; font-size:10px; cursor:pointer;">↩️ Ångra Punkt</button>
-                    <button onclick="if(window.clearSmartGreen) window.clearSmartGreen();" style="flex:1; background:#ef4444; color:#fff; border:none; padding:8px 4px; border-radius:5px; font-weight:bold; font-size:10px; cursor:pointer;">🗑️ Rensa</button>
+                    <button onclick="if(window.undoPolygonPoint) window.undoPolygonPoint();" style="flex:1; background:#334155; color:#94a3b8; border:none; padding:8px 4px; border-radius:5px; font-weight:bold; font-size:10px; cursor:pointer;">↩️ Undo Point</button>
+                    <button onclick="if(window.clearSmartGreen) window.clearSmartGreen();" style="flex:1; background:#ef4444; color:#fff; border:none; padding:8px 4px; border-radius:5px; font-weight:bold; font-size:10px; cursor:pointer;">🗑️ Clear</button>
                 </div>
-                <button onclick="if(window.executePropsPolygon) window.executePropsPolygon();" style="width:100%; background:linear-gradient(135deg, #10b981, #059669); color:#fff; border:none; padding:10px 0; border-radius:6px; font-weight:bold; font-size:12px; cursor:pointer; box-shadow:0 4px 15px rgba(16,185,129,0.4);">🌴 FYLL MED OBJEKT</button>
+                <button onclick="if(window.executePropsPolygon) window.executePropsPolygon();" style="width:100%; background:linear-gradient(135deg, #10b981, #059669); color:#fff; border:none; padding:10px 0; border-radius:6px; font-weight:bold; font-size:12px; cursor:pointer; box-shadow:0 4px 15px rgba(16,185,129,0.4);">🌴 FILL WITH OBJECTS</button>
             </div>
 
             <script>
@@ -1515,8 +1561,8 @@
             </div>
 
             <div style="background:rgba(239,68,68,0.1); padding:12px; border-radius:10px; border:1px solid rgba(239,68,68,0.3);">
-                <div style="color:#f87171; font-size:12px; font-weight:bold; margin-bottom:4px;">🔒 LÅST UNDER MATCH</div>
-                <div style="color:#94a3b8; font-size:11px;">Gimme Distance, Auto-Putt, Mulligans, Auto Concede och Player Roster kan bara ändras innan matchen startas.</div>
+                <div style="color:#f87171; font-size:12px; font-weight:bold; margin-bottom:4px;">🔒 LOCKED DURING MATCH</div>
+                <div style="color:#94a3b8; font-size:11px;">Gimme Distance, Auto-Putt, Mulligans, Auto Concede and Player Roster can only be changed before the match starts.</div>
             </div>
             
             <div style="text-align:center; margin-top:15px;">
@@ -1552,6 +1598,8 @@
                 <button id="btn-save-copy" onclick="publishCourse({ isDraft: true, overwrite: false })" style="width:90%; background:#eab308; color:#0f172a; border:none; padding:12px 25px; border-radius:10px; font-weight:bold; font-size:16px; cursor:pointer;">🗂️ Save Draft (New Slot)</button>
                 <!-- Publish Version -->
                 <button onclick="publishCourse({ isDraft: false })" style="width:90%; background:#10b981; color:#fff; border:none; padding:12px 25px; border-radius:10px; font-weight:bold; font-size:16px; cursor:pointer;">🌍 Publish Final Version</button>
+                <!-- Save as Template (Admin) -->
+                <button onclick="showSaveTemplateModal()" style="width:90%; background:#7c3aed; color:#fff; border:none; padding:12px 25px; border-radius:10px; font-weight:bold; font-size:16px; cursor:pointer;" title="Save terrain as template">📦 Save as Template</button>
             </div>
             
             <!-- OFFLINE SHARE VIA URL -->
@@ -6139,10 +6187,26 @@
             let autoPlay = params.get('auto_play') === 'true' || sessionStorage.getItem('scan_auto_play') === 'true';
             let scanMode = sessionStorage.getItem('scan_build_mode') || 'rally';
             
+            // Wait for terrain geometry to initialize (poll instead of fixed delay)
+            await new Promise(function(resolve) {
+                var attempts = 0;
+                var check = setInterval(function() {
+                    attempts++;
+                    if (window._arcadePlaneGeo || attempts >= 50) { // 50 × 100ms = 5s max
+                        clearInterval(check);
+                        resolve();
+                    }
+                }, 100);
+            });
+            
             // Clean up sessionStorage
             sessionStorage.removeItem('scan_build_plan');
             sessionStorage.removeItem('scan_build_mode');
             sessionStorage.removeItem('scan_auto_play');
+            
+            // Get template ID (if any)
+            let scanTemplateId = sessionStorage.getItem('scan_template_id');
+            sessionStorage.removeItem('scan_template_id');
             
             if (scanPlan && window.ScanBuilder) {
                 // Force rally editor mode
@@ -6161,14 +6225,94 @@
                 // Show scan-build progress overlay
                 let loader = document.getElementById('global-loader');
                 if (loader) {
-                    loader.querySelector('div:last-child').textContent = autoPlay ? 'Building your world...' : 'Building your world...';
+                    loader.querySelector('div:last-child').textContent = scanTemplateId ? 'Loading terrain template...' : 'Building your world...';
                     loader.classList.remove('hidden');
                 }
                 
-                // Wait for terrain to initialize
-                await new Promise(r => setTimeout(r, 1500));
+                // ── TEMPLATE LOADING: Apply template terrain BEFORE scan-build ──
+                if (scanTemplateId) {
+                    try {
+                        console.log('📦 Loading template:', scanTemplateId);
+                        let tmplResp = await fetch('/api/templates/' + scanTemplateId);
+                        let tmplData = await tmplResp.json();
+                        
+                        if (tmplData && tmplData.meta) {
+                            // 1. Apply heightmap
+                            if (tmplData.heightmapUrl) {
+                                let hmResp = await fetch(tmplData.heightmapUrl);
+                                let hmBuf = await hmResp.arrayBuffer();
+                                let decompressed = pako.inflate(new Uint8Array(hmBuf));
+                                let heightArr = new Int16Array(decompressed.buffer);
+                                let geo = window._arcadePlaneGeo;
+                                let posArr = geo.attributes.position.array;
+                                let vertCount = Math.min(heightArr.length, posArr.length / 3);
+                                for (let hi = 0; hi < vertCount; hi++) {
+                                    posArr[hi * 3 + 2] = heightArr[hi] / 100;
+                                }
+                                geo.attributes.position.needsUpdate = true;
+                                geo.computeVertexNormals();
+                                console.log('  ✅ Heightmap applied (' + vertCount + ' vertices)');
+                            }
+                            
+                            // 2. Apply biome canvas
+                            if (tmplData.biomeUrl && window._arcadePCtx) {
+                                let biomeImg = new Image();
+                                biomeImg.crossOrigin = 'anonymous';
+                                await new Promise((resolve, reject) => {
+                                    biomeImg.onload = () => {
+                                        window._arcadePCtx.drawImage(biomeImg, 0, 0, window._arcadePCtx.canvas.width, window._arcadePCtx.canvas.height);
+                                        // Update terrain material texture
+                                        if (window._arcadePlaneMat && window._arcadePlaneMat.map) {
+                                            window._arcadePlaneMat.map.needsUpdate = true;
+                                        }
+                                        console.log('  ✅ Biome canvas applied');
+                                        resolve();
+                                    };
+                                    biomeImg.onerror = reject;
+                                    biomeImg.src = tmplData.biomeUrl;
+                                });
+                            }
+                            
+                            // 3. Place template trees
+                            if (tmplData.trees && tmplData.trees.length > 0 && typeof window.createTree === 'function') {
+                                for (let ti = 0; ti < tmplData.trees.length; ti++) {
+                                    let tt = tmplData.trees[ti];
+                                    window.createTree(tt.type || 'default', tt.x, tt.z, tt.s || 1, tt.r || 0, tt.c || undefined, tt.tc || undefined);
+                                }
+                                console.log('  ✅ Placed ' + tmplData.trees.length + ' template trees');
+                            }
+                            
+                            // 4. Set biome/environment
+                            if (tmplData.environment && tmplData.environment.biomeId) {
+                                if (typeof window.changeBiome === 'function') {
+                                    window.changeBiome(tmplData.environment.biomeId);
+                                } else {
+                                    window.ACTIVE_BIOME = tmplData.environment.biomeId;
+                                }
+                                console.log('  ✅ Biome set to', tmplData.environment.biomeId);
+                            }
+                            
+                            // 5. Restore surrounding horizon
+                            if (tmplData.environment && tmplData.environment.horizon) {
+                                let hz = tmplData.environment.horizon;
+                                ['N','E','S','W'].forEach(function(dir) {
+                                    let el = document.getElementById('surr-' + dir);
+                                    if (el && hz[dir]) el.value = hz[dir];
+                                });
+                                if (typeof window.updateSurroundColors === 'function') {
+                                    window.updateSurroundColors();
+                                }
+                                console.log('  ✅ Horizon set:', JSON.stringify(hz));
+                            }
+                            
+                            if (loader) loader.querySelector('div:last-child').textContent = 'Building your roads...';
+                        }
+                    } catch (tmplErr) {
+                        console.error('Template load error:', tmplErr);
+                    }
+                }
                 
-                // Execute the build
+                // Execute the scan-build ON TOP of template terrain
                 await window.ScanBuilder.build(scanPlan, function(done, total, msg) {
                     console.log('🎨 Build progress:', done + '/' + total, msg);
                     if (loader) {
@@ -6448,21 +6592,41 @@
                     let pbrEl = document.getElementById('env-use-pbr');
                     if (pbrEl) pbrEl.checked = raceConfig.usePbr;
 
+                    // Check if start and finish share coordinates
+                    let isCombined = false;
+                    if (raceConfig.start && raceConfig.finish) {
+                        let dx = raceConfig.start.x - raceConfig.finish.x;
+                        let dy = raceConfig.start.y - raceConfig.finish.y;
+                        let dz = raceConfig.start.z - raceConfig.finish.z;
+                        let dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+                        if (dist < 2.0) isCombined = true;
+                    }
+
                     // Recreate start gate mesh
                     if (raceConfig.startMesh) { scene.remove(raceConfig.startMesh); raceConfig.startMesh = null; }
-                    if (raceConfig.start && typeof createRallyGate === 'function') {
-                        let sg = createRallyGate(raceConfig.start.x, raceConfig.start.y, raceConfig.start.z, 'start');
-                        if (raceConfig.start.rotation) sg.rotation.y = raceConfig.start.rotation;
-                        scene.add(sg);
-                        raceConfig.startMesh = sg;
-                    }
-                    // Recreate finish gate mesh
                     if (raceConfig.finishMesh) { scene.remove(raceConfig.finishMesh); raceConfig.finishMesh = null; }
-                    if (raceConfig.finish && typeof createRallyGate === 'function') {
-                        let fg = createRallyGate(raceConfig.finish.x, raceConfig.finish.y, raceConfig.finish.z, 'finish');
-                        if (raceConfig.finish.rotation) fg.rotation.y = raceConfig.finish.rotation;
-                        scene.add(fg);
-                        raceConfig.finishMesh = fg;
+
+                    if (isCombined) {
+                        if (raceConfig.start && typeof createRallyGate === 'function') {
+                            let sfg = createRallyGate(raceConfig.start.x, raceConfig.start.y, raceConfig.start.z, 'start_finish');
+                            if (raceConfig.start.rotation) sfg.rotation.y = raceConfig.start.rotation;
+                            scene.add(sfg);
+                            raceConfig.startMesh = sfg;
+                            raceConfig.finishMesh = null;
+                        }
+                    } else {
+                        if (raceConfig.start && typeof createRallyGate === 'function') {
+                            let sg = createRallyGate(raceConfig.start.x, raceConfig.start.y, raceConfig.start.z, 'start');
+                            if (raceConfig.start.rotation) sg.rotation.y = raceConfig.start.rotation;
+                            scene.add(sg);
+                            raceConfig.startMesh = sg;
+                        }
+                        if (raceConfig.finish && typeof createRallyGate === 'function') {
+                            let fg = createRallyGate(raceConfig.finish.x, raceConfig.finish.y, raceConfig.finish.z, 'finish');
+                            if (raceConfig.finish.rotation) fg.rotation.y = raceConfig.finish.rotation;
+                            scene.add(fg);
+                            raceConfig.finishMesh = fg;
+                        }
                     }
                     // Recreate checkpoint meshes
                     if (raceConfig.checkpointMeshes) {
@@ -8483,21 +8647,41 @@
             raceConfig.checkpoints = rd.checkpoints || [];
             raceConfig.missedCheckpointRule = rd.missedCheckpointRule || 'PENALTY_5S';
             
+            // Check if start and finish share coordinates
+            let isCombined = false;
+            if (raceConfig.start && raceConfig.finish) {
+                let dx = raceConfig.start.x - raceConfig.finish.x;
+                let dy = raceConfig.start.y - raceConfig.finish.y;
+                let dz = raceConfig.start.z - raceConfig.finish.z;
+                let dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+                if (dist < 2.0) isCombined = true;
+            }
+
             // Rebuild meshes
             if (raceConfig.startMesh) { scene.remove(raceConfig.startMesh); raceConfig.startMesh = null; }
-            if (raceConfig.start && typeof createRallyGate === 'function') {
-                let sg = createRallyGate(raceConfig.start.x, raceConfig.start.y, raceConfig.start.z, 'start');
-                if (raceConfig.start.rotation) sg.rotation.y = raceConfig.start.rotation;
-                scene.add(sg);
-                raceConfig.startMesh = sg;
-            }
-            
             if (raceConfig.finishMesh) { scene.remove(raceConfig.finishMesh); raceConfig.finishMesh = null; }
-            if (raceConfig.finish && typeof createRallyGate === 'function') {
-                let fg = createRallyGate(raceConfig.finish.x, raceConfig.finish.y, raceConfig.finish.z, 'finish');
-                if (raceConfig.finish.rotation) fg.rotation.y = raceConfig.finish.rotation;
-                scene.add(fg);
-                raceConfig.finishMesh = fg;
+
+            if (isCombined) {
+                if (raceConfig.start && typeof createRallyGate === 'function') {
+                    let sfg = createRallyGate(raceConfig.start.x, raceConfig.start.y, raceConfig.start.z, 'start_finish');
+                    if (raceConfig.start.rotation) sfg.rotation.y = raceConfig.start.rotation;
+                    scene.add(sfg);
+                    raceConfig.startMesh = sfg;
+                    raceConfig.finishMesh = null;
+                }
+            } else {
+                if (raceConfig.start && typeof createRallyGate === 'function') {
+                    let sg = createRallyGate(raceConfig.start.x, raceConfig.start.y, raceConfig.start.z, 'start');
+                    if (raceConfig.start.rotation) sg.rotation.y = raceConfig.start.rotation;
+                    scene.add(sg);
+                    raceConfig.startMesh = sg;
+                }
+                if (raceConfig.finish && typeof createRallyGate === 'function') {
+                    let fg = createRallyGate(raceConfig.finish.x, raceConfig.finish.y, raceConfig.finish.z, 'finish');
+                    if (raceConfig.finish.rotation) fg.rotation.y = raceConfig.finish.rotation;
+                    scene.add(fg);
+                    raceConfig.finishMesh = fg;
+                }
             }
             
             if (raceConfig.checkpointMeshes) {
@@ -8712,10 +8896,26 @@
                 if (hit.object !== plane) {
                     // Check if it's a Rally gate first
                     if (window.EDITOR_MODE === 'rally' && window.raceConfig) {
+                        let isCombined = false;
+                        if (window.raceConfig.start && window.raceConfig.finish) {
+                            let dx = window.raceConfig.start.x - window.raceConfig.finish.x;
+                            let dy = window.raceConfig.start.y - window.raceConfig.finish.y;
+                            let dz = window.raceConfig.start.z - window.raceConfig.finish.z;
+                            let dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+                            if (dist < 2.0) isCombined = true;
+                        }
+
                         if (window.raceConfig.startMesh && (window.raceConfig.startMesh === hit.object || window.raceConfig.startMesh.children.includes(hit.object))) {
                             scene.remove(window.raceConfig.startMesh);
                             window.raceConfig.startMesh = null;
                             window.raceConfig.start = null;
+                            if (isCombined) {
+                                if (window.raceConfig.finishMesh) {
+                                    scene.remove(window.raceConfig.finishMesh);
+                                    window.raceConfig.finishMesh = null;
+                                }
+                                window.raceConfig.finish = null;
+                            }
                             saveLevel();
                             return;
                         }
@@ -8723,6 +8923,13 @@
                             scene.remove(window.raceConfig.finishMesh);
                             window.raceConfig.finishMesh = null;
                             window.raceConfig.finish = null;
+                            if (isCombined) {
+                                if (window.raceConfig.startMesh) {
+                                    scene.remove(window.raceConfig.startMesh);
+                                    window.raceConfig.startMesh = null;
+                                }
+                                window.raceConfig.start = null;
+                            }
                             saveLevel();
                             return;
                         }
@@ -8799,13 +9006,33 @@
                     removeMeasureAt(lastHitPoint);
                 }
             }
-        } else if(currentTool === 'SPLINE') {
+        } else if(currentTool === 'SPLINE' || (currentTool === 'MTN' && window._mtnToolMode === 'SPLINE')) {
             if(e.button === 0 && lastHitPoint) {
                 splinePoints.push(lastHitPoint.clone());
                 updateSplinePreview();
             } else if (e.button === 2 && splinePoints.length > 0) {
                 splinePoints.pop();
                 updateSplinePreview();
+            }
+            controls.enabled = false;
+        } else if(currentTool === 'MTN' && window._mtnToolMode === 'STAMP' && e.button === 0 && lastHitPoint) {
+            // STAMP mode: single click captures or places terrain stamp
+            let pt = lastHitPoint.clone();
+            if(window._stampMode === 'CAPTURE') {
+                let radius = parseInt(document.getElementById('stamp-capture-radius').value) || 50;
+                let name = document.getElementById('stamp-name-input').value.trim() || ('Stamp ' + ((window._stampLibrary || []).length + 1));
+                window.captureTerrainStamp(pt.x, pt.z, radius, name);
+                // Update count
+                let countEl = document.getElementById('stamp-count');
+                if(countEl) countEl.textContent = (window._stampLibrary || []).length;
+                // Clear name input
+                document.getElementById('stamp-name-input').value = '';
+            } else if(window._stampMode === 'PLACE') {
+                if(window._activeStampIndex >= 0 && window._activeStampIndex < (window._stampLibrary || []).length) {
+                    window.applyTerrainStamp(window._activeStampIndex, pt.x, pt.z);
+                } else {
+                    showBuildToast('⚠️ Select a stamp from the library first!', '#f59e0b');
+                }
             }
             controls.enabled = false;
         } else if(currentTool === 'SMART_BUILDER' || (currentTool === 'PAINT' && window._paintToolMode === 'POLYGON') || (currentTool === 'PROPS' && window._propsToolMode === 'POLYGON')) {
@@ -8839,35 +9066,15 @@
                 controls.enabled = false;
                 return;
             }
-            // STAMP mode: single click captures or places terrain stamp
-            if(currentTool === 'MTN' && window._mtnToolMode === 'STAMP' && e.button === 0 && lastHitPoint) {
-                let pt = lastHitPoint.clone();
-                if(window._stampMode === 'CAPTURE') {
-                    let radius = parseInt(document.getElementById('stamp-capture-radius').value) || 50;
-                    let name = document.getElementById('stamp-name-input').value.trim() || ('Stamp ' + ((window._stampLibrary || []).length + 1));
-                    window.captureTerrainStamp(pt.x, pt.z, radius, name);
-                    // Update count
-                    let countEl = document.getElementById('stamp-count');
-                    if(countEl) countEl.textContent = (window._stampLibrary || []).length;
-                    // Clear name input
-                    document.getElementById('stamp-name-input').value = '';
-                } else if(window._stampMode === 'PLACE') {
-                    if(window._activeStampIndex >= 0 && window._activeStampIndex < (window._stampLibrary || []).length) {
-                        window.applyTerrainStamp(window._activeStampIndex, pt.x, pt.z);
-                    } else {
-                        showBuildToast('⚠️ Select a stamp from the library first!', '#f59e0b');
-                    }
-                }
-                controls.enabled = false;
-                return;
-            }
             if(e.button === 0 && lastHitPoint) {
                 // --- SMART_BUILDER: Rally Gate Placement ---
-                if (currentTool === 'SMART_BUILDER' && window.EDITOR_MODE === 'rally' && (window._smartBuilderType === 'TEE' || window._smartBuilderType === 'GREEN')) {
+                if (currentTool === 'SMART_BUILDER' && window.EDITOR_MODE === 'rally' && (window._smartBuilderType === 'TEE' || window._smartBuilderType === 'GREEN' || window._smartBuilderType === 'START_FINISH')) {
                     if (window._smartBuilderType === 'TEE') {
                         if (typeof window.executeSmartStartClick === 'function') window.executeSmartStartClick(lastHitPoint.x, lastHitPoint.y, lastHitPoint.z, window._rallyGateRotation || 0);
-                    } else {
+                    } else if (window._smartBuilderType === 'GREEN') {
                         if (typeof window.executeSmartFinishClick === 'function') window.executeSmartFinishClick(lastHitPoint.x, lastHitPoint.y, lastHitPoint.z, window._rallyGateRotation || 0);
+                    } else if (window._smartBuilderType === 'START_FINISH') {
+                        if (typeof window.executeSmartStartFinishClick === 'function') window.executeSmartStartFinishClick(lastHitPoint.x, lastHitPoint.y, lastHitPoint.z, window._rallyGateRotation || 0);
                     }
                     controls.enabled = false;
                     return;
@@ -8898,6 +9105,47 @@
             controls.enabled = false;
         } else if(currentTool === 'TEST_PUTT') {
             // Legacy handler — no longer reachable from UI
+        } else if(currentTool === 'MASK_LOCK' && lastHitPoint) {
+            // MASK LOCK polygon tool: click to add points, right-click to close & fill
+            if (!window._maskLockPolygon) window._maskLockPolygon = [];
+            if (!window._maskLockMarkers) window._maskLockMarkers = [];
+            
+            if (e.button === 0) {
+                // Left click: add point
+                let pt = lastHitPoint.clone();
+                window._maskLockPolygon.push(pt);
+                
+                // Visual marker (small red sphere)
+                let markerGeo = new THREE.SphereGeometry(1.5, 8, 8);
+                let markerMat = new THREE.MeshBasicMaterial({ color: 0xff3333 });
+                let marker = new THREE.Mesh(markerGeo, markerMat);
+                marker.position.set(pt.x, pt.y + 1.5, pt.z);
+                scene.add(marker);
+                window._maskLockMarkers.push(marker);
+                
+                // Create/update preview line
+                if (window._maskLockPolygon.length >= 2) {
+                    if (window._maskLockLine) scene.remove(window._maskLockLine);
+                    let pts = window._maskLockPolygon.map(function(p) { return new THREE.Vector3(p.x, p.y + 1, p.z); });
+                    let lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
+                    let lineMat = new THREE.LineBasicMaterial({ color: 0xff3333, linewidth: 2 });
+                    window._maskLockLine = new THREE.Line(lineGeo, lineMat);
+                    scene.add(window._maskLockLine);
+                }
+                
+                // Auto-close if clicking near first point (within 10m) and 3+ points
+                if (window._maskLockPolygon.length >= 3) {
+                    let first = window._maskLockPolygon[0];
+                    let dx = pt.x - first.x, dz = pt.z - first.z;
+                    if (Math.sqrt(dx*dx + dz*dz) < 10) {
+                        closeMaskLockPolygon();
+                    }
+                }
+            } else if (e.button === 2 && window._maskLockPolygon.length >= 3) {
+                // Right click: close polygon & fill
+                closeMaskLockPolygon();
+            }
+            controls.enabled = false;
         } else if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || (currentTool === 'PAINT' && window._paintToolMode !== 'POLYGON') || currentTool === 'WATER' || currentTool === 'RIDGE' || currentTool === 'NOISE' || (currentTool === 'PROPS' && window._propsToolMode === 'BRUSH') || currentTool === 'RAMP') {
             isSculpting = true;
             controls.enabled = false; 
@@ -9313,9 +9561,16 @@
             updateBrushSize(); // Restore normal sculpt brush size
         }
         
+        // Clear spline preview if leaving SPLINE tool or MTN-SPLINE mode
+        if (toolName !== 'SPLINE' && !(toolName === 'MTN' && window._mtnToolMode === 'SPLINE')) {
+            if (typeof window.clearSpline === 'function') {
+                window.clearSpline();
+            }
+        }
+        
         currentTool = toolName;
         
-        let tools = ['inspect', 'sculpt', 'smooth', 'flatten', 'ramp', 'noise', 'water', 'spline', 'paint', 'mtn', 'smartbuilder', 'testputt', 'ridge', 'props', 'block', 'jump', 'measure', 'eraser', 'colorize'];
+        let tools = ['inspect', 'sculpt', 'smooth', 'flatten', 'ramp', 'noise', 'water', 'spline', 'paint', 'mtn', 'smartbuilder', 'testputt', 'ridge', 'props', 'block', 'jump', 'measure', 'eraser', 'colorize', 'mask-lock'];
         
         tools.forEach(t => {
             let btn = document.getElementById('tool-' + t);
@@ -9326,7 +9581,8 @@
             }
         });
         
-        let activeBtn = document.getElementById('tool-' + toolName.toLowerCase().replace('_',''));
+        let activeBtn = document.getElementById('tool-' + toolName.toLowerCase().replace('_','-'));
+        if (!activeBtn) activeBtn = document.getElementById('tool-' + toolName.toLowerCase().replace('_',''));
         if (activeBtn) {
             let isPro = activeBtn.classList.contains('pro-tool');
             let base = isPro ? 'pro-tool ' : '';
@@ -9345,6 +9601,26 @@
             setPaintMode(window._paintToolMode || 'FREEHAND');
         }
         document.getElementById('terrain-paint-group').style.display = (toolName === 'MTN') ? 'flex' : 'none';
+        
+        // Template mask overlay toggle
+        if (toolName === 'MASK_LOCK') {
+            if (window.TemplateMask) {
+                if (!window.TemplateMask.isInit()) window.TemplateMask.init();
+                window.TemplateMask.createOverlay(TERRAIN_SIZE, scene);
+                window.TemplateMask.toggleOverlay(true);
+            }
+            window._maskLockPolygon = []; // Reset polygon points
+        } else {
+            if (window.TemplateMask && window.TemplateMask.isInit()) {
+                window.TemplateMask.toggleOverlay(false);
+            }
+            // Clean up polygon markers
+            if (window._maskLockMarkers) {
+                window._maskLockMarkers.forEach(function(m) { scene.remove(m); });
+                window._maskLockMarkers = [];
+            }
+            if (window._maskLockLine) { scene.remove(window._maskLockLine); window._maskLockLine = null; }
+        }
         if (toolName === 'MTN') {
             if (typeof setMtnMode === 'function') setMtnMode(window._mtnToolMode || 'PAINT');
             renderer.domElement.style.cursor = 'crosshair';
@@ -9730,11 +10006,12 @@
                 ghostTree.visible = false;
                 lastHitPoint = null;
             }
-        } else if (currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'MEASURE' || currentTool === 'HOLE' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'RAMP' || currentTool === 'SPLINE' || currentTool === 'COLORIZE' || currentTool === 'ERASER' || currentTool === 'SMART_BUILDER' || currentTool === 'MTN' || currentTool === 'PROPS') {
+        } else if (currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'MEASURE' || currentTool === 'HOLE' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'RAMP' || currentTool === 'SPLINE' || currentTool === 'COLORIZE' || currentTool === 'ERASER' || currentTool === 'SMART_BUILDER' || currentTool === 'MTN' || currentTool === 'PROPS' || currentTool === 'MASK_LOCK') {
             ghostBlock.visible = false;
             ghostTree.visible = false;
             if (window._ghostRallyStart) window._ghostRallyStart.visible = false;
             if (window._ghostRallyFinish) window._ghostRallyFinish.visible = false;
+            if (window._ghostRallyStartFinish) window._ghostRallyStartFinish.visible = false;
             raycaster.setFromCamera(mouse, camera);
             let intersects = raycaster.intersectObject(plane);
             if(intersects.length > 0) {
@@ -9756,6 +10033,22 @@
                             window.placedTrees[closest].color = col;
                             window.placedTrees[closest].trunkColor = tCol;
                             rebuildInstancePool(window.placedTrees[closest].type);
+                        }
+                    }
+                }
+                
+                // Mask LOCK — show cursor for polygon placement
+                if (currentTool === 'MASK_LOCK') {
+                    sculptBrushCursor.visible = true;
+                    sculptBrushCursor.position.copy(lastHitPoint);
+                    sculptBrushCursor.position.y += 0.5;
+                    // Update preview line from last point to cursor
+                    if (window._maskLockPolygon && window._maskLockPolygon.length > 0) {
+                        if (window._maskLockLine) {
+                            let pts = window._maskLockPolygon.map(function(p) { return new THREE.Vector3(p.x, p.y + 1, p.z); });
+                            pts.push(new THREE.Vector3(lastHitPoint.x, lastHitPoint.y + 1, lastHitPoint.z));
+                            window._maskLockLine.geometry.dispose();
+                            window._maskLockLine.geometry = new THREE.BufferGeometry().setFromPoints(pts);
                         }
                     }
                 }
@@ -9806,10 +10099,12 @@
                     
                     let isStart = window._smartBuilderType === 'TEE';
                     let isFinish = window._smartBuilderType === 'GREEN';
+                    let isStartFinish = window._smartBuilderType === 'START_FINISH';
                     let isCheckpoint = window._smartBuilderType === 'AIM';
                     
                     if (window._ghostRallyStart) window._ghostRallyStart.visible = false;
                     if (window._ghostRallyFinish) window._ghostRallyFinish.visible = false;
+                    if (window._ghostRallyStartFinish) window._ghostRallyStartFinish.visible = false;
                     if (window._ghostRallyCheckpoint) window._ghostRallyCheckpoint.visible = false;
                     
                     if (isStart) {
@@ -9837,6 +10132,19 @@
                             window._ghostRallyFinish.position.copy(lastHitPoint);
                             window._ghostRallyFinish.rotation.y = window._rallyGateRotation || 0;
                             window._ghostRallyFinish.visible = true;
+                        }
+                    } else if (isStartFinish) {
+                        if (!window._ghostRallyStartFinish) {
+                            if (typeof createRallyGate === 'function') {
+                                window._ghostRallyStartFinish = createRallyGate(0, 0, 0, 'start_finish');
+                                window._ghostRallyStartFinish.traverse(c => { if(c.material) { c.material.transparent=true; c.material.opacity=0.6; } });
+                                scene.add(window._ghostRallyStartFinish);
+                            }
+                        }
+                        if (window._ghostRallyStartFinish) {
+                            window._ghostRallyStartFinish.position.copy(lastHitPoint);
+                            window._ghostRallyStartFinish.rotation.y = window._rallyGateRotation || 0;
+                            window._ghostRallyStartFinish.visible = true;
                         }
                     } else if (isCheckpoint) {
                         if (!window._ghostRallyCheckpoint) {
@@ -10042,13 +10350,14 @@
         if (appMode !== 'BUILD') return;
         
         // --- SMART_BUILDER: Rally Gate Rotation ---
-        if (currentTool === 'SMART_BUILDER' && window.EDITOR_MODE === 'rally' && (window._smartBuilderType === 'TEE' || window._smartBuilderType === 'GREEN')) {
+        if (currentTool === 'SMART_BUILDER' && window.EDITOR_MODE === 'rally' && (window._smartBuilderType === 'TEE' || window._smartBuilderType === 'GREEN' || window._smartBuilderType === 'START_FINISH')) {
             e.preventDefault();
             e.stopPropagation();
             window._rallyGateManualRotation = true;
             window._rallyGateRotation = (window._rallyGateRotation || 0) + (Math.PI / 12) * (e.deltaY > 0 ? 1 : -1);
             if (window._ghostRallyStart && window._ghostRallyStart.visible) window._ghostRallyStart.rotation.y = window._rallyGateRotation;
             if (window._ghostRallyFinish && window._ghostRallyFinish.visible) window._ghostRallyFinish.rotation.y = window._rallyGateRotation;
+            if (window._ghostRallyStartFinish && window._ghostRallyStartFinish.visible) window._ghostRallyStartFinish.rotation.y = window._rallyGateRotation;
             return;
         }
 
@@ -10184,8 +10493,12 @@
         splineSpheres = [];
         if(splineLineMesh) { scene.remove(splineLineMesh); splineLineMesh = null; }
 
-        let sMat = new THREE.MeshBasicMaterial({ color: 0xec4899 });
-        let sMatFirst = new THREE.MeshBasicMaterial({ color: 0x38bdf8 }); // Blue = start/close point
+        let isMtnSpline = (currentTool === 'MTN' && window._mtnToolMode === 'SPLINE');
+        let dotColor = isMtnSpline ? 0x38bdf8 : 0xec4899;
+        let startColor = isMtnSpline ? 0x60a5fa : 0x38bdf8;
+
+        let sMat = new THREE.MeshBasicMaterial({ color: dotColor });
+        let sMatFirst = new THREE.MeshBasicMaterial({ color: startColor });
         let sGeo = new THREE.SphereGeometry(0.4, 8, 8);
         let sGeoFirst = new THREE.SphereGeometry(0.6, 8, 8);
         splinePoints.forEach((pt, idx) => {
@@ -10199,22 +10512,22 @@
         if(splinePoints.length > 1) {
             let pts = [...splinePoints];
             
-            let curve = new THREE.CatmullRomCurve3(pts);
+            let curve = new THREE.CatmullRomCurve3(pts, isMtnSpline);
             let curvePts = curve.getPoints(50 * pts.length);
             let lineGeo = new THREE.BufferGeometry().setFromPoints(curvePts);
-            let lineMat = new THREE.LineBasicMaterial({ color: 0xec4899, linewidth: 3 });
+            let lineMat = new THREE.LineBasicMaterial({ color: dotColor, linewidth: 3 });
             splineLineMesh = new THREE.Line(lineGeo, lineMat);
             splineLineMesh.position.y += 0.5;
             scene.add(splineLineMesh);
         }
 
         let pnl = document.getElementById('spline-action-panel');
-        if(pnl) pnl.style.display = splinePoints.length >= 2 ? 'block' : 'none';
+        if(pnl) pnl.style.display = (splinePoints.length >= 2 && !isMtnSpline) ? 'block' : 'none';
         renderer.render(scene, camera); // Force draw
     }
 
     window.clearSpline = function() {
-        splinePoints = [];
+        splinePoints.length = 0;
         updateSplinePreview();
     };
 
@@ -12031,6 +12344,7 @@ window.triggerExplosion = function(x, y, z) {
         <button id="sb-type-aim" onclick="setSmartBuilderType('AIM')" style="background:#334155; color:#94a3b8; border:none; padding:7px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer; ">📍 CP</button>
 
         <button id="sb-type-road" onclick="setSmartBuilderType('ROAD')" style="background:#334155; color:#94a3b8; border:none; padding:7px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer;">🛣️ ROAD</button>
+        <button id="sb-type-start_finish" onclick="setSmartBuilderType('START_FINISH')" style="background:#334155; color:#94a3b8; border:none; padding:7px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer; grid-column: span 2;">🔄 START / FINISH</button>
     </div>
     
     <!-- Rally: Remove Last Checkpoint button -->
@@ -12514,7 +12828,7 @@ window.triggerExplosion = function(x, y, z) {
         function setSmartBuilderType(type) {
             window._rallyGateManualRotation = false;
             window._smartBuilderType = type;
-            ['GREEN','BUNKER','FAIRWAY','TEE','AIM','ROAD'].forEach(t => {
+            ['GREEN','BUNKER','FAIRWAY','TEE','AIM','ROAD','START_FINISH'].forEach(t => {
                 let btn = document.getElementById('sb-type-' + t.toLowerCase());
                 if(btn) {
                     btn.style.background = (t === type) ? '#4ade80' : '#334155';
@@ -12537,7 +12851,7 @@ window.triggerExplosion = function(x, y, z) {
             }
             // Update panel border color
             let panel = document.getElementById('smart-green-action-panel');
-            let colors = {GREEN: '#4ade80', BUNKER: '#f59e0b', FAIRWAY: '#7db952', TEE: '#38bdf8', AIM: '#f59e0b', ROAD: '#f59e0b'};
+            let colors = {GREEN: '#4ade80', BUNKER: '#f59e0b', FAIRWAY: '#7db952', TEE: '#38bdf8', AIM: '#f59e0b', ROAD: '#f59e0b', START_FINISH: '#a78bfa'};
             panel.style.borderColor = colors[type] || '#4ade80';
             // Update build button
             let buildBtn = document.getElementById('sb-build-btn');
@@ -12549,7 +12863,7 @@ window.triggerExplosion = function(x, y, z) {
                 } else if(type === 'FAIRWAY') {
                     buildBtn.textContent = '🏌️ Build Fairway';
                     buildBtn.style.background = 'linear-gradient(135deg, #7db952, #6b9e3d)';
-                } else if(type === 'TEE') {
+                } else if(type === 'TEE' || type === 'START_FINISH') {
                     if (window.EDITOR_MODE === 'rally') {
                         buildBtn.style.display = 'none'; // Click to place directly
                     } else {
@@ -12680,6 +12994,239 @@ function toggleHbSection(el) {
         content.style.display = 'none';
         if(span) span.style.transform = 'rotate(-90deg)';
     }
+}
+</script>
+
+<!-- Template Save Modal -->
+<div id="template-save-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:10000; align-items:center; justify-content:center;">
+  <div style="background:#1e293b; border-radius:12px; padding:24px; max-width:500px; width:90%; color:#fff;">
+    <h2 style="margin:0 0 16px;">📦 Save as Template</h2>
+    <label>Name:<br><input id="tmpl-name" style="width:100%;padding:8px;background:#0f172a;color:#fff;border:1px solid #334155;border-radius:6px;box-sizing:border-box;" placeholder="Canyon Run"></label>
+    <br><br>
+    <label>Category:<br>
+      <select id="tmpl-category" style="width:100%;padding:8px;background:#0f172a;color:#fff;border:1px solid #334155;border-radius:6px;">
+        <option value="desert">🏜️ Desert</option>
+        <option value="grass" selected>🌿 Grassland</option>
+        <option value="snow">❄️ Snow</option>
+        <option value="island">🏝️ Island</option>
+      </select>
+    </label>
+    <br><br>
+    <label>Description:<br><textarea id="tmpl-desc" rows="2" style="width:100%;padding:8px;background:#0f172a;color:#fff;border:1px solid #334155;border-radius:6px;box-sizing:border-box;" placeholder="Short description..."></textarea></label>
+    <br><br>
+    <div style="display:flex;gap:12px;">
+      <div style="flex:1;text-align:center;">
+        <div style="font-size:12px;opacity:0.6;">Preview</div>
+        <canvas id="tmpl-preview" width="200" height="200" style="border:1px solid #334155;border-radius:6px;"></canvas>
+      </div>
+      <div style="flex:1;text-align:center;">
+        <div style="font-size:12px;opacity:0.6;">Mask</div>
+        <canvas id="tmpl-mask-preview" width="200" height="200" style="border:1px solid #334155;border-radius:6px;"></canvas>
+      </div>
+    </div>
+    <div id="tmpl-drawable-pct" style="text-align:center;margin:8px 0;font-size:14px;opacity:0.8;">Drawable: 100%</div>
+    <div style="display:flex;gap:12px;margin-top:16px;">
+      <button onclick="document.getElementById('template-save-modal').style.display='none'" style="flex:1;padding:10px;background:#334155;color:#fff;border:none;border-radius:6px;cursor:pointer;">Cancel</button>
+      <button onclick="executeSaveTemplate()" id="tmpl-save-btn" style="flex:1;padding:10px;background:#7c3aed;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:bold;">Save Template</button>
+    </div>
+    <div id="tmpl-save-status" style="text-align:center;margin-top:8px;font-size:13px;"></div>
+  </div>
+</div>
+
+<script>
+// === MASK LOCK POLYGON ===
+function closeMaskLockPolygon() {
+    if (!window._maskLockPolygon || window._maskLockPolygon.length < 3) return;
+    if (!window.TemplateMask) return;
+    if (!window.TemplateMask.isInit()) window.TemplateMask.init();
+    
+    var maskCtx = window.TemplateMask.getContext();
+    var MASK_SIZE = window.TemplateMask.MASK_SIZE;
+    var half = TERRAIN_SIZE / 2;
+    
+    // Convert world polygon to mask canvas coordinates
+    maskCtx.beginPath();
+    for (var i = 0; i < window._maskLockPolygon.length; i++) {
+        var pt = window._maskLockPolygon[i];
+        var px = ((pt.x + half) / TERRAIN_SIZE) * MASK_SIZE;
+        var py = ((pt.z + half) / TERRAIN_SIZE) * MASK_SIZE;
+        if (i === 0) maskCtx.moveTo(px, py);
+        else maskCtx.lineTo(px, py);
+    }
+    maskCtx.closePath();
+    maskCtx.fillStyle = '#000000'; // Black = blocked
+    maskCtx.fill();
+    
+    // Update 3D overlay
+    window.TemplateMask.refreshOverlay(TERRAIN_SIZE, scene);
+    
+    // Clean up markers and line
+    if (window._maskLockMarkers) {
+        window._maskLockMarkers.forEach(function(m) {
+            scene.remove(m);
+            m.geometry.dispose();
+            m.material.dispose();
+        });
+        window._maskLockMarkers = [];
+    }
+    if (window._maskLockLine) {
+        scene.remove(window._maskLockLine);
+        window._maskLockLine.geometry.dispose();
+        window._maskLockLine.material.dispose();
+        window._maskLockLine = null;
+    }
+    
+    // Reset polygon for next area
+    window._maskLockPolygon = [];
+    
+    console.log('🔒 Mask polygon locked. Drawable: ' + window.TemplateMask.getDrawablePercent() + '%');
+}
+
+// === TEMPLATE SAVE SYSTEM ===
+function showSaveTemplateModal() {
+    var modal = document.getElementById('template-save-modal');
+    modal.style.display = 'flex';
+    
+    // Generate thumbnail preview
+    var previewCanvas = document.getElementById('tmpl-preview');
+    var pctx2 = previewCanvas.getContext('2d');
+    renderer.render(scene, camera);
+    pctx2.drawImage(renderer.domElement, 0, 0, 200, 200);
+    
+    // Show mask preview
+    var maskPreview = document.getElementById('tmpl-mask-preview');
+    var mctx2 = maskPreview.getContext('2d');
+    if (window.TemplateMask && window.TemplateMask.isInit()) {
+        mctx2.drawImage(window.TemplateMask.getCanvas(), 0, 0, 200, 200);
+        document.getElementById('tmpl-drawable-pct').textContent = 
+            'Drawable: ' + window.TemplateMask.getDrawablePercent() + '%';
+    } else {
+        mctx2.fillStyle = '#00ff00';
+        mctx2.fillRect(0, 0, 200, 200);
+        document.getElementById('tmpl-drawable-pct').textContent = 'Drawable: 100% (no mask painted)';
+    }
+    document.getElementById('tmpl-save-status').textContent = '';
+}
+
+async function executeSaveTemplate() {
+    var statusEl = document.getElementById('tmpl-save-status');
+    var saveBtn = document.getElementById('tmpl-save-btn');
+    statusEl.textContent = 'Saving...';
+    statusEl.style.color = '#fbbf24';
+    saveBtn.disabled = true;
+    
+    try {
+        var name = document.getElementById('tmpl-name').value || 'Untitled';
+        var category = document.getElementById('tmpl-category').value;
+        var description = document.getElementById('tmpl-desc').value || '';
+        var id = category + '_' + Date.now().toString(36);
+        
+        // Heightmap (same pattern as saveLevel)
+        var geo = window._arcadePlaneGeo;
+        var posArr = geo.attributes.position.array;
+        var segs = Math.round(Math.sqrt(posArr.length / 3)) - 1;
+        var vertCount = (segs + 1) * (segs + 1);
+        var heightData = new Int16Array(vertCount);
+        for (var i = 0; i < vertCount; i++) {
+            heightData[i] = Math.round(posArr[i * 3 + 2] * 100);
+        }
+        var compressed = pako.deflate(new Uint8Array(heightData.buffer));
+        var heightmapBlob = new Blob([compressed], { type: 'application/octet-stream' });
+        
+        // Biome canvas (downsample 4096 -> 2048)
+        var biomeBlob = null;
+        if (window._arcadePCtx) {
+            var tmpC = document.createElement('canvas');
+            tmpC.width = 2048; tmpC.height = 2048;
+            tmpC.getContext('2d').drawImage(window._arcadePCtx.canvas, 0, 0, 2048, 2048);
+            biomeBlob = await new Promise(function(r) { tmpC.toBlob(r, 'image/jpeg', 0.8); });
+        }
+        
+        // Mask
+        var maskBlob = null;
+        if (window.TemplateMask && window.TemplateMask.isInit()) {
+            maskBlob = await window.TemplateMask.exportPNG();
+        }
+        
+        // Thumbnail
+        renderer.render(scene, camera);
+        var thumbBlob = await new Promise(function(r) {
+            renderer.domElement.toBlob(function(b) { r(b); }, 'image/jpeg', 0.7);
+        });
+        
+        // Trees/Props (placedTrees stores data objects: {type, x, z, scale, rot, ...})
+        var trees = [];
+        if (window.placedTrees) {
+            for (var ti = 0; ti < window.placedTrees.length; ti++) {
+                var t = window.placedTrees[ti];
+                if (t) {
+                    trees.push({
+                        type: t.type || 'default',
+                        x: t.x, z: t.z,
+                        s: t.scale || 1,
+                        r: t.rot || 0,
+                        c: t.color || null,
+                        tc: t.trunkColor || null
+                    });
+                }
+            }
+        }
+        
+        // Environment
+        var environment = {
+            biomeId: window.ACTIVE_BIOME || 'NORDIC',
+            weather: window._currentWeather || 'clear'
+        };
+        if (scene.fog) {
+            environment.fogColor = '#' + scene.fog.color.getHexString();
+            environment.fogNear = scene.fog.near;
+            environment.fogFar = scene.fog.far;
+        }
+        // Surrounding Horizon (N/E/S/W)
+        var sN = document.getElementById('surr-N');
+        var sE = document.getElementById('surr-E');
+        var sS = document.getElementById('surr-S');
+        var sW = document.getElementById('surr-W');
+        if (sN) environment.horizon = {
+            N: sN.value, E: sE ? sE.value : 'fescueColor',
+            S: sS ? sS.value : 'fescueColor', W: sW ? sW.value : 'fescueColor'
+        };
+        
+        // Meta
+        var meta = {
+            id: id, name: name, category: category,
+            biome: window.ACTIVE_BIOME || 'NORDIC',
+            description: description, active: true,
+            drawableArea: { percentage: window.TemplateMask ? window.TemplateMask.getDrawablePercent() : 100 },
+            created: new Date().toISOString()
+        };
+        
+        // POST FormData
+        var formData = new FormData();
+        formData.append('password', 'golfadmin123');
+        formData.append('meta', JSON.stringify(meta));
+        if (heightmapBlob) formData.append('heightmap', heightmapBlob, 'heightmap.bin');
+        if (biomeBlob) formData.append('biome', biomeBlob, 'biome.jpg');
+        if (maskBlob) formData.append('mask', maskBlob, 'mask.png');
+        if (thumbBlob) formData.append('thumb', thumbBlob, 'thumb.jpg');
+        formData.append('trees', JSON.stringify(trees));
+        formData.append('environment', JSON.stringify(environment));
+        
+        var resp = await fetch('/api/templates', { method: 'POST', body: formData });
+        var result = await resp.json();
+        
+        if (result.success) {
+            statusEl.textContent = '✅ Template saved! ID: ' + id;
+            statusEl.style.color = '#4ade80';
+        } else {
+            throw new Error(result.error || 'Save failed');
+        }
+    } catch (err) {
+        statusEl.textContent = '❌ Error: ' + err.message;
+        statusEl.style.color = '#ef4444';
+        console.error('Save template error:', err);
+    }
+    saveBtn.disabled = false;
 }
 </script>
 

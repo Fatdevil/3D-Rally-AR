@@ -1,8 +1,11 @@
 require('dotenv').config();
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 const express = require('express');
 const { Pool } = require('pg');
 const cors = require('cors');
 const path = require('path');
+const multer = require('multer');
+const templateStorage = require('./template-storage');
 
 const app = express();
 const port = process.env.PORT || 8080;
@@ -833,87 +836,87 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const RALLY_SCAN_PROMPT = `You are a WRC rally stage designer analyzing a hand-drawn map.
 
-INTERPRETATION RULES:
-- Any line or path drawn = road. Follow the drawn path precisely as a sequence of coordinate points.
-- Large shapes, circles, or mountain-like drawings = hills/mountains. Bigger shape = taller hill (10-30m).
-- Small dots, tree-like drawings, or cluster marks = trees. Group them naturally.
-- Arrows or car drawings = start position + direction the arrow points.
-- Wavy lines, blue marks, or water-like drawings = water features (lakes, rivers).
-- Houses, buildings, animals, rainbows, or ANY creative element = interpret as decoration or ignore gracefully.
-- If you see text/labels written on the drawing, use them as hints (e.g. "big mountain", "forest", "lake").
+COLOR-CODING & STAMP RULES:
+- The drawing uses specific colors and stamps. Interpret them exactly as follows:
+  1. Opaque Brown strokes (#4a3728): This is the ROAD. Follow the brown path precisely to generate the coordinate nodes of the road. Ignore all other colors when tracing the road.
+  2. Semi-transparent Green strokes (rgba(74, 140, 60, 0.7)): These are MOUNTAINS/HILLS. Do NOT output them in the "sculpts" or "trees" arrays (the engine automatically builds them from green pixels). Do NOT place trees on or near the green strokes.
+  3. Semi-transparent Blue strokes (rgba(56, 189, 248, 0.7)): These are WATER features (lakes, ponds, rivers). Output them in the "water" array. Water features in the "water" array must have the shape: {"x": number, "z": number, "radius": number, "depth": number, "label": string}. Only output if a blue stroke is present.
+  4. Tree Stamp (🌳): Only place trees in the "trees" array at coordinates where a 🌳 stamp is explicitly drawn. If no 🌳 stamps are drawn, the "trees" array MUST be empty []. Do NOT invent trees or forests. Each tree object should have the shape: {"x": number, "z": number, "type": "oak"|"pine"|"palm"|"cactus", "scale": number}.
+  5. Start Flag Stamp (🏁): This is the start position of the race. Map this to "race.start".
+  6. Checkpoint Stamp (⭕): These are checkpoints. Map them to "race.checkpoints" in the order of the track. If no ⭕ stamps are drawn, generate 4-8 checkpoints evenly spaced along the road.
+  7. House Stamp (🏠): These are houses. Use them as background decoration or ignore.
+  8. Yellow/Orange Triangles with labels 'S', 'M', or 'L': These are JUMP RAMPS. 'S' = small (height 2m, radius 8m), 'M' = medium (height 4m, radius 12m), 'L' = large (height 7m, radius 18m). Place a terrain sculpt at that position. Sculpt features in the "sculpts" array must have the shape: {"x": number, "z": number, "radius": number, "height": number, "falloff": "smooth"|"linear", "label": string}. Only output if explicit sculpt/hill stamps or jump ramps are present.
 
 CRITICAL ROAD RULE:
 - Output exactly ONE road in the "roads" array. Never split a continuous drawn path into multiple roads.
+- There is always exactly ONE road and it must be a single continuous path. Even if there are gaps or breaks in the drawn road, you MUST bridge them and connect them into a single continuous sequence of nodes.
 - If the drawing shows one continuous path, output it as a single road with many nodes.
 - If the drawing shows a loop/circuit, the first and last node should be near each other.
 - Use 15-30 nodes to capture the shape accurately. More nodes for complex paths.
 
 COORDINATE SYSTEM:
 - Map the ENTIRE drawing to a 900x900 meter grid centered at (0,0).
-- Paper/canvas edges map to approximately -400..+400 in both X and Z.
+- Paper/canvas edges map to approximately -450..+450 in both X and Z.
 - X axis = left-right on the paper. Z axis = top-bottom on the paper (top = negative Z, bottom = positive Z).
 
 MANDATORY RACE SETUP (always do this, even if not drawn):
 - ALWAYS place a start gate at the beginning of the road.
-- ALWAYS place a finish gate at the end of the road (or at start if it's a loop).
-- ALWAYS place 4-8 checkpoints evenly spaced along the road between start and finish.
+- ALWAYS place a finish gate at the end of the road.
 - Set "heading" to the road direction angle in radians at that point.
+- CLOSED LOOP / CIRCUIT TRACK RULE: If the track is a closed loop/circuit, you MUST set both "race.start" and "race.finish" to the EXACT SAME coordinates and heading (both pointing in the direction of travel). Do not place separate start and finish gates. Also, set "laps" to 3 for circuit tracks (and 1 for point-to-point tracks).
 
 RALLY EXPERT ENHANCEMENTS (apply automatically):
 1. BANKING: On curves tighter than 40m radius, add a terrain sculpt raising the outer edge by 1-2m.
 2. JUMPS: On long straight sections (>80m), add a 3-5m crest with a 15m flat landing zone after it.
 3. HAIRPINS: At very tight turns, widen the road to 12m and lower the inner edge by -2m.
-4. TREES: Auto-fill trees 5-15m from road edges wherever the drawing suggests vegetation. Space trees 4-8m apart.
-5. SURFACE: Vary road material — use "asphalt" near start/finish, "gravel" in open areas, "dirt" in forest sections.
-6. DIFFICULTY: Make the first third easier (gentle curves), middle technical (hairpins), final third fast (crests, straights).
+4. SURFACE: Vary road material — use "asphalt" near start/finish, "gravel" in open areas, "dirt" in forest sections.
+5. DIFFICULTY: Make the first third easier (gentle curves), middle technical (hairpins), final third fast (crests, straights).
 
 OUTPUT: Return ONLY valid JSON (no markdown fences, no explanations). Use this exact schema:
 {
   "biome": "GENERIC",
-  "sculpts": [{"x":0,"z":0,"radius":30,"height":15,"falloff":"smooth","label":"Hill"}],
+  "sculpts": [],
   "roads": [{"width":8,"material":"gravel","nodes":[{"x":0,"z":0}]}],
-  "trees": [{"x":0,"z":0,"type":"oak","scale":1.0}],
-  "water": [{"x":0,"z":0,"radius":20,"depth":3,"label":"Lake"}],
-  "race": {"start":{"x":0,"z":0,"heading":0},"finish":{"x":0,"z":0,"heading":0},"checkpoints":[{"x":0,"z":0}],"laps":1}
+  "trees": [],
+  "water": [],
+  "race": {"start":{"x":0,"z":0,"heading":0},"finish":{"x":0,"z":0,"heading":0},"checkpoints":[],"laps":1}
 }`;
 
 const GOLF_SCAN_PROMPT = `You are a professional golf course architect analyzing a hand-drawn course layout.
 
-INTERPRETATION RULES:
-- Ovals or circles = greens. The size determines green radius (8-15m).
-- Paths or corridors between elements = fairways (path of play).
-- Dots inside circles or flag drawings = pin/hole positions on the green.
-- Arrows, rectangles near edges, or tee-like marks = tee boxes. Arrow direction = aim direction.
-- Hatched areas, filled shapes, or sandy-colored areas = bunkers.
-- Wavy marks, blue areas = water hazards.
-- Tree drawings, dots along borders = trees/vegetation.
-- Numbers written = hole numbers. Follow the numbered sequence.
-- If no numbers, interpret left-to-right, top-to-bottom as hole order.
+COLOR-CODING & STAMP RULES:
+- The drawing uses specific colors and stamps. Interpret them exactly as follows:
+  1. Opaque Brown strokes (#4a3728): This is the FAIRWAY path. Follow the brown path to define the "fairway_path" of each hole.
+  2. Semi-transparent Green strokes (rgba(74, 140, 60, 0.7)): These are HILLS/MOUNTAINS. Do NOT output them in the "sculpts" or "trees" arrays (the engine automatically builds them from green pixels). Do NOT place trees on or near the green strokes.
+  3. Semi-transparent Blue strokes (rgba(56, 189, 248, 0.7)): These are WATER hazards. Output them in the "water" array. Each water hazard object should have the shape: {"x": number, "z": number, "radius": number, "depth": number, "label": string}. Only output if blue strokes are present.
+  4. Tree Stamp (🌳): Only place trees in the "trees" array at coordinates where a 🌳 stamp is explicitly drawn. If no 🌳 stamps are drawn, the "trees" array MUST be empty []. Do NOT invent trees or forests. Each tree object should have the shape: {"x": number, "z": number, "type": "oak"|"pine"|"palm"|"cactus", "scale": number}.
+  5. Start Flag Stamp (🏁): This is the Tee Box. Map this to "tee" in the "holes" array.
+  6. Checkpoint Stamp (⭕): This is the Green and Hole/Pin location. Map this to "pin" and "green" in the "holes" array.
+  7. House Stamp (🏠): This is a building (clubhouse or decoration).
 
 COORDINATE SYSTEM:
 - Map the ENTIRE drawing to a 900x900 meter grid centered at (0,0).
-- Paper/canvas edges map to approximately -400..+400 in both X and Z.
+- Paper/canvas edges map to approximately -450..+450 in both X and Z.
 
 GOLF EXPERT ENHANCEMENTS:
 1. GREEN CONTOURING: Add subtle 0.3-0.8m sculpt undulation near greens.
 2. STRATEGIC BUNKERS: Place greenside bunkers on the approach side if not explicitly drawn.
 3. PAR CALCULATION: Auto-calculate par from tee-to-pin distance (<180m=3, 180-380m=4, >380m=5).
-4. TREE LINING: Add trees along fairway borders for definition, 8-15m from centerline.
-5. ELEVATION: Add gentle rolling hills (2-5m) between holes for visual interest.
+4. ELEVATION: Add gentle rolling hills (2-5m) between holes for visual interest (not on the green or fairway).
 
 OUTPUT: Return ONLY valid JSON (no markdown fences, no explanations). Use this exact schema:
 {
   "biome": "GENERIC",
-  "sculpts": [{"x":0,"z":0,"radius":30,"height":5,"falloff":"smooth","label":"Hill between holes"}],
-  "trees": [{"x":0,"z":0,"type":"oak","scale":1.0}],
-  "water": [{"x":0,"z":0,"radius":20,"depth":3,"label":"Pond"}],
-  "holes": [{"number":1,"par":4,"tee":{"x":0,"z":0,"heading":0},"green":{"x":0,"z":0,"radius":12},"pin":{"x":0,"z":0},"fairway_path":[{"x":0,"z":0}],"bunkers":[{"x":0,"z":0,"radius":6}]}],
-  "paint_zones": [{"type":"SAND","center":{"x":0,"z":0},"radius":8}]
+  "sculpts": [],
+  "trees": [],
+  "water": [],
+  "holes": [{"number":1,"par":4,"tee":{"x":0,"z":0,"heading":0},"green":{"x":0,"z":0,"radius":12},"pin":{"x":0,"z":0},"fairway_path":[{"x":0,"z":0}],"bunkers":[]}],
+  "paint_zones": []
 }`;
 
 app.post('/api/scan', async (req, res) => {
     try {
-        const { image_base64, mode, style } = req.body;
+        const { image_base64, mode, style, aspectRatio, road_image_base64 } = req.body;
         if (!image_base64) return res.status(400).json({ error: 'Missing image data' });
         if (!process.env.GEMINI_API_KEY) return res.status(503).json({ error: 'AI not configured — add GEMINI_API_KEY to .env' });
 
@@ -925,13 +928,31 @@ app.post('/api/scan', async (req, res) => {
         // Select prompt based on mode
         let prompt = (mode === 'golf') ? GOLF_SCAN_PROMPT : RALLY_SCAN_PROMPT;
 
+        // Inject dynamic grid dimensions based on canvas aspect ratio
+        if (aspectRatio && aspectRatio > 0) {
+            let gridW = Math.round(900 * Math.max(1, aspectRatio));
+            let gridH = Math.round(900 * Math.max(1, 1 / aspectRatio));
+            let halfW = Math.round(gridW / 2) - 50;
+            let halfH = Math.round(gridH / 2) - 50;
+            prompt = prompt.replace('900x900 meter grid', gridW + 'x' + gridH + ' meter grid');
+            prompt = prompt.replace('-400..+400 in both X and Z', '-' + halfW + '..+' + halfW + ' in X and -' + halfH + '..+' + halfH + ' in Z');
+        }
+
+        // Remove expert enhancements in trace mode (they conflict with "do not add elements")
+        if (style === 'trace') {
+            prompt = prompt.replace(/RALLY EXPERT ENHANCEMENTS[\s\S]*?(?=OUTPUT:)/, '');
+            prompt = prompt.replace(/GOLF EXPERT ENHANCEMENTS[\s\S]*?(?=OUTPUT:)/, '');
+        }
+
         // Add style modifier
         if (style === 'trace') {
-            prompt += '\n\nSTYLE: TRACE MODE — Copy the drawing as precisely as possible. Minimal enhancements. Do NOT add elements that are not in the drawing.';
+            prompt += '\n\nSTYLE: TRACE MODE — Copy the drawing as precisely as possible. Minimal enhancements. Do NOT add elements that are not in the drawing. Absolutely NO arbitrary trees, water, or other features. If no 🌳 stamps are drawn, the "trees" array MUST be empty: [].';
         } else if (style === 'generate') {
-            prompt += '\n\nSTYLE: GENERATE MODE — Use the drawing as loose inspiration. Create a complete, professional-quality course/track. Add many more elements than drawn. Be creative and generous with details.';
+            prompt += '\n\nSTYLE: GENERATE MODE — Use the drawing as loose inspiration. Create a complete, professional-quality course/track. Add many more elements than drawn. Be creative and generous with details. You are allowed to add decorative tree clusters, forests, and other natural features even if not drawn.';
+        } else {
+            // Default 'enhance' style
+            prompt += '\n\nSTYLE: ENHANCE MODE — Clean up and improve the layout of the drawn elements (smoothen paths, fix curves). Do NOT add arbitrary trees or water that are not in the drawing. If no 🌳 stamps are drawn, the "trees" array MUST be empty: [].';
         }
-        // Default 'enhance' uses the base prompt as-is
 
         // Strip data URI prefix if present
         let imageData = image_base64;
@@ -939,10 +960,22 @@ app.post('/api/scan', async (req, res) => {
             imageData = imageData.split(',')[1];
         }
 
-        const result = await model.generateContent([
+        // Build multi-modal content array
+        let contentParts = [
             { text: prompt },
             { inlineData: { mimeType: 'image/png', data: imageData } }
-        ]);
+        ];
+        // Add road-only canvas for cleaner road tracing (if available)
+        if (road_image_base64) {
+            let roadData = road_image_base64;
+            if (roadData.startsWith('data:')) roadData = roadData.split(',')[1];
+            contentParts.push(
+                { text: '\n\nADDITIONAL IMAGE: This second image shows ONLY the road strokes (brown on white), without mountains, water, trees or stamps. Use this for more precise road node extraction.' },
+                { inlineData: { mimeType: 'image/png', data: roadData } }
+            );
+        }
+
+        const result = await model.generateContent(contentParts);
 
         const text = result.response.text();
         
@@ -952,8 +985,8 @@ app.post('/api/scan', async (req, res) => {
             // Try direct parse first
             buildPlan = JSON.parse(text);
         } catch(e) {
-            // Try extracting from markdown code fences
-            const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+            // Try extracting from markdown code fences (greedy — get last/largest block)
+            const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*)```/);
             if (jsonMatch) {
                 buildPlan = JSON.parse(jsonMatch[1].trim());
             } else {
@@ -967,6 +1000,204 @@ app.post('/api/scan', async (req, res) => {
                 }
             }
         }
+
+        // --- VALIDATE AI OUTPUT: sanitize non-numeric coordinates ---
+        function sanitizeCoord(val) {
+            if (typeof val === 'number' && Number.isFinite(val)) return val;
+            let n = parseFloat(val);
+            return Number.isFinite(n) ? n : 0;
+        }
+        if (buildPlan.roads) {
+            for (let r of buildPlan.roads) {
+                if (Array.isArray(r.nodes)) {
+                    r.nodes = r.nodes.filter(n => n && (typeof n.x !== 'undefined') && (typeof n.z !== 'undefined'))
+                        .map(n => ({ x: sanitizeCoord(n.x), z: sanitizeCoord(n.z) }));
+                }
+            }
+        }
+        if (buildPlan.sculpts) {
+            buildPlan.sculpts = buildPlan.sculpts.filter(s => s && Number.isFinite(sanitizeCoord(s.x)))
+                .map(s => ({ ...s, x: sanitizeCoord(s.x), z: sanitizeCoord(s.z), radius: sanitizeCoord(s.radius) || 20, height: sanitizeCoord(s.height) || 5 }));
+        }
+        if (buildPlan.trees) {
+            buildPlan.trees = buildPlan.trees.filter(t => t && Number.isFinite(sanitizeCoord(t.x)))
+                .map(t => ({ ...t, x: sanitizeCoord(t.x), z: sanitizeCoord(t.z) }));
+        }
+        if (buildPlan.water) {
+            buildPlan.water = buildPlan.water.filter(w => w && Number.isFinite(sanitizeCoord(w.x)))
+                .map(w => ({ ...w, x: sanitizeCoord(w.x), z: sanitizeCoord(w.z), radius: sanitizeCoord(w.radius) || 20 }));
+        }
+
+        // --- POST-PROCESSING FOR RALLY MODE ---
+        if (mode === 'rally' && buildPlan && Array.isArray(buildPlan.roads)) {
+            // 1. Filter and stitch multiple roads together
+            let roadsPool = buildPlan.roads.filter(r => r && Array.isArray(r.nodes) && r.nodes.length > 0);
+            if (roadsPool.length > 0) {
+                let currentRoad = roadsPool.shift();
+                let mergedNodes = [...currentRoad.nodes];
+                let width = currentRoad.width || 8;
+                let material = currentRoad.material || 'gravel';
+                
+                while (roadsPool.length > 0) {
+                    let bestDist = Infinity;
+                    let bestIndex = -1;
+                    let bestType = ''; // 'append', 'append-reversed', 'prepend', 'prepend-reversed'
+                    
+                    let startNode = mergedNodes[0];
+                    let endNode = mergedNodes[mergedNodes.length - 1];
+                    
+                    for (let i = 0; i < roadsPool.length; i++) {
+                        let rNodes = roadsPool[i].nodes;
+                        let rStart = rNodes[0];
+                        let rEnd = rNodes[rNodes.length - 1];
+                        
+                        let d1 = Math.hypot(endNode.x - rStart.x, endNode.z - rStart.z);
+                        if (d1 < bestDist) { bestDist = d1; bestIndex = i; bestType = 'append'; }
+                        
+                        let d2 = Math.hypot(endNode.x - rEnd.x, endNode.z - rEnd.z);
+                        if (d2 < bestDist) { bestDist = d2; bestIndex = i; bestType = 'append-reversed'; }
+                        
+                        let d3 = Math.hypot(startNode.x - rEnd.x, startNode.z - rEnd.z);
+                        if (d3 < bestDist) { bestDist = d3; bestIndex = i; bestType = 'prepend'; }
+                        
+                        let d4 = Math.hypot(startNode.x - rStart.x, startNode.z - rStart.z);
+                        if (d4 < bestDist) { bestDist = d4; bestIndex = i; bestType = 'prepend-reversed'; }
+                    }
+                    
+                    if (bestIndex !== -1) {
+                        let nextRoad = roadsPool.splice(bestIndex, 1)[0];
+                        let nextNodes = [...nextRoad.nodes];
+                        if (bestType === 'append') {
+                            mergedNodes = mergedNodes.concat(nextNodes);
+                        } else if (bestType === 'append-reversed') {
+                            mergedNodes = mergedNodes.concat(nextNodes.reverse());
+                        } else if (bestType === 'prepend') {
+                            mergedNodes = nextNodes.concat(mergedNodes);
+                        } else if (bestType === 'prepend-reversed') {
+                            mergedNodes = nextNodes.reverse().concat(mergedNodes);
+                        }
+                    } else {
+                        break;
+                    }
+                }
+                
+                buildPlan.roads = [{
+                    width: width,
+                    material: material,
+                    nodes: mergedNodes
+                }];
+
+                // Dedup near-identical consecutive nodes (from stitching overlaps)
+                let dedupNodes = [mergedNodes[0]];
+                for (let i = 1; i < mergedNodes.length; i++) {
+                    let prev = dedupNodes[dedupNodes.length - 1];
+                    let curr = mergedNodes[i];
+                    let d = Math.hypot(prev.x - curr.x, prev.z - curr.z);
+                    if (d > 3) dedupNodes.push(curr); // Skip nodes closer than 3m
+                }
+                buildPlan.roads[0].nodes = dedupNodes;
+            }
+            
+            // 2. Loop detection, loop closing, and start/finish unification
+            if (buildPlan.roads[0] && Array.isArray(buildPlan.roads[0].nodes) && buildPlan.roads[0].nodes.length >= 2) {
+                let nodes = buildPlan.roads[0].nodes;
+                let startNode = nodes[0];
+                let endNode = nodes[nodes.length - 1];
+                let dist = Math.hypot(startNode.x - endNode.x, startNode.z - endNode.z);
+                
+                // Determine loop: either AI wants multiple laps OR endpoints are within 250m
+                let isLoop = (buildPlan.race && buildPlan.race.laps > 1) || (dist < 80);
+                
+                if (!buildPlan.race) {
+                    buildPlan.race = { checkpoints: [], laps: isLoop ? 3 : 1 };
+                }
+                
+                if (isLoop) {
+                    console.log(`🔄 ENFORCING LOOP: closing road loop programmatically (distance: ${dist.toFixed(1)}m)`);
+                    
+                    // Close the road loop by appending the start node if distance is substantial
+                    if (dist > 5) {
+                        nodes.push({ x: startNode.x, z: startNode.z });
+                    }
+                    
+                    // Force laps to 3 if not already set > 1
+                    if (buildPlan.race.laps <= 1) {
+                        buildPlan.race.laps = 3;
+                    }
+                    
+                    // Calculate heading rotation angle from node 0 to node 1
+                    let dx = nodes[1].x - nodes[0].x;
+                    let dz = nodes[1].z - nodes[0].z;
+                    let heading = Math.atan2(dx, dz);
+                    
+                    // Unify start and finish gate to startNode
+                    buildPlan.race.start = {
+                        x: startNode.x,
+                        z: startNode.z,
+                        heading: heading
+                    };
+                    buildPlan.race.finish = {
+                        x: startNode.x,
+                        z: startNode.z,
+                        heading: heading
+                    };
+                } else {
+                    console.log(`🛣️ ENFORCING POINT-TO-POINT: start and finish at different points (distance: ${dist.toFixed(1)}m)`);
+                    
+                    // Point-to-point track: Ensure start and finish are separate and placed at endpoints
+                    let dxStart = nodes[1].x - nodes[0].x;
+                    let dzStart = nodes[1].z - nodes[0].z;
+                    let startHeading = Math.atan2(dxStart, dzStart);
+                    
+                    buildPlan.race.start = {
+                        x: startNode.x,
+                        z: startNode.z,
+                        heading: startHeading
+                    };
+                    
+                    let lastIdx = nodes.length - 1;
+                    let dxEnd = nodes[lastIdx].x - nodes[lastIdx - 1].x;
+                    let dzEnd = nodes[lastIdx].z - nodes[lastIdx - 1].z;
+                    let endHeading = Math.atan2(dxEnd, dzEnd);
+                    
+                    buildPlan.race.finish = {
+                        x: endNode.x,
+                        z: endNode.z,
+                        heading: endHeading
+                    };
+                    
+                    buildPlan.race.laps = 1;
+                }
+            }
+        }
+        
+        // --- POST-PROCESSING FOR GOLF MODE ---
+        if (mode === 'golf' && buildPlan && Array.isArray(buildPlan.holes)) {
+            buildPlan.holes = buildPlan.holes.filter(h => h && h.tee && h.pin);
+            buildPlan.holes.forEach((h, i) => {
+                if (!h.par || h.par < 3 || h.par > 5) {
+                    // Auto-calculate par from distance
+                    let dist = Math.hypot((h.pin.x || 0) - (h.tee.x || 0), (h.pin.z || 0) - (h.tee.z || 0));
+                    h.par = dist < 180 ? 3 : dist > 380 ? 5 : 4;
+                }
+                h.number = i + 1;
+            });
+            console.log(`⛳ Golf post-processing: ${buildPlan.holes.length} valid holes`);
+        }
+
+        // --- CLAMP all coordinates to grid bounds ---
+        const HALF = 450;
+        function clampCoord(v) { return Math.max(-HALF, Math.min(HALF, v)); }
+        if (buildPlan.roads) {
+            for (let r of buildPlan.roads) {
+                if (Array.isArray(r.nodes)) {
+                    r.nodes.forEach(n => { n.x = clampCoord(n.x); n.z = clampCoord(n.z); });
+                }
+            }
+        }
+        if (buildPlan.sculpts) buildPlan.sculpts.forEach(s => { s.x = clampCoord(s.x); s.z = clampCoord(s.z); });
+        if (buildPlan.trees) buildPlan.trees.forEach(t => { t.x = clampCoord(t.x); t.z = clampCoord(t.z); });
+        if (buildPlan.water) buildPlan.water.forEach(w => { w.x = clampCoord(w.x); w.z = clampCoord(w.z); });
 
         // Count elements for preview
         const summary = {
@@ -986,7 +1217,118 @@ app.post('/api/scan', async (req, res) => {
     }
 });
 
+// --- TEMPLATE PLATES API ---
+
+// Multer config: store uploaded files in memory as Buffers
+const templateUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 20 * 1024 * 1024 } // 20MB per file
+});
+
+// List active templates
+app.get('/api/templates', async (req, res) => {
+    try {
+        const includeAll = req.query.all === 'true';
+        const templates = includeAll
+            ? await templateStorage.listAllTemplates()
+            : await templateStorage.listTemplates();
+        res.json(templates);
+    } catch (err) {
+        console.error('GET /api/templates error:', err);
+        res.status(500).json({ error: 'Failed to list templates' });
+    }
+});
+
+// Get full template data by ID
+app.get('/api/templates/:id', async (req, res) => {
+    try {
+        const template = await templateStorage.getTemplate(req.params.id);
+        if (!template) {
+            return res.status(404).json({ error: 'Template not found' });
+        }
+        res.json(template);
+    } catch (err) {
+        console.error('GET /api/templates/:id error:', err);
+        res.status(500).json({ error: 'Failed to load template' });
+    }
+});
+
+// Save template (admin auth required)
+// Accepts multipart/form-data with binary files + JSON fields
+app.post('/api/templates', templateUpload.fields([
+    { name: 'heightmap', maxCount: 1 },
+    { name: 'biome', maxCount: 1 },
+    { name: 'mask', maxCount: 1 },
+    { name: 'thumb', maxCount: 1 }
+]), async (req, res) => {
+    try {
+        // Admin auth check
+        if (req.body.password !== 'golfadmin123') {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        // Parse meta from JSON string in form field
+        let meta;
+        try {
+            meta = typeof req.body.meta === 'string' ? JSON.parse(req.body.meta) : req.body.meta;
+        } catch (e) {
+            return res.status(400).json({ error: 'Invalid meta JSON' });
+        }
+
+        if (!meta || !meta.id) {
+            return res.status(400).json({ error: 'Missing template meta or id' });
+        }
+
+        // Parse trees and environment from JSON strings
+        let trees, environment;
+        try {
+            trees = req.body.trees ? (typeof req.body.trees === 'string' ? JSON.parse(req.body.trees) : req.body.trees) : undefined;
+            environment = req.body.environment ? (typeof req.body.environment === 'string' ? JSON.parse(req.body.environment) : req.body.environment) : undefined;
+        } catch (e) {
+            return res.status(400).json({ error: 'Invalid trees or environment JSON' });
+        }
+
+        // Build save data from uploaded files + parsed JSON
+        const saveData = {
+            meta,
+            heightmap: req.files?.heightmap?.[0]?.buffer || null,
+            biome:     req.files?.biome?.[0]?.buffer || null,
+            mask:      req.files?.mask?.[0]?.buffer || null,
+            thumb:     req.files?.thumb?.[0]?.buffer || null,
+            trees,
+            environment
+        };
+
+        const savedMeta = await templateStorage.saveTemplate(meta.id, saveData);
+        res.json({ success: true, meta: savedMeta });
+    } catch (err) {
+        console.error('POST /api/templates error:', err);
+        res.status(500).json({ error: 'Failed to save template' });
+    }
+});
+
+// Delete template (admin auth via query param)
+app.delete('/api/templates/:id', async (req, res) => {
+    try {
+        if (req.query.password !== 'golfadmin123') {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        const deleted = await templateStorage.deleteTemplate(req.params.id);
+        if (!deleted) {
+            return res.status(404).json({ error: 'Template not found' });
+        }
+        res.json({ success: true, deleted: req.params.id });
+    } catch (err) {
+        console.error('DELETE /api/templates/:id error:', err);
+        res.status(500).json({ error: 'Failed to delete template' });
+    }
+});
+
 // --- SERVING STATIC FILES (För Railway Deploy) ---
+// Serve template files (heightmap.bin, biome.jpg, etc.) directly
+app.use('/templates', express.static(path.join(__dirname, 'templates')));
+
 // Disable cache for HTML files during development
 app.use((req, res, next) => {
     if (req.path.endsWith('.html') || req.path === '/') {

@@ -504,7 +504,31 @@ window.roadSystem = {
     CFG: ROAD_CFG,
     MATERIALS: Object.keys(ROAD_BIOME_COLORS),
     getRoads: function() { return _roads; },
-    getScene: function() { return _scene; }
+    getScene: function() { return _scene; },
+
+    // Bridge for smart-builder.js — registers a road built via executeSmartRoad
+    // into rally-roads.js for canvas painting + vertex color baking + decals
+    registerExternalRoad: function(entry) {
+        if (!entry || !entry.nodes || entry.nodes.length < 2) return;
+        let nodes = entry.nodes.map(function(n) {
+            let y = n.worldY || 0;
+            if (_getTerrainHeight) {
+                let h = _getTerrainHeight(n.worldX, n.worldZ);
+                if (typeof h === 'number' && isFinite(h)) y = h;
+            }
+            return { worldX: n.worldX, worldY: y, worldZ: n.worldZ };
+        });
+        let curve = buildSpline(nodes);
+        let sampled = curve ? sampleSpline(curve, ROAD_CFG.SAMPLE_DENSITY) : (entry.sampledPoints || []);
+        _roads.push({
+            id: entry.id || uuid(),
+            nodes: nodes,
+            width: entry.width || ROAD_CFG.DEFAULT_WIDTH,
+            material: entry.material || 'GRAVEL',
+            sampledPoints: sampled
+        });
+        bakeAllRoads();
+    }
 };
 
 })();
