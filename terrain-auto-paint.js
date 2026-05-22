@@ -14,9 +14,28 @@
         ALPINE:  { dirt: '#9B8B70', rock: '#8A8478', cliff: '#706860', peak: '#C0B8A8', name: '🏔️ Alpin' },
         DESERT:  { dirt: '#C4A870', rock: '#B89E78', cliff: '#8B7355', peak: '#D4C4A0', name: '🏜️ Öken' },
         VOLCANO: { dirt: '#6B5E50', rock: '#4A4540', cliff: '#2D2825', peak: '#5A5550', name: '🌋 Vulkan' },
-        FOREST:  { dirt: '#708A4D', rock: '#3E5D2A', cliff: '#1E3618', peak: '#90A872', name: '🌲 Grönskande kulle' },
-        HEATHER: { dirt: '#8C866B', rock: '#596643', cliff: '#323D25', peak: '#9E8394', name: '🪻 Ljung & Hed' },
-        JUNGLE:  { dirt: '#608038', rock: '#2A521E', cliff: '#0E250A', peak: '#85AD42', name: '🌴 Djungel' },
+        
+        FOREST:  { 
+            name: '🌲 Grönskande kulle',
+            isBiomeAdaptive: true,
+            GLOBAL: { dirt: '#708A4D', rock: '#3E5D2A', cliff: '#1E3618', peak: '#90A872' },
+            AUTUMN: { dirt: '#9A7D46', rock: '#7A5C28', cliff: '#3D2508', peak: '#D47E2A' },
+            WINTER: { dirt: '#6A6D56', rock: '#4A4C3D', cliff: '#22231A', peak: '#82856E' }
+        },
+        HEATHER: { 
+            name: '🪻 Ljung & Hed',
+            isBiomeAdaptive: true,
+            GLOBAL: { dirt: '#8C866B', rock: '#596643', cliff: '#323D25', peak: '#9E8394' },
+            AUTUMN: { dirt: '#927D60', rock: '#6B5D43', cliff: '#3E3422', peak: '#A36E8D' },
+            WINTER: { dirt: '#757263', rock: '#525445', cliff: '#2D2E24', peak: '#857580' }
+        },
+        JUNGLE:  { 
+            name: '🌴 Djungel',
+            isBiomeAdaptive: true,
+            GLOBAL: { dirt: '#608038', rock: '#2A521E', cliff: '#0E250A', peak: '#85AD42' },
+            AUTUMN: { dirt: '#80682B', rock: '#544A1E', cliff: '#26200A', peak: '#A3A635' },
+            WINTER: { dirt: '#5C5E48', rock: '#3E422C', cliff: '#1B1E10', peak: '#737856' }
+        }
     };
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -108,7 +127,14 @@
             window.pushUndoState();
         }
 
-        const preset   = PRESETS[options.preset || 'NORDIC'] || PRESETS.NORDIC;
+        const presetData = PRESETS[options.preset || 'NORDIC'] || PRESETS.NORDIC;
+        const activeBiome = window.ACTIVE_BIOME || 'GLOBAL';
+        let preset;
+        if (presetData.isBiomeAdaptive) {
+            preset = presetData[activeBiome] || presetData['GLOBAL'];
+        } else {
+            preset = presetData;
+        }
         const canvasW  = pCtx.canvas.width;
         const canvasH  = pCtx.canvas.height;
 
