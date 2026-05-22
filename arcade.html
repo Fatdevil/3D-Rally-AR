@@ -10414,6 +10414,10 @@
         dir.y = 0; // Vi låser den till markplanet
         dir.normalize();
 
+        // Skapa höger-vektor för sidoförflyttning (pan/strafe)
+        let right = new THREE.Vector3();
+        right.crossVectors(dir, new THREE.Vector3(0, 1, 0)).normalize();
+
         if (e.code === 'Space') {
             camera.position.set(camera.position.x, 250, camera.position.z);
             controls.target.set(camera.position.x, 0, camera.position.z - 1);
@@ -10430,12 +10434,20 @@
             controls.target.addScaledVector(dir, -panSpeed);
         }
         if (e.key.toLowerCase() === 'a') {
+            camera.position.addScaledVector(right, -panSpeed);
+            controls.target.addScaledVector(right, -panSpeed);
+        }
+        if (e.key.toLowerCase() === 'd') {
+            camera.position.addScaledVector(right, panSpeed);
+            controls.target.addScaledVector(right, panSpeed);
+        }
+        if (e.key.toLowerCase() === 'q') {
             let orbitSpeed = 0.05;
             let offset = new THREE.Vector3().subVectors(controls.target, camera.position);
             offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), orbitSpeed);
             controls.target.copy(camera.position).add(offset);
         }
-        if (e.key.toLowerCase() === 'd') {
+        if (e.key.toLowerCase() === 'e') {
             let orbitSpeed = 0.05;
             let offset = new THREE.Vector3().subVectors(controls.target, camera.position);
             offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), -orbitSpeed);
