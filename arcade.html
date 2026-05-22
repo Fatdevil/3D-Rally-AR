@@ -940,6 +940,55 @@
                 <button id="btn-toggle-unit" onclick="toggleRangeUnit()" style="display:none; background:#1e293b; color:#eab308; border:1px solid #475569; padding:8px; border-radius:6px; font-weight:bold; cursor:pointer; grid-column:1 / -1; margin-top:5px;">📐 Enhet: Meter</button>
             </div>
         </div>
+
+        <!-- Mask Lock Settings -->
+        <div id="mask-lock-settings-group" class="prop-panel" style="display:none; flex-direction:column; gap:8px;">
+            <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">🔒 Lock Terrain</label>
+            <div style="color:#94a3b8; font-size:10px; line-height:1.4;">
+                Click to place points. Click first point (or right-click) to close the polygon and lock the area.<br>
+                Locked areas (shown in <strong>Red</strong>) prevent roads from being drawn on them.
+            </div>
+            <div style="display:flex; gap:4px; margin-top:4px;">
+                <button onclick="undoMaskLockPoint()" style="flex:1; background:#334155; color:#94a3b8; border:none; padding:8px 4px; border-radius:5px; font-weight:bold; font-size:10px; cursor:pointer;" title="Removes last unclosed point">↩️ Undo Point</button>
+                <button onclick="clearAllMaskLocks()" style="flex:1; background:#ef4444; color:#fff; border:none; padding:8px 4px; border-radius:5px; font-weight:bold; font-size:10px; cursor:pointer;" title="Clears all locked zones on the map">🗑️ Clear All</button>
+            </div>
+            <script>
+                function undoMaskLockPoint() {
+                    if (window._maskLockPolygon && window._maskLockPolygon.length > 0) {
+                        window._maskLockPolygon.pop();
+                        if (window._maskLockMarkers && window._maskLockMarkers.length > 0) {
+                            let marker = window._maskLockMarkers.pop();
+                            scene.remove(marker);
+                            marker.geometry.dispose();
+                            marker.material.dispose();
+                        }
+                        if (window._maskLockLine) {
+                            scene.remove(window._maskLockLine);
+                            window._maskLockLine.geometry.dispose();
+                            window._maskLockLine.material.dispose();
+                            window._maskLockLine = null;
+                        }
+                        if (window._maskLockPolygon.length >= 2) {
+                            let pts = window._maskLockPolygon.map(function(p) { return new THREE.Vector3(p.x, p.y + 1, p.z); });
+                            let lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
+                            let lineMat = new THREE.LineBasicMaterial({ color: 0xff3333, linewidth: 2 });
+                            window._maskLockLine = new THREE.Line(lineGeo, lineMat);
+                            scene.add(window._maskLockLine);
+                        }
+                        console.log('↩️ Removed last point from mask lock polygon. Points left: ' + window._maskLockPolygon.length);
+                    }
+                }
+                function clearAllMaskLocks() {
+                    if (confirm("Är du säker på att du vill ta bort alla låsta områden? Detta låser upp hela banan så att vägar kan ritas överallt.")) {
+                        if (window.TemplateMask) {
+                            window.TemplateMask.clear();
+                            window.TemplateMask.refreshOverlay(TERRAIN_SIZE, scene);
+                            console.log("🔓 All mask locks cleared!");
+                        }
+                    }
+                }
+            </script>
+        </div>
         </div> <!-- End of tab-content-TOOLS -->
 
         <div id="tab-content-ENV" style="display:none; flex-direction:column; gap:10px;">
@@ -3757,6 +3806,7 @@
     };
     
     const waterGeo = planeGeo.clone(); 
+    window._arcadeWaterGeo = waterGeo;
     waterGeo.attributes.position.setUsage(THREE.DynamicDrawUsage);
     let wPos = waterGeo.attributes.position.array;
     window.waterBaseZ = new Float32Array(waterGeo.attributes.position.count);
@@ -3809,6 +3859,7 @@
     // visualOnly=false (default): full rebuild including vertex cleanup
     //   (used on pointerup and after loading)
     function rebuildWaterMask(visualOnly) {
+        window.rebuildWaterMask = rebuildWaterMask;
         if (typeof wCtx === 'undefined' || typeof waterGeo === 'undefined') return;
         
         let wPosArr = waterGeo.attributes.position.array;
@@ -6303,6 +6354,22 @@
                                     window.updateSurroundColors();
                                 }
                                 console.log('  ✅ Horizon set:', JSON.stringify(hz));
+                            }
+                            
+                            // 6. Apply template mask
+                            if (tmplData.maskUrl && window.TemplateMask) {
+                                if (!window.TemplateMask.isInit()) window.TemplateMask.init();
+                                try {
+                                    await window.TemplateMask.importFromURL(tmplData.maskUrl);
+                                    console.log('  ✅ Template mask applied');
+                                    // Refresh overlay if MASK_LOCK is current tool
+                                    if (currentTool === 'MASK_LOCK') {
+                                        window.TemplateMask.createOverlay(TERRAIN_SIZE, scene);
+                                        window.TemplateMask.toggleOverlay(true);
+                                    }
+                                } catch (maskErr) {
+                                    console.warn('  ⚠️ Failed to load template mask:', maskErr);
+                                }
                             }
                             
                             if (loader) loader.querySelector('div:last-child').textContent = 'Building your roads...';
@@ -9636,6 +9703,10 @@
         if (toolName === 'JUMP' && window.activateJumpTool) window.activateJumpTool();
         else if (window.deactivateJumpTool) window.deactivateJumpTool();
         document.getElementById('colorize-picker-group').style.display = (toolName === 'COLORIZE') ? 'flex' : 'none';
+        let maskLockGroup = document.getElementById('mask-lock-settings-group');
+        if (maskLockGroup) {
+            maskLockGroup.style.display = (toolName === 'MASK_LOCK') ? 'flex' : 'none';
+        }
         document.getElementById('putt-settings-group').style.display = (toolName === 'TEST_PUTT') ? 'flex' : 'none';
         document.getElementById('sculpt-settings-group').style.display = (toolName === 'SCULPT' || toolName === 'SMOOTH' || toolName === 'FLATTEN' || toolName === 'PAINT' || toolName === 'WATER' || toolName === 'RIDGE' || toolName === 'NOISE' || toolName === 'RAMP') ? 'flex' : 'none';
         
@@ -9861,12 +9932,20 @@
         planeGeo.computeVertexNormals();
         
         let wPos = waterGeo.attributes.position;
-        for(let i=0; i<wPos.count; i++) { wPos.setZ(i, -2); }
+        for(let i=0; i<wPos.count; i++) { 
+            wPos.setZ(i, -99.0); 
+            if (window.waterBaseZ) window.waterBaseZ[i] = -99.0;
+        }
         wPos.needsUpdate = true;
         
-        pCtx.fillStyle = '#4a782b';
+        let roughColor = (window.CURRENT_BIOME_CONFIG && window.CURRENT_BIOME_CONFIG.roughColor) || '#4a782b';
+        pCtx.fillStyle = roughColor;
         pCtx.fillRect(0,0,4096,4096);
         mapTex.needsUpdate = true;
+        
+        if (typeof window.terrainBiomeData !== 'undefined') {
+            window.terrainBiomeData = pCtx.getImageData(0,0,4096,4096).data;
+        }
         
         wCtx.fillStyle = '#000000';
         wCtx.fillRect(0,0,4096,4096);

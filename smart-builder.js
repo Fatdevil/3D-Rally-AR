@@ -655,6 +655,9 @@ window.executeSmartBunker = function() {
     let lipHeight = lipSlider ? parseFloat(lipSlider.value) : 0.3;
     let shape = window._smartBunkerShape || 'BOWL';
 
+    let waterGeo = window._arcadeWaterGeo;
+    let wPosArray = waterGeo ? waterGeo.attributes.position.array : null;
+
     // Build closed curve
     let curve = new THREE.CatmullRomCurve3(smartGreenPoints, true);
     let numSamples = Math.max(200, smartGreenPoints.length * 40);
@@ -765,17 +768,8 @@ window.executeSmartBunker = function() {
         if(d > maxDist) maxDist = d;
     }
 
-    // Save original heights BEFORE digging (for post-smooth enforcement)
-    let origHeights = new Float32Array((gxEnd - gxStart + 1) * (gzEnd - gzStart + 1));
-    for(let gz = gzStart; gz <= gzEnd; gz++) {
-        for(let gx = gxStart; gx <= gxEnd; gx++) {
-            let idx = gz * (window.TERRAIN_SEGS+1) + gx;
-            let oi = (gz - gzStart) * (gxEnd - gxStart + 1) + (gx - gxStart);
-            origHeights[oi] = positions[idx*3+2];
-        }
-    }
-
-    // Single pass for performance
+    // === PASS 1: DIGGING ===
+    // Dig the bunker relative to the terrain, using continuous blend distances and shapes (FLAT / BOWL)
     for(let gz = gzStart; gz <= gzEnd; gz++) {
         for(let gx = gxStart; gx <= gxEnd; gx++) {
             let idx = gz * (window.TERRAIN_SEGS+1) + gx;
@@ -783,76 +777,80 @@ window.executeSmartBunker = function() {
             let vz = -positions[idx*3+1];
 
             let isInside = pointInPolygon(vx, vz, densePts);
-            if(!isInside) continue; // ONLY affect terrain inside polygon
+            if(!isInside) continue; // ONLY dig inside the polygon
 
-            let distEdge = distToPolygon(vx, vz, densePts);
-
-            let currentH = positions[idx*3+2];
-
-            // HYBRID dig: flat floor + per-vertex, whichever is LOWER
-            // - Flat floor (minEdgeH - depth): always below the LOWEST edge → visible from all sides
-            // - Per-vertex (currentH - depth): extra dig on high-side
-            // Math.min picks the deeper cut → proper bunker on all terrain
-            let digDepth = depth;
-            let flatFloor = minEdgeH - depth;
-
-            // Bowl shape: deeper in center, shallower at edges
-            if(shape === 'BOWL') {
-                let distCenter = Math.sqrt((vx - cx)**2 + (vz - cz)**2);
-                let normalizedDist = distCenter / (maxDist + 0.001);
-                let bowlFactor = 1.0 - normalizedDist * normalizedDist;
-                digDepth = depth * (0.4 + 0.6 * bowlFactor);
-                flatFloor = minEdgeH - depth * (0.4 + 0.6 * bowlFactor);
+            // Remove water inside the bunker
+            if (wPosArray) {
+                wPosArray[idx*3 + 2] = -99.0;
+                if (window.waterBaseZ) {
+                    window.waterBaseZ[idx] = -99.0;
+                }
             }
 
-            // Pick the deeper of flat-floor vs per-vertex
-            let targetHeight = Math.min(flatFloor, currentH - digDepth);
+            let distEdge = distToPolygon(vx, vz, densePts);
+            let currentH = positions[idx*3+2];
 
-            // Directional edge blend: wider ramp on face/lip side for gentle slope
+            // Determine dig depth based on shape (FLAT or BOWL)
+            let digDepth = depth;
+            if (shape === 'BOWL') {
+                let distCenter = Math.sqrt((vx - cx)**2 + (vz - cz)**2);
+                let normalizedDist = distCenter / (maxDist + 0.001);
+                let bowlFactor = 1.0 - Math.min(1.0, normalizedDist * normalizedDist);
+                // Bowl is deeper in center (100% of depth) and shallower at edges (40% of depth)
+                digDepth = depth * (0.4 + 0.6 * bowlFactor);
+            }
+
+            let targetHeight = currentH - digDepth;
+
+            // Continuous blend distance calculation based on angle to face direction
             let relX = vx - cx;
             let relZ = vz - cz;
             let faceDot = relX * faceDx + relZ * faceDz;
-            let isFaceSide = faceDot > 0;
+            let distCenter = Math.sqrt(relX*relX + relZ*relZ);
+            let cosTheta = distCenter > 0 ? (faceDot / distCenter) : 0;
+            let t = (cosTheta + 1.0) / 2.0; // range [0, 1]
             
-            // Face side: 10m gentle slope for natural walk-in, back side: 3.5m steep bowl wall
-            let blendDist = isFaceSide ? 10.0 : 3.5;
+            // Smoothly vary blendDist between 2.5m (back side) and 5.0m (face side)
+            let blendDist = 2.5 + (5.0 - 2.5) * t;
             let edgeBlend = Math.min(1.0, distEdge / blendDist);
             
-            // Use smoothstep for even smoother transition (S-curve instead of linear)
+            // Cubic smoothstep transition
             edgeBlend = edgeBlend * edgeBlend * (3.0 - 2.0 * edgeBlend);
 
-            // Apply: blend from current terrain to target
+            // Dig down towards target
             let blendedDig = currentH + (targetHeight - currentH) * edgeBlend;
-            
-            // Phase 2: LIP — raise edge on face side (allowed to raise, but only where needed)
-            if(lipHeight > 0) {
+
+            // Phase 2: LIP — raise edge on green-facing side (relative to local terrain)
+            if (lipHeight > 0) {
                 let normalized = faceDot / (faceLen + 0.001);
-                
-                let edgeProximity = 1.0 - Math.min(1.0, distEdge / 5.0); // Wider lip zone (5m)
-                if(normalized > 0 && edgeProximity > 0) {
-                    let lipTarget = baseH + lipHeight;
-                    // Only add lip if terrain is BELOW the lip target
-                    if (currentH < lipTarget) {
-                        // Quadratic falloff for softer, more natural lip transition
-                        let lipInfluence = edgeProximity * edgeProximity * Math.min(1.0, normalized);
-                        let lipAdd = (lipTarget - currentH) * lipInfluence;
-                        blendedDig += lipAdd;
-                    }
+                let edgeProximity = 1.0 - Math.min(1.0, distEdge / 5.0); // 5m lip zone
+                if (normalized > 0 && edgeProximity > 0) {
+                    // Quadratic falloff + directional alignment
+                    let lipInfluence = edgeProximity * edgeProximity * Math.min(1.0, normalized);
+                    let lipAdd = lipHeight * lipInfluence;
+                    blendedDig += lipAdd;
                 }
             }
-            
+
             positions[idx*3+2] = blendedDig;
         }
     }
-    // === AUTO-SMOOTH PASS (golden backup values) ===
-    // 6 passes, tight margin, proven strengths
+
+    // === PASS 2: AUTO-SMOOTH EDGES ===
+    // Run 5 passes of unbiased Laplacian smoothing on the transition zone (creases at bunker edges)
     let _smoothStride = window.TERRAIN_SEGS + 1;
     let smGxStart = Math.max(0, gxStart - 3);
     let smGxEnd = Math.min(window.TERRAIN_SEGS, gxEnd + 3);
     let smGzStart = Math.max(0, gzStart - 3);
     let smGzEnd = Math.min(window.TERRAIN_SEGS, gzEnd + 3);
 
-    for(let smPass = 0; smPass < 6; smPass++) {
+    for(let smPass = 0; smPass < 5; smPass++) {
+        // Copy current heights to a temp buffer for unbiased smoothing
+        let tempHeights = new Float32Array(positions.length / 3);
+        for (let i = 0; i < tempHeights.length; i++) {
+            tempHeights[i] = positions[i*3 + 2];
+        }
+
         for(let gz = smGzStart; gz <= smGzEnd; gz++) {
             for(let gx = smGxStart; gx <= smGxEnd; gx++) {
                 let idx = gz * _smoothStride + gx;
@@ -861,24 +859,24 @@ window.executeSmartBunker = function() {
 
                 let isInside = pointInPolygon(vx, vz, densePts);
                 let distEdge = distToPolygon(vx, vz, densePts);
-                
-                // Smooth inside the bunker, and a margin outside to blend the lip
-                if(isInside || distEdge < 2.5) {
+
+                // Smooth inside the bunker, and a margin outside (up to 2.5m) to blend the edges nicely
+                if (isInside || distEdge < 2.5) {
                     let nCount = 0;
                     let nSum = 0;
-                    if (gz > 0) { nSum += positions[((gz-1)*_smoothStride + gx)*3 + 2]; nCount++; }
-                    if (gz < window.TERRAIN_SEGS) { nSum += positions[((gz+1)*_smoothStride + gx)*3 + 2]; nCount++; }
-                    if (gx > 0) { nSum += positions[(gz*_smoothStride + gx-1)*3 + 2]; nCount++; }
-                    if (gx < window.TERRAIN_SEGS) { nSum += positions[(gz*_smoothStride + gx+1)*3 + 2]; nCount++; }
+                    if (gz > 0) { nSum += tempHeights[(gz-1)*_smoothStride + gx]; nCount++; }
+                    if (gz < window.TERRAIN_SEGS) { nSum += tempHeights[(gz+1)*_smoothStride + gx]; nCount++; }
+                    if (gx > 0) { nSum += tempHeights[gz*_smoothStride + gx-1]; nCount++; }
+                    if (gx < window.TERRAIN_SEGS) { nSum += tempHeights[gz*_smoothStride + gx+1]; nCount++; }
                     
                     if (nCount > 0) {
                         let localAvg = nSum / nCount;
                         // Strength: strong at edge to remove jaggedness, milder further away
-                        let smoothStrength = 0.7; 
-                        if(isInside && distEdge > 1.5) smoothStrength = 0.2; // Keep center bowl shape intact
-                        if(!isInside && distEdge > 1.5) smoothStrength = 0.3; // Fade out smoothing outside
+                        let smoothStrength = 0.6;
+                        if (isInside && distEdge > 2.0) smoothStrength = 0.15; // Keep center shape intact
+                        if (!isInside && distEdge > 1.5) smoothStrength = 0.25; // Fade out smoothing outside
                         
-                        positions[idx*3 + 2] += (localAvg - positions[idx*3 + 2]) * smoothStrength;
+                        positions[idx*3 + 2] += (localAvg - tempHeights[idx]) * smoothStrength;
                     }
                 }
             }
@@ -895,6 +893,11 @@ window.executeSmartBunker = function() {
     if(window.slopeOverlayActive) window.updateSlopeOverlay();
     if(window.contourLinesActive) window.updateContourLines();
     if(window.elevationHeatmapActive) window.updateElevationHeatmap();
+
+    if (wPosArray && window.rebuildWaterMask) {
+        waterGeo.attributes.position.needsUpdate = true;
+        window.rebuildWaterMask(false);
+    }
 
     clearSmartGreen();
 };
@@ -2142,54 +2145,23 @@ window.executeSplineSmartGreen = function() {
     // Build expanded foregreen polygon for surround hill start
     let expandedFG = foregreenWidth > 0 ? offsetPolygon(densePts, foregreenWidth) : densePts;
 
-    // === PASS 1: SURROUND HILL (raise terrain around green — distance-based, no jagged edges) ===
-    if (surroundHeight > 0) {
-        let totalSpread = foregreenWidth + surroundRadius;
-        for(let gz = gzStart; gz <= gzEnd; gz++) {
-            for(let gx = gxStart; gx <= gxEnd; gx++) {
-                let idx = gz * (window.TERRAIN_SEGS+1) + gx;
-                let vx = positions[idx*3];
-                let vz = -positions[idx*3+1];
-
-                // Use signed distance: negative = inside green, positive = outside
-                let isInside = pointInPolygon(vx, vz, densePts);
-                let distEdge = distToPolygon(vx, vz, densePts);
-                let signedDist = isInside ? -distEdge : distEdge;
-
-                // Skip vertices too far outside
-                if (signedDist > totalSpread) continue;
-
-                let currentH = positions[idx*3+2];
-                let hillH = 0;
-
-                if (signedDist <= 0) {
-                    // Inside green polygon: full height
-                    hillH = surroundHeight;
-                } else if (signedDist <= foregreenWidth) {
-                    // Foregreen zone: full height (smooth transition handled naturally)
-                    hillH = surroundHeight;
-                } else {
-                    // Surround zone: smooth cosine falloff from foregreen edge
-                    let distFromFG = signedDist - foregreenWidth;
-                    let t = distFromFG / surroundRadius;
-                    hillH = surroundHeight * 0.5 * (1 + Math.cos(t * Math.PI));
-                }
-
-                // Apply tilt
-                if (tiltEnabled && signedDist > 0) {
-                    let proj = (vx - polyCentX) * tiltDirX + (vz - polyCentZ) * tiltDirZ;
-                    let tiltFade = Math.min(1, signedDist / totalSpread);
-                    hillH += (proj / tiltMaxDist) * tiltMaxDist * tiltPct * (1 - tiltFade);
-                }
-
-                if (hillH > 0.01) {
-                    positions[idx*3+2] = currentH + hillH;
-                }
-            }
+    // === PASS 1: EXTENDED PLATEAU FLATTENING ===
+    // We flatten the green + foregreen, and taper down to original terrain over a transition zone
+    let taperDist = 5.0;
+    if (window._raisedGreenActive && surroundHeight > 0) {
+        taperDist = surroundRadius;
+    }
+    
+    // Save original heights of the bounding box before modifying
+    let origHeights = new Float32Array((gxEnd - gxStart + 1) * (gzEnd - gzStart + 1));
+    for(let gz = gzStart; gz <= gzEnd; gz++) {
+        for(let gx = gxStart; gx <= gxEnd; gx++) {
+            let idx = gz * (window.TERRAIN_SEGS+1) + gx;
+            let oi = (gz - gzStart) * (gxEnd - gxStart + 1) + (gx - gxStart);
+            origHeights[oi] = positions[idx*3+2];
         }
     }
 
-    // === PASS 2: FLATTEN GREEN + CONTOURS (on top of raised terrain) ===
     for(let gz = gzStart; gz <= gzEnd; gz++) {
         for(let gx = gxStart; gx <= gxEnd; gx++) {
             let idx = gz * (window.TERRAIN_SEGS+1) + gx;
@@ -2197,30 +2169,121 @@ window.executeSplineSmartGreen = function() {
             let vz = -positions[idx*3+1];
 
             let isInside = pointInPolygon(vx, vz, densePts);
-            if (!isInside) continue; // Only flatten the actual green polygon
+            let distEdge = distToPolygon(vx, vz, densePts);
+            let signedDist = isInside ? -distEdge : distEdge;
 
-            let targetHeight = baseH + surroundHeight;
-            let seedX = vx + window._sgSeedOffsetX;
-            let seedZ = vz + window._sgSeedOffsetZ;
-            if(difficulty === 'EASY') {
-                targetHeight += Math.sin(seedX * 0.1) * Math.cos(seedZ * 0.1) * 0.10;
-            } else if(difficulty === 'MED') {
-                targetHeight += Math.sin(seedX * 0.12) * Math.cos(seedZ * 0.12) * 0.18;
-                targetHeight += Math.sin(seedX * 0.07 + seedZ * 0.05) * 0.08;
-            } else if(difficulty === 'HARD') {
-                targetHeight += Math.sin(seedX * 0.15) * Math.cos(seedZ * 0.12) * 0.22
-                              + Math.sin(seedZ * 0.25 + seedX * 0.08) * 0.06
-                              + Math.cos(seedX * 0.20) * Math.sin(seedZ * 0.18) * 0.05;
-            }
+            // Skip vertices too far outside
+            if (signedDist > foregreenWidth + taperDist) continue;
 
-            // Apply tilt
+            // Define target height on the plateau (including tilt if active)
+            let tiltVal = 0;
             if (tiltEnabled) {
                 let proj = (vx - polyCentX) * tiltDirX + (vz - polyCentZ) * tiltDirZ;
-                targetHeight += (proj / tiltMaxDist) * tiltMaxDist * tiltPct;
+                tiltVal = (proj / tiltMaxDist) * tiltMaxDist * tiltPct;
+            }
+            let targetH = baseH + surroundHeight + tiltVal;
+
+            let oi = (gz - gzStart) * (gxEnd - gxStart + 1) + (gx - gxStart);
+            let originalH = origHeights[oi];
+
+            // Calculate flattening influence based on distance
+            let influence = 0;
+            if (signedDist <= foregreenWidth) {
+                // Inside green and foregreen: 100% flattened to plateau
+                influence = 1.0;
+            } else if (signedDist <= foregreenWidth + taperDist) {
+                // Taper zone outside foregreen: smooth fade to original terrain
+                let t = (signedDist - foregreenWidth) / taperDist;
+                influence = 1.0 - t;
+                influence = influence * influence * (3.0 - 2.0 * influence); // cubic smoothstep
             }
 
-            let currentH = positions[idx*3+2];
-            positions[idx*3+2] = currentH + (targetHeight - currentH) * 0.95;
+            if (influence > 0) {
+                positions[idx*3+2] = originalH + (targetH - originalH) * influence;
+            }
+        }
+    }
+
+    // === PASS 2: AUTO-SMOOTH PLATEAU EDGES ===
+    // Run unbiased Laplacian smoothing on the transition zone (creases at plateau edge and taper end)
+    let _smoothStride = window.TERRAIN_SEGS + 1;
+    let smGxStart = Math.max(0, gxStart - 2);
+    let smGxEnd = Math.min(window.TERRAIN_SEGS, gxEnd + 2);
+    let smGzStart = Math.max(0, gzStart - 2);
+    let smGzEnd = Math.min(window.TERRAIN_SEGS, gzEnd + 2);
+
+    for(let smPass = 0; smPass < 5; smPass++) {
+        // Copy current heights to a temp buffer for unbiased smoothing
+        let tempHeights = new Float32Array(positions.length / 3);
+        for (let i = 0; i < tempHeights.length; i++) {
+            tempHeights[i] = positions[i*3 + 2];
+        }
+
+        for(let gz = smGzStart; gz <= smGzEnd; gz++) {
+            for(let gx = smGxStart; gx <= smGxEnd; gx++) {
+                let idx = gz * _smoothStride + gx;
+                let vx = positions[idx*3];
+                let vz = -positions[idx*3+1];
+
+                let isInside = pointInPolygon(vx, vz, densePts);
+                let distEdge = distToPolygon(vx, vz, densePts);
+                let signedDist = isInside ? -distEdge : distEdge;
+
+                // Smooth from 2.0m inside green to 2.0m outside the taper zone
+                if (signedDist > -2.0 && signedDist < foregreenWidth + taperDist + 2.0) {
+                    let nCount = 0;
+                    let nSum = 0;
+                    if (gz > 0) { nSum += tempHeights[(gz-1)*_smoothStride + gx]; nCount++; }
+                    if (gz < window.TERRAIN_SEGS) { nSum += tempHeights[(gz+1)*_smoothStride + gx]; nCount++; }
+                    if (gx > 0) { nSum += tempHeights[gz*_smoothStride + gx-1]; nCount++; }
+                    if (gx < window.TERRAIN_SEGS) { nSum += tempHeights[gz*_smoothStride + gx+1]; nCount++; }
+                    
+                    if (nCount > 0) {
+                        let localAvg = nSum / nCount;
+                        let smoothStrength = 0.5;
+                        positions[idx*3 + 2] += (localAvg - tempHeights[idx]) * smoothStrength;
+                    }
+                }
+            }
+        }
+    }
+
+    // === PASS 3: APPLY GREEN CONTOURS & UNDULATIONS ===
+    // Add difficulty-based hills inside the green polygon, blending to 0 at green boundary
+    for(let gz = gzStart; gz <= gzEnd; gz++) {
+        for(let gx = gxStart; gx <= gxEnd; gx++) {
+            let idx = gz * (window.TERRAIN_SEGS+1) + gx;
+            let vx = positions[idx*3];
+            let vz = -positions[idx*3+1];
+
+            let isInside = pointInPolygon(vx, vz, densePts);
+            if (!isInside) continue;
+
+            let undulation = 0;
+            let seedX = vx + window._sgSeedOffsetX;
+            let seedZ = vz + window._sgSeedOffsetZ;
+
+            if(difficulty === 'EASY') {
+                undulation += Math.sin(seedX * 0.1) * Math.cos(seedZ * 0.1) * 0.10;
+            } else if(difficulty === 'MED') {
+                undulation += Math.sin(seedX * 0.12) * Math.cos(seedZ * 0.12) * 0.18;
+                undulation += Math.sin(seedX * 0.07 + seedZ * 0.05) * 0.08;
+            } else if(difficulty === 'HARD') {
+                undulation += Math.sin(seedX * 0.15) * Math.cos(seedZ * 0.12) * 0.22
+                            + Math.sin(seedZ * 0.25 + seedX * 0.08) * 0.06
+                            + Math.cos(seedX * 0.20) * Math.sin(seedZ * 0.18) * 0.05;
+            }
+
+            // Blend undulation near green boundary to make it fade out at foregreen edge
+            let distEdge = distToPolygon(vx, vz, densePts);
+            let blendWidth = 2.5; 
+            if (distEdge < blendWidth) {
+                let t = distEdge / blendWidth;
+                let smoothT = t * t * (3 - 2 * t);
+                positions[idx*3+2] += undulation * smoothT;
+            } else {
+                positions[idx*3+2] += undulation;
+            }
         }
     }
 
@@ -2236,23 +2299,121 @@ window.executeSplineSmartGreen = function() {
     if(window.elevationHeatmapActive) window.updateElevationHeatmap();
 
 
-    // Auto-place Flag at centroid
+    // Auto-place Flag at centroid (or fallback inside if centroid is outside/near boundary)
     let cx = 0, cz = 0;
     for(let pt of smartGreenPoints) { cx += pt.x; cz += pt.z; }
     cx /= smartGreenPoints.length;
     cz /= smartGreenPoints.length;
-    let surf = window.localGetTerrainAt(cx, -cz);
+
+    // Helper functions for Point-in-Polygon (PIP) and Distance-to-Boundary using densePts (smooth curve)
+    function isPointInGreenPoly(x, z, poly) {
+        let inside = false;
+        for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+            let xi = poly[i].x, zi = poly[i].z;
+            let xj = poly[j].x, zj = poly[j].z;
+            if (((zi > z) !== (zj > z)) && (x < (xj - xi) * (z - zi) / (zj - zi) + xi)) {
+                inside = !inside;
+            }
+        }
+        return inside;
+    }
+
+    function distToGreenBoundary(px, pz, poly) {
+        let minDist = Infinity;
+        for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+            let ax = poly[j].x, az = poly[j].z;
+            let bx = poly[i].x, bz = poly[i].z;
+            let dx = bx - ax, dz = bz - az;
+            let len2 = dx * dx + dz * dz;
+            let t = len2 > 0 ? Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / len2)) : 0;
+            let projx = ax + t * dx;
+            let projz = az + t * dz;
+            let dist = Math.hypot(px - projx, pz - projz);
+            if (dist < minDist) minDist = dist;
+        }
+        return minDist;
+    }
+
+    let flagX = cx;
+    let flagZ = cz;
+
+    // Verify if centroid is inside and sufficiently far from green boundary (at least 2.5 meters)
+    if (!isPointInGreenPoly(cx, cz, densePts) || distToGreenBoundary(cx, cz, densePts) < 2.5) {
+        let candidates = [];
+
+        // Candidate 1: Centroid (if inside, even if close to boundary)
+        if (isPointInGreenPoly(cx, cz, densePts)) {
+            candidates.push({ x: cx, z: cz });
+        }
+
+        // Candidates 2: 15x15 uniform grid inside bounding box of green
+        let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+        for (let pt of densePts) {
+            if (pt.x < minX) minX = pt.x;
+            if (pt.x > maxX) maxX = pt.x;
+            if (pt.z < minZ) minZ = pt.z;
+            if (pt.z > maxZ) maxZ = pt.z;
+        }
+
+        let steps = 15;
+        for (let ix = 0; ix <= steps; ix++) {
+            let px = minX + (maxX - minX) * (ix / steps);
+            for (let iz = 0; iz <= steps; iz++) {
+                let pz = minZ + (maxZ - minZ) * (iz / steps);
+                if (isPointInGreenPoly(px, pz, densePts)) {
+                    candidates.push({ x: px, z: pz });
+                }
+            }
+        }
+
+        // Candidates 3: Midpoints between centroid and each user-clicked point
+        for (let pt of smartGreenPoints) {
+            let mx = (cx + pt.x) / 2;
+            let mz = (cz + pt.z) / 2;
+            if (isPointInGreenPoly(mx, mz, densePts)) {
+                candidates.push({ x: mx, z: mz });
+            }
+        }
+
+        // Select the candidate furthest from any boundary (pole of inaccessibility)
+        let bestCandidate = null;
+        let maxDist = -1;
+        for (let cand of candidates) {
+            let d = distToGreenBoundary(cand.x, cand.z, densePts);
+            if (d > maxDist) {
+                maxDist = d;
+                bestCandidate = cand;
+            }
+        }
+
+        if (bestCandidate) {
+            flagX = bestCandidate.x;
+            flagZ = bestCandidate.z;
+            console.log("⛳ Auto-shifted flag to optimal green position:", flagX, flagZ, "dist to boundary:", maxDist);
+        } else {
+            // Fallback: pick the first vertex shifted slightly towards the centroid
+            if (smartGreenPoints.length > 0) {
+                let first = smartGreenPoints[0];
+                let dx = cx - first.x, dz = cz - first.z;
+                let len = Math.hypot(dx, dz) + 0.001;
+                flagX = first.x + (dx / len) * 3;
+                flagZ = first.z + (dz / len) * 3;
+            }
+        }
+    }
+
+    let surf = window.localGetTerrainAt(flagX, -flagZ);
     let cy = surf ? surf.z : baseH;
 
     hole = window.courseHoles[window.currentHoleIndex];
     if (hole.flagMesh) window._arcadeScene.remove(hole.flagMesh);
-    hole.flag = { x: cx, y: cy, z: cz };
-    hole.flagMesh = window.createFlagObject(cx, cy, cz);
+    hole.flag = { x: flagX, y: cy, z: flagZ };
+    hole.flagMesh = window.createFlagObject(flagX, cy, flagZ);
     
     if(!hole.pins) hole.pins = {};
-    hole.pins.easy = { x: cx, y: cy, z: cz };
-    hole.pins.medium = { x: cx, y: cy, z: cz };
-    hole.pins.hard = { x: cx, y: cy, z: cz };
+    hole.pins.easy = { x: flagX, y: cy, z: flagZ };
+    hole.pins.medium = { x: flagX, y: cy, z: flagZ };
+    hole.pins.hard = { x: flagX, y: cy, z: flagZ };
 
     // After green is built, auto-switch to AIM if tees exist but no aim point
     if((hole.tees.yellow || hole.tees.red || hole.tees.white || hole.tees.black) && !hole.aimPoint) {
