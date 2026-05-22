@@ -14,6 +14,9 @@
         ALPINE:  { dirt: '#9B8B70', rock: '#8A8478', cliff: '#706860', peak: '#C0B8A8', name: '🏔️ Alpin' },
         DESERT:  { dirt: '#C4A870', rock: '#B89E78', cliff: '#8B7355', peak: '#D4C4A0', name: '🏜️ Öken' },
         VOLCANO: { dirt: '#6B5E50', rock: '#4A4540', cliff: '#2D2825', peak: '#5A5550', name: '🌋 Vulkan' },
+        FOREST:  { dirt: '#708A4D', rock: '#3E5D2A', cliff: '#1E3618', peak: '#90A872', name: '🌲 Grönskande kulle' },
+        HEATHER: { dirt: '#8C866B', rock: '#596643', cliff: '#323D25', peak: '#9E8394', name: '🪻 Ljung & Hed' },
+        JUNGLE:  { dirt: '#608038', rock: '#2A521E', cliff: '#0E250A', peak: '#85AD42', name: '🌴 Djungel' },
     };
 
     // ── Helpers ───────────────────────────────────────────────────────────────
