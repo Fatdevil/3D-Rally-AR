@@ -2689,20 +2689,92 @@
         for (let i = 0; i < data.length; i += 4) {
             let r = data[i], g = data[i+1], b = data[i+2];
             
-            // Find the TWO closest old biome colors
+            // Find the closest old biome colors (quick flat check)
             let best1 = -1, best1Dist = 999999;
             let best2 = -1, best2Dist = 999999;
             
+            let flatDists = [];
             for (let j = 0; j < colorMap.length; j++) {
                 let dr = r - colorMap[j].old.r;
                 let dg = g - colorMap[j].old.g;
                 let db = b - colorMap[j].old.b;
-                let dist = dr*dr + dg*dg + db*db;
-                if (dist < best1Dist) {
+                let distFlat = dr*dr + dg*dg + db*db;
+                flatDists.push(distFlat);
+                
+                if (distFlat < best1Dist) {
                     best2 = best1; best2Dist = best1Dist;
-                    best1 = j; best1Dist = dist;
-                } else if (dist < best2Dist) {
-                    best2 = j; best2Dist = dist;
+                    best1 = j; best1Dist = distFlat;
+                } else if (distFlat < best2Dist) {
+                    best2 = j; best2Dist = distFlat;
+                }
+            }
+            
+            // If the closest flat distance is >= 100 and we have noise, try noise subtraction on top candidates
+            if (best1Dist >= 100 && window.fbm) {
+                let pxIdx = i / 4;
+                let cx = pxIdx % 4096;
+                let cy = Math.floor(pxIdx / 4096);
+                
+                let blendEl = document.getElementById('blend-intensity');
+                let factor = blendEl ? (parseInt(blendEl.value) || 0) / 100 : 0.5;
+                
+                const surfaceParams = {
+                    green:     { coarse: 10, fine: 4,  freqC: 0.015, freqF: 0.06 },
+                    foregreen: { coarse: 12, fine: 5,  freqC: 0.018, freqF: 0.07 },
+                    fairway:   { coarse: 14, fine: 5,  freqC: 0.012, freqF: 0.05 },
+                    tee:       { coarse: 8,  fine: 3,  freqC: 0.02,  freqF: 0.08 },
+                    semi:      { coarse: 16, fine: 6,  freqC: 0.01,  freqF: 0.04 },
+                    rough:     { coarse: 22, fine: 9,  freqC: 0.008, freqF: 0.035 },
+                    fescue:    { coarse: 20, fine: 8,  freqC: 0.01,  freqF: 0.04 },
+                    bunker:    { coarse: 18, fine: 7,  freqC: 0.025, freqF: 0.1  },
+                    waste:     { coarse: 16, fine: 6,  freqC: 0.015, freqF: 0.06 },
+                    ob:        { coarse: 0,  fine: 0,  freqC: 0,     freqF: 0 }
+                };
+                
+                let testCandidates = [];
+                if (best1 >= 0 && flatDists[best1] < 6000) testCandidates.push(best1);
+                if (best2 >= 0 && flatDists[best2] < 6000) testCandidates.push(best2);
+                
+                let best1NoisyDist = best1Dist;
+                let best2NoisyDist = best2Dist;
+                
+                testCandidates.forEach(candIdx => {
+                    let key = colorMap[candIdx].key;
+                    let p = surfaceParams[key] || { coarse: 0, fine: 0, freqC: 0, freqF: 0 };
+                    
+                    let noiseR = 0, noiseG = 0, noiseB = 0;
+                    if (factor > 0 && p.freqC > 0) {
+                        const n1 = window.fbm(cx * p.freqC, cy * p.freqC, 3, 2.0, 0.5);
+                        const n2 = window.fbm(cx * p.freqF, cy * p.freqF, 2, 2.0, 0.5);
+                        noiseR = (n1 * p.coarse + n2 * p.fine) * factor;
+                        noiseG = (n1 * p.coarse * 1.2 + n2 * p.fine) * factor;
+                        noiseB = (n1 * p.coarse * 0.7 + n2 * p.fine * 0.8) * factor;
+                    }
+                    
+                    let dr = r - noiseR - colorMap[candIdx].old.r;
+                    let dg = g - noiseG - colorMap[candIdx].old.g;
+                    let db = b - noiseB - colorMap[candIdx].old.b;
+                    let distNoisy = dr*dr + dg*dg + db*db;
+                    
+                    let dist = Math.min(flatDists[candIdx], distNoisy);
+                    if (candIdx === best1) {
+                        best1NoisyDist = dist;
+                    } else if (candIdx === best2) {
+                        best2NoisyDist = dist;
+                    }
+                });
+                
+                if (best1NoisyDist > best2NoisyDist) {
+                    let tmp = best1;
+                    best1 = best2;
+                    best2 = tmp;
+                    
+                    let tmpD = best1NoisyDist;
+                    best1Dist = best2NoisyDist;
+                    best2Dist = tmpD;
+                } else {
+                    best1Dist = best1NoisyDist;
+                    best2Dist = best2NoisyDist;
                 }
             }
             
