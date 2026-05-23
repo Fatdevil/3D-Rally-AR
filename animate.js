@@ -34,7 +34,6 @@
 
         applySculpting();
 
-        // === WIND-DRIVEN WATER WAVES ===
         if (typeof waterGeo !== 'undefined' && waterGeo && waterGeo.attributes && waterGeo.attributes.position) {
             let wArr = waterGeo.attributes.position.array;
             let windMph = window.currentWindMph || 0;
@@ -45,11 +44,24 @@
             if (amp > 0.001) {
                 let wdx = Math.cos(windRad);
                 let wdy = Math.sin(windRad);
-                for (let i = 0; i < wArr.length; i += 3) {
-                    let baseZ = window.waterBaseZ[i / 3];
-                    if (baseZ > -90) {
-                        let phase = wArr[i] * wdx + wArr[i + 1] * wdy;
-                        wArr[i + 2] = baseZ + Math.sin(t * 2.5 + phase * 0.3) * amp;
+                let wSegsL = waterGeo.parameters ? waterGeo.parameters.widthSegments : 50;
+                let tSegsL = window.TERRAIN_SEGS || 600;
+                let halfL = (waterGeo.parameters ? waterGeo.parameters.width : (window.TERRAIN_SIZE || 900)) / 2;
+                let wStepL = halfL * 2 / wSegsL;
+                let tStepL = halfL * 2 / tSegsL;
+                for (let wz = 0; wz <= wSegsL; wz++) {
+                    for (let wx = 0; wx <= wSegsL; wx++) {
+                        let vi = (wz * (wSegsL + 1) + wx) * 3;
+                        let worldX = -halfL + wx * wStepL;
+                        let worldZ = -halfL + wz * wStepL;
+                        let txI = Math.min(tSegsL, Math.max(0, Math.round((worldX + halfL) / tStepL)));
+                        let tzI = Math.min(tSegsL, Math.max(0, Math.round((worldZ + halfL) / tStepL)));
+                        let tIdx = tzI * (tSegsL + 1) + txI;
+                        let baseZ = window.waterBaseZ[tIdx];
+                        if (baseZ > -90) {
+                            let phase = wArr[vi] * wdx + wArr[vi + 1] * wdy;
+                            wArr[vi + 2] = baseZ + Math.sin(t * 2.5 + phase * 0.3) * amp;
+                        }
                     }
                 }
                 waterGeo.attributes.position.needsUpdate = true;

@@ -3999,15 +3999,61 @@
         );
     };
     
-    const waterGeo = planeGeo.clone(); 
+    // --- LOW-RES WATER VISUAL (50x50 = 5000 tris instead of 720,000) ---
+    const WATER_SEGS = 50;
+    const waterGeo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, WATER_SEGS, WATER_SEGS);
     window._arcadeWaterGeo = waterGeo;
     waterGeo.attributes.position.setUsage(THREE.DynamicDrawUsage);
-    let wPos = waterGeo.attributes.position.array;
-    window.waterBaseZ = new Float32Array(waterGeo.attributes.position.count);
-    for(let i=0; i<waterGeo.attributes.position.count; i++) {
-        wPos[i*3 + 2] = -99.0;
-        window.waterBaseZ[i] = -99.0;
-    }
+    // Push all visual water vertices below ground
+    let wVisPos = waterGeo.attributes.position.array;
+    for (let i = 2; i < wVisPos.length; i += 3) wVisPos[i] = -99.0;
+    
+    // --- WATER DATA ARRAY (terrain-res, for physics/painting/saving) ---
+    let terrainVertCount = (TERRAIN_SEGS + 1) * (TERRAIN_SEGS + 1);
+    window.waterData = new Float32Array(terrainVertCount).fill(-99);
+    window.waterBaseZ = new Float32Array(terrainVertCount).fill(-99);
+    
+    // Sync waterData -> low-res visual mesh
+    window.syncWaterVisual = function() {
+        let vPos = waterGeo.attributes.position.array;
+        let wSegs = WATER_SEGS;
+        let tSegs = window.TERRAIN_SEGS;
+        let half = TERRAIN_SIZE / 2;
+        let wStep = TERRAIN_SIZE / wSegs;
+        let tStep = TERRAIN_SIZE / tSegs;
+        
+        // Find the first painted water height to use as a local fallback,
+        // otherwise use the global waterTableLevel.
+        let defaultWaterLevel = (window.waterTableLevel != null) ? window.waterTableLevel : -0.5;
+        if (window.waterData) {
+            for (let i = 0; i < window.waterData.length; i++) {
+                if (window.waterData[i] > -90) {
+                    defaultWaterLevel = window.waterData[i];
+                    break;
+                }
+            }
+        }
+
+        for (let wz = 0; wz <= wSegs; wz++) {
+            for (let wx = 0; wx <= wSegs; wx++) {
+                let worldX = -half + wx * wStep;
+                let worldZ = -half + wz * wStep;
+                // Map to terrain grid
+                let tx = Math.min(tSegs, Math.max(0, Math.round((worldX + half) / tStep)));
+                let tz = Math.min(tSegs, Math.max(0, Math.round((worldZ + half) / tStep)));
+                let tIdx = tz * (tSegs + 1) + tx;
+                
+                let val = window.waterData[tIdx];
+                if (val <= -90) {
+                    val = defaultWaterLevel;
+                }
+                
+                let vIdx = (wz * (wSegs + 1) + wx) * 3 + 2;
+                vPos[vIdx] = val;
+            }
+        }
+        waterGeo.attributes.position.needsUpdate = true;
+    };
     
     window.waterMat = new THREE.MeshLambertMaterial({ 
         color: 0x38bdf8, 
@@ -4056,10 +4102,9 @@
         window.rebuildWaterMask = rebuildWaterMask;
         if (typeof wCtx === 'undefined' || typeof waterGeo === 'undefined') return;
         
-        let wPosArr = waterGeo.attributes.position.array;
         let tPosArr = planeGeo.attributes.position.array;
-        let count = waterGeo.attributes.position.count;
-        let segs = TERRAIN_SEGS;
+        let count = (window.TERRAIN_SEGS + 1) * (window.TERRAIN_SEGS + 1);
+        let segs = window.TERRAIN_SEGS;
         
         // === SMOOTH EDGES: Draw mask at low resolution, then upscale with bilinear interpolation ===
         // This eliminates staircase artifacts by letting the browser's image scaling smooth the edges.
@@ -4077,7 +4122,7 @@
         lrCtx.fillStyle = '#ffffff';
         
         for (let i = 0; i < count; i++) {
-            let wz = wPosArr[i * 3 + 2];
+            let wz = window.waterData[i];
             if (wz > -90) {
                 let terrainZ = tPosArr[i * 3 + 2];
                 if (terrainZ < wz + 0.1) {
@@ -4088,7 +4133,7 @@
                     // Slightly oversized fill for better coverage at low-res
                     lrCtx.fillRect(px - lrPPS * 0.5, py - lrPPS * 0.5, lrPPS * 2, lrPPS * 2);
                 } else if (!visualOnly) {
-                    wPosArr[i * 3 + 2] = -99;
+                    window.waterData[i] = -99;
                     if (window.waterBaseZ) window.waterBaseZ[i] = -99;
                 }
             }
@@ -4101,7 +4146,7 @@
         wCtx.imageSmoothingQuality = 'high';
         wCtx.drawImage(window._waterLowResCanvas, 0, 0, 4096, 4096);
         
-        if (!visualOnly) waterGeo.attributes.position.needsUpdate = true;
+        if (!visualOnly && window.syncWaterVisual) window.syncWaterVisual();
         waterTex.needsUpdate = true;
     }
     
@@ -4266,8 +4311,8 @@
         else biomeType = 'ROUGH';
         
         let waterHeight = -99;
-        if (typeof waterGeo !== 'undefined' && waterGeo) {
-            waterHeight = waterGeo.attributes.position.array[idx * 3 + 2];
+        if (window.waterData) {
+            waterHeight = window.waterData[idx];
         }
         if (waterHeight > -90 && height < waterHeight + 0.1) {
             biomeType = 'WATER';
@@ -5445,7 +5490,7 @@
         let roadCount = window._builtRoads ? window._builtRoads.length : 0;
         let targetCount = targets ? targets.length : 0;
         let holeCount = courseHoles ? courseHoles.length : 0;
-        let waterVertCount = typeof waterGeo !== 'undefined' && waterGeo ? waterGeo.attributes.position.count : 0;
+        let waterVertCount = window.waterData ? vertexCount : 0;
         
         // Byte estimates per component (based on actual JSON output measurements)
         let heightmapBytes = (vertexCount + waterVertCount) * 8; // ~8 bytes per float as JSON number
@@ -5914,7 +5959,7 @@
         let dumpTrees = window.placedTrees ? window.placedTrees.map(t => ({type: t.type, x: t.x, z: t.z, s: t.scale, r: t.rot, c: t.color, tc: t.trunkColor})) : [];
         
         let hm = Array.from(planeGeo.attributes.position.array).filter((v, i) => i % 3 === 2); 
-        let w_hm = typeof waterGeo !== 'undefined' ? Array.from(waterGeo.attributes.position.array).filter((v, i) => i % 3 === 2) : [];
+        let w_hm = window.waterData ? Array.from(window.waterData) : [];
         let biome = pCtx.canvas.toDataURL('image/jpeg', 0.8);
         let w_mask = (typeof wCtx !== 'undefined') ? wCtx.canvas.toDataURL('image/jpeg', 0.8) : null;
 
@@ -6000,12 +6045,10 @@
                 heights.push(Math.round(pos[i] * 100) / 100);
             }
 
-            // Water heightmap
             let waterHeights = [];
-            if (typeof waterGeo !== 'undefined' && waterGeo) {
-                let wPos = waterGeo.attributes.position.array;
-                for (let i = 2; i < wPos.length; i += 3) {
-                    waterHeights.push(Math.round(wPos[i] * 100) / 100);
+            if (window.waterData) {
+                for (let i = 0; i < window.waterData.length; i++) {
+                    waterHeights.push(Math.round(window.waterData[i] * 100) / 100);
                 }
             }
 
@@ -6155,30 +6198,25 @@
                 planeGeo.computeVertexNormals();
             }
 
-            // RESET water mesh to -99 BEFORE loading — prevents ghost water
-            if (typeof waterGeo !== 'undefined' && waterGeo) {
-                let wPos = waterGeo.attributes.position.array;
-                for (let i = 2; i < wPos.length; i += 3) {
-                    wPos[i] = -99;
-                    window.waterBaseZ[(i-2)/3] = -99;
-                }
-                waterGeo.attributes.position.needsUpdate = true;
+            // RESET water data to -99 BEFORE loading — prevents ghost water
+            if (window.waterData) {
+                window.waterData.fill(-99);
+                window.waterBaseZ.fill(-99);
                 if (typeof wCtx !== 'undefined') {
                     wCtx.fillStyle = '#000000';
                     wCtx.fillRect(0, 0, 4096, 4096);
                     if (typeof waterTex !== 'undefined') waterTex.needsUpdate = true;
                 }
+                if (window.syncWaterVisual) window.syncWaterVisual();
             }
 
             // Restore water heightmap
-            if (data.w && data.w.length > 0 && typeof waterGeo !== 'undefined' && waterGeo) {
-                let wPos = waterGeo.attributes.position.array;
-                let wIdx = 0;
-                for (let i = 2; i < wPos.length && wIdx < data.w.length; i += 3) {
-                    wPos[i] = data.w[wIdx++];
-                    window.waterBaseZ[(i-2)/3] = wPos[i];
+            if (data.w && data.w.length > 0 && window.waterData) {
+                for (let i = 0; i < data.w.length && i < window.waterData.length; i++) {
+                    window.waterData[i] = data.w[i];
+                    window.waterBaseZ[i] = data.w[i];
                 }
-                waterGeo.attributes.position.needsUpdate = true;
+                if (window.syncWaterVisual) window.syncWaterVisual();
                 // Rebuild water alpha mask from loaded heightmap
                 rebuildWaterMask();
             }
@@ -6964,15 +7002,10 @@
                 if (isCloud && arr.terrain_heightmap) {
                     let mapData = (typeof arr.terrain_heightmap === 'string') ? JSON.parse(arr.terrain_heightmap) : arr.terrain_heightmap;
                     let pos = planeGeo.attributes.position;
-                    let wPos = typeof waterGeo !== 'undefined' ? waterGeo.attributes.position : null;
-                    
-                    // RESET water mesh to -99 BEFORE loading — prevents ghost water in bunkers
-                    if (wPos) {
-                        for(let i=0; i < wPos.count; i++) {
-                            wPos.setZ(i, -99);
-                            window.waterBaseZ[i] = -99;
-                        }
-                        wPos.needsUpdate = true;
+                    // RESET water data to -99 BEFORE loading — prevents ghost water in bunkers
+                    if (window.waterData) {
+                        window.waterData.fill(-99);
+                        window.waterBaseZ.fill(-99);
                     }
                     // Clear water mask to black (no water visible)
                     if (typeof wCtx !== 'undefined') {
@@ -6996,15 +7029,15 @@
                         for(let i=0; i<vertCount && i<heightData.length; i++) pos.setZ(i, heightData[i]);
 
                     }
-                    if(waterArr && wPos) {
-                        for(let i=0; i<waterArr.length; i++) {
-                            wPos.setZ(i, waterArr[i]);
+                    if(waterArr && window.waterData) {
+                        for(let i=0; i<waterArr.length && i<window.waterData.length; i++) {
+                            window.waterData[i] = waterArr[i];
                             window.waterBaseZ[i] = waterArr[i];
                         }
                     }
 
                     pos.needsUpdate = true;
-                    if(wPos) wPos.needsUpdate = true;
+                    if (window.syncWaterVisual) window.syncWaterVisual();
                     planeGeo.computeVertexNormals();
 
                     // Rebuild water alpha mask from loaded heightmap
@@ -8588,8 +8621,8 @@
                     if (d <= bestDist) { bestDist = d; biomeType = surfaceMap[key].name; }
                 }
                 let waterHeight = -99;
-                if (typeof waterGeo !== 'undefined' && waterGeo) {
-                    waterHeight = waterGeo.attributes.position.array[idx * 3 + 2];
+                if (window.waterData) {
+                    waterHeight = window.waterData[idx];
                 }
                 
                 if (waterHeight > -90 && height < waterHeight + 0.1) {
@@ -8848,15 +8881,10 @@
         planeGeo.attributes.position.needsUpdate = true;
         planeGeo.computeVertexNormals();
         
-        if (state.wHeights && typeof waterGeo !== 'undefined' && waterGeo) {
-            let wPosArr = waterGeo.attributes.position.array;
-            for(let i=0; i<wPosArr.length; i++) {
-                wPosArr[i] = state.wHeights[i];
-            }
-            for(let i=2; i<wPosArr.length; i+=3) {
-                window.waterBaseZ[(i-2)/3] = wPosArr[i];
-            }
-            waterGeo.attributes.position.needsUpdate = true;
+        if (state.wHeights && window.waterData) {
+            window.waterData.set(state.wHeights);
+            window.waterBaseZ.set(state.wHeights);
+            if (window.syncWaterVisual) window.syncWaterVisual();
         }
         
         pCtx.clearRect(0,0,4096,4096);
@@ -9020,7 +9048,7 @@
         cCopy.width = 4096; cCopy.height = 4096;
         cCopy.getContext('2d', {willReadFrequently:true}).drawImage(paintCanvas, 0, 0);
         
-        let wPosCopy = typeof waterGeo !== 'undefined' && waterGeo ? new Float32Array(waterGeo.attributes.position.array) : null;
+        let wPosCopy = window.waterData ? new Float32Array(window.waterData) : null;
         let wCanvasCopy = document.createElement('canvas');
         wCanvasCopy.width = 4096; wCanvasCopy.height = 4096;
         if(typeof waterCanvas !== 'undefined') wCanvasCopy.getContext('2d', {willReadFrequently:true}).drawImage(waterCanvas, 0, 0);
@@ -9455,7 +9483,7 @@
                 if(gz < 0) gz = 0; if(gz > TERRAIN_SEGS) gz = TERRAIN_SEGS;
                 let idx = gz * (TERRAIN_SEGS+1) + gx;
                 
-                let existingWater = typeof waterGeo !== 'undefined' ? waterGeo.attributes.position.array[idx*3 + 2] : -99;
+                let existingWater = window.waterData ? window.waterData[idx] : -99;
                 
                 if (existingWater > -90) {
                     waterLevelTarget = existingWater; 
@@ -9499,6 +9527,7 @@
                 snapObjectsToGround();
                 // Rebuild water mask (visual-only to preserve the flat water mesh and smooth edges)
                 rebuildWaterMask(true);
+                if (window.syncWaterVisual) window.syncWaterVisual();
                 window._waterNeedsFullRebuild = false;
                 // Refresh terrain analysis overlays
                 if(window.slopeOverlayActive) window.updateSlopeOverlay();
@@ -10154,12 +10183,9 @@
         pos.needsUpdate = true;
         planeGeo.computeVertexNormals();
         
-        let wPos = waterGeo.attributes.position;
-        for(let i=0; i<wPos.count; i++) { 
-            wPos.setZ(i, -99.0); 
-            if (window.waterBaseZ) window.waterBaseZ[i] = -99.0;
-        }
-        wPos.needsUpdate = true;
+        if (window.waterData) window.waterData.fill(-99);
+        if (window.waterBaseZ) window.waterBaseZ.fill(-99);
+        if (window.syncWaterVisual) window.syncWaterVisual();
         
         let roughColor = (window.CURRENT_BIOME_CONFIG && window.CURRENT_BIOME_CONFIG.roughColor) || '#4a782b';
         pCtx.fillStyle = roughColor;
@@ -11034,7 +11060,7 @@
         
         let l2 = (p1.x - p2.x)*(p1.x - p2.x) + (p1.z - p2.z)*(p1.z - p2.z);
         
-        let wPosArray = waterGeo ? waterGeo.attributes.position.array : null;
+        let wPosArray = window.waterData;
 
         // Laplacian smooth: stride for grid neighbor lookup
         let _smoothStride = TERRAIN_SEGS + 1;
@@ -11060,9 +11086,8 @@
             // Visibility is controlled SOLELY by the alpha mask (rebuildWaterMask).
             if (currentTool === 'WATER' && wPosArray && sculptDirection === 1) {
                 if (dist < radius + 12) {
-                    wPosArray[i*3 + 2] = waterLevelTarget;
+                    wPosArray[i] = waterLevelTarget;
                     window.waterBaseZ[i] = waterLevelTarget;
-                    waterGeo.attributes.position.needsUpdate = true;
                 }
             }
 
@@ -11186,9 +11211,8 @@
                         let origH = 0; // Raise toward sea level
                         positions[i*3 + 2] += (origH - positions[i*3 + 2]) * 0.15 * falloff;
                         if(wPosArray) {
-                            wPosArray[i*3 + 2] = -99;
+                            wPosArray[i] = -99;
                             window.waterBaseZ[i] = -99;
-                            waterGeo.attributes.position.needsUpdate = true;
                         }
                         // Clear water alpha mask at this point
                         if(typeof wCtx !== 'undefined') {
@@ -11206,7 +11230,7 @@
                         // Normal mode: dig terrain down to create lake bed
                         // The water mesh is already set as a flat plane (above)
                         // Alpha mask controls visibility — water appears as terrain dips below waterLevelTarget
-                        let bottomTarget = waterLevelTarget - 0.7;
+                        let bottomTarget = waterLevelTarget - 2.5; // Deeper lake bed to prevent water disappearing when smoothing
                         positions[i*3 + 2] += (bottomTarget - positions[i*3 + 2]) * 0.3 * falloff;
                     }
                     updatePos = true;
@@ -12283,17 +12307,30 @@ window.triggerExplosion = function(x, y, z) {
             let wArr = waterGeo.attributes.position.array;
             let windMph = window.currentWindMph || 0;
             let windRad = (window.currentWindDir || 0) * Math.PI / 180;
-            let amp = Math.min(windMph * 0.004, 0.15);  // Wave height from wind (capped)
+            let amp = Math.min(windMph * 0.004, 0.15);
             let t = performance.now() * 0.001;
             
             if (amp > 0.001) {
                 let wdx = Math.cos(windRad);
                 let wdy = Math.sin(windRad);
-                for (let i = 0; i < wArr.length; i += 3) {
-                    let baseZ = window.waterBaseZ[i / 3];
-                    if (baseZ > -90) { // Only animate visible water
-                        let phase = wArr[i] * wdx + wArr[i + 1] * wdy;
-                        wArr[i + 2] = baseZ + Math.sin(t * 2.5 + phase * 0.3) * amp;
+                let wSegsLocal = WATER_SEGS;
+                let tSegsLocal = window.TERRAIN_SEGS;
+                let halfLocal = TERRAIN_SIZE / 2;
+                let wStepLocal = TERRAIN_SIZE / wSegsLocal;
+                let tStepLocal = TERRAIN_SIZE / tSegsLocal;
+                for (let wz = 0; wz <= wSegsLocal; wz++) {
+                    for (let wx = 0; wx <= wSegsLocal; wx++) {
+                        let vi = (wz * (wSegsLocal + 1) + wx) * 3;
+                        let worldX = -halfLocal + wx * wStepLocal;
+                        let worldZ = -halfLocal + wz * wStepLocal;
+                        let tx = Math.min(tSegsLocal, Math.max(0, Math.round((worldX + halfLocal) / tStepLocal)));
+                        let tz = Math.min(tSegsLocal, Math.max(0, Math.round((worldZ + halfLocal) / tStepLocal)));
+                        let tIdx = tz * (tSegsLocal + 1) + tx;
+                        let baseZ = window.waterBaseZ[tIdx];
+                        if (baseZ > -90) {
+                            let phase = wArr[vi] * wdx + wArr[vi + 1] * wdy;
+                            wArr[vi + 2] = baseZ + Math.sin(t * 2.5 + phase * 0.3) * amp;
+                        }
                     }
                 }
                 waterGeo.attributes.position.needsUpdate = true;

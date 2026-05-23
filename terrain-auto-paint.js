@@ -380,6 +380,8 @@
 
         // Mark that auto-paint was used (changeBiome will re-run after recolorTerrain)
         window._terrainAutoPainted = true;
+        window._lastMtnPreset = options.preset || 'NORDIC';
+        window._lastMtnAimPoint = options.aimPoint || null;
 
         const ms = (performance.now() - t0).toFixed(0);
         const areaInfo = (options.center && options.radius > 0)

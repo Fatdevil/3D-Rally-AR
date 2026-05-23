@@ -402,9 +402,39 @@
     function classifyBiomeColor(r, g, b) {
         let best = 'ROUGH', bestDist = Infinity;
         for (let bc of BIOME_COLORS) {
-            let dr = r-bc.r, dg = g-bc.g, db = b-bc.b;
+            let dr = r - bc.r, dg = g - bc.g, db = b - bc.b;
             let d = dr*dr + dg*dg + db*db;
             if (d < bestDist) { bestDist = d; best = bc.type; }
+        }
+        
+        if (bestDist < 100) {
+            return best;
+        }
+        
+        bestDist = Infinity;
+        const vr = 1.0, vg = 1.1, vb = 0.75;
+        const vLenSq = 2.7725;
+        
+        for (let bc of BIOME_COLORS) {
+            let dr = r - bc.r, dg = g - bc.g, db = b - bc.b;
+            let distSq = dr*dr + dg*dg + db*db;
+            
+            if (bc.type !== 'WATER' && bc.type !== 'OB') {
+                let t = (dr * vr + dg * vg + db * vb) / vLenSq;
+                t = Math.max(-35, Math.min(35, t));
+                let diffR = dr - t * vr;
+                let diffG = dg - t * vg;
+                let diffB = db - t * vb;
+                let distProjSq = diffR*diffR + diffG*diffG + diffB*diffB;
+                if (distProjSq < distSq) {
+                    distSq = distProjSq;
+                }
+            }
+            
+            if (distSq < bestDist) {
+                bestDist = distSq;
+                best = bc.type;
+            }
         }
         return best;
     }

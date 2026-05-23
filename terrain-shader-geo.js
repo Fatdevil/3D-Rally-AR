@@ -204,6 +204,42 @@
                 const d  = (r - cr) ** 2 + (g - cg) ** 2 + (b - cb) ** 2;
                 if (d < bestDist) { bestDist = d; best = names[key]; }
             }
+            
+            if (bestDist < 100) {
+                return best;
+            }
+            
+            bestDist = Infinity;
+            const vr = 1.0, vg = 1.1, vb = 0.75;
+            const vLenSq = 2.7725;
+            
+            for (const key in names) {
+                const hex = cfg[key + 'Color'];
+                if (!hex) continue;
+                const cr = parseInt(hex.slice(1, 3), 16);
+                const cg = parseInt(hex.slice(3, 5), 16);
+                const cb = parseInt(hex.slice(5, 7), 16);
+                
+                let dr = r - cr, dg = g - cg, db = b - cb;
+                let distSq = dr*dr + dg*dg + db*db;
+                
+                if (key !== 'water' && key !== 'ob') {
+                    let t = (dr * vr + dg * vg + db * vb) / vLenSq;
+                    t = Math.max(-35, Math.min(35, t));
+                    let diffR = dr - t * vr;
+                    let diffG = dg - t * vg;
+                    let diffB = db - t * vb;
+                    let distProjSq = diffR*diffR + diffG*diffG + diffB*diffB;
+                    if (distProjSq < distSq) {
+                        distSq = distProjSq;
+                    }
+                }
+                
+                if (distSq < bestDist) {
+                    bestDist = distSq;
+                    best = names[key];
+                }
+            }
             return best;
         };
     }
