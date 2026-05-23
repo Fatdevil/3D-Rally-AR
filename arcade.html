@@ -2441,7 +2441,7 @@
         fairwayColor: '#688050',     // Dull green fairway
         semiColor: '#5a6a40',        // Faded semi
         roughColor: '#4a5a35',       // Dark cold rough
-        fescueColor: '#3a4425',      // Dead grass
+        fescueColor: '#2a3418',      // Dead grass (darkened for better rough/fescue separation)
         waterColor: '#5a9ab8',       // Cold blue
         oceanColor: '#1a3050',
         horizonColor: '#9ab0c0'      // Cold grey-blue horizon
@@ -2577,8 +2577,8 @@
                     if (dist < bestDist) { bestDist = dist; matched = surfaces[s]; }
                 }
 
-                // Skip if: no match, too far from any surface, OR closer to mountain color
-                if (!matched || bestDist > 4000 || minMtnDist < bestDist) { skipped++; continue; }
+                // Skip if: no match, too far from any surface, OR significantly closer to mountain color
+                if (!matched || bestDist > 4000 || (minMtnDist < bestDist * 0.5 && minMtnDist < 1500)) { skipped++; continue; }
 
                 if (factor > 0) {
                     const n1 = window.fbm(x * matched.freqC, y * matched.freqC, 3, 2.0, 0.5);
@@ -2781,6 +2781,11 @@
             if (best1 < 0 || best1Dist > maxDistSq) continue;
             
             // ── Biome-Adaptive Mountain Recoloring ─────────────────────────────
+            // BUG-FIX: Only remap as mountain if the pixel is genuinely closer to a
+            // mountain color than to the best biome surface color. Without this guard,
+            // biome surface pixels (e.g., rough) get falsely captured by mountain colors
+            // that happen to be nearby in RGB space (e.g., NORDIC dirt), producing
+            // incorrectly-colored pixels that get classified as Deep Rough.
             let mtnMatch = -1;
             let mtnMatchDist = 999999;
             for (let m = 0; m < mtnColorMap.length; m++) {
@@ -2793,7 +2798,8 @@
                     mtnMatchDist = dist;
                 }
             }
-            if (mtnMatch >= 0) {
+            // Only apply mountain remap if pixel is CLOSER to mountain than to best biome
+            if (mtnMatch >= 0 && mtnMatchDist < best1Dist) {
                 let dr = r - mtnColorMap[mtnMatch].old.r;
                 let dg = g - mtnColorMap[mtnMatch].old.g;
                 let db = b - mtnColorMap[mtnMatch].old.b;
@@ -2803,8 +2809,12 @@
                 continue;
             }
 
-            // ── MOUNTAIN PAINT PROTECTION (fast: pre-computed RGB) ─────
-            // If pixel is closer to ANY terrain paint color than best biome match → skip
+            // ── MOUNTAIN PAINT PROTECTION (hardened: require BOTH relative + absolute) ─
+            // BUG-FIX: Old logic skipped pixels if closer to ANY mtn color than best biome.
+            // This caused rough pixels (close to mtn dirt colors) to be skipped during
+            // recoloring, leaving them in the old biome and getting classified as Deep Rough.
+            // New: pixel must be BOTH significantly closer to mtn (50% margin) AND within
+            // absolute distance 1500 to be considered mountain paint.
             if (mtnRGBs.length > 0) {
                 let isMountain = false;
                 for (let tc = 0; tc < mtnRGBs.length; tc++) {
@@ -2812,12 +2822,22 @@
                     let dg = g - mtnRGBs[tc].g;
                     let db = b - mtnRGBs[tc].b;
                     let tDist = dr*dr + dg*dg + db*db;
-                    if (tDist < best1Dist) { isMountain = true; break; }
+                    if (tDist < best1Dist * 0.5 && tDist < 1500) { isMountain = true; break; }
                 }
                 if (isMountain) continue;
             }
+            // ── Prevent problematic cross-blending ──
+            // BUG-FIX: OB blended with any surface produces red artifacts.
+            // rough↔fescue blending produces intermediate colors classified as Deep Rough.
+            let preventBlend = false;
+            if (best1 >= 0 && best2 >= 0) {
+                let k1 = colorMap[best1].key;
+                let k2 = colorMap[best2].key;
+                if (k1 === 'ob' || k2 === 'ob') preventBlend = true;
+                if ((k1 === 'rough' && k2 === 'fescue') || (k1 === 'fescue' && k2 === 'rough')) preventBlend = true;
+            }
             
-            if (best2 < 0 || best2Dist > maxDistSq || best1Dist < 10) {
+            if (preventBlend || best2 < 0 || best2Dist > maxDistSq || best1Dist < 10) {
                 // Single closest color (exact or near-exact match)
                 data[i]   = colorMap[best1].new.r;
                 data[i+1] = colorMap[best1].new.g;
@@ -2922,6 +2942,12 @@
                 if (scene.fog) scene.fog.color.setHex(parseInt(window.CURRENT_BIOME_CONFIG.skyColor.replace('#','0x')));
             }
             
+            // BUG-FIX: Update terrain shader uniforms to match new biome colors
+            if (window.terrainShaderUniforms) {
+                window.terrainShaderUniforms.uObColor.value.set(window.CURRENT_BIOME_CONFIG.obColor);
+                window.terrainShaderUniforms.uRoughColor.value.set(window.CURRENT_BIOME_CONFIG.roughColor);
+            }
+            
             // Uppdatera terrängens canvas pixlar i realtid
             if(window.recolorTerrain) {
                 // Ta bort ev. gammal snö FÖRE vi omfärgar canvasen
@@ -2930,6 +2956,15 @@
                 }
                 
                 window.recolorTerrain(oldConfig, window.CURRENT_BIOME_CONFIG);
+                
+                // BUG-FIX: Re-run terrain auto-paint if mountains were painted,
+                // so mountain colors adapt to the new biome's palette.
+                if (window._terrainAutoPainted && window.terrainAutoPaint) {
+                    let preset = window._lastMtnPreset || 'NORDIC';
+                    let aimPt = window._lastMtnAimPoint || null;
+                    console.log('🏔️ Re-running auto-paint for biome switch: preset=' + preset);
+                    window.terrainAutoPaint.paintNaturalTerrain({ preset: preset, aimPoint: aimPt });
+                }
                 
                 // Lägg till snö EFTER vi har färgat om basen om temat är WINTER
                 if (val === 'WINTER' && typeof window.applySnowLayer === 'function') {
@@ -3361,9 +3396,13 @@
         if (!window.terrainBiomeData) return;
         let gData = window.greenCtx.createImageData(4096, 4096);
         let tData = window.terrainBiomeData;
+        // BUG-FIX: Use dynamic biome colors instead of hardcoded GLOBAL green (152,206,104)
+        let cfg = window.CURRENT_BIOME_CONFIG || {};
+        let gHex = cfg.greenColor || '#98ce68';
+        let gR = parseInt(gHex.slice(1,3),16), gG = parseInt(gHex.slice(3,5),16), gB = parseInt(gHex.slice(5,7),16);
         for(let i=0; i < tData.length; i+=4) {
             let r = tData[i], g = tData[i+1], b = tData[i+2];
-            let dGreen = (r-152)*(r-152) + (g-206)*(g-206) + (b-104)*(b-104);
+            let dGreen = (r-gR)*(r-gR) + (g-gG)*(g-gG) + (b-gB)*(b-gB);
             if (dGreen < 2000) {
                 gData.data[i] = 255; gData.data[i+1] = 255; gData.data[i+2] = 255; gData.data[i+3] = 255;
             } else {
@@ -4184,6 +4223,35 @@
         let dWater = cDist(r,g,b, _water[0],_water[1],_water[2]);
         
         let minD = Math.min(dOB, dSand, dWaste, dTee, dGreen, dForegreen, dFairway, dSemiRough, dRough, dDeepRough, dWater);
+        
+        if (minD >= 100) {
+            const vr = 1.0, vg = 1.1, vb = 0.75;
+            const vLenSq = 2.7725;
+            
+            function getProjDist(rVal, gVal, bVal, baseColor) {
+                let dr_p = rVal - baseColor[0];
+                let dg_p = gVal - baseColor[1];
+                let db_p = bVal - baseColor[2];
+                let t = (dr_p * vr + dg_p * vg + db_p * vb) / vLenSq;
+                t = Math.max(-35, Math.min(35, t));
+                let diffR = dr_p - t * vr;
+                let diffG = dg_p - t * vg;
+                let diffB = db_p - t * vb;
+                return diffR*diffR + diffG*diffG + diffB*diffB;
+            }
+            
+            dSand = getProjDist(r,g,b, _sand);
+            dWaste = getProjDist(r,g,b, _waste);
+            dTee = getProjDist(r,g,b, _tee);
+            dGreen = getProjDist(r,g,b, _green);
+            dForegreen = getProjDist(r,g,b, _foregreen);
+            dFairway = getProjDist(r,g,b, _fairway);
+            dSemiRough = getProjDist(r,g,b, _semi);
+            dRough = getProjDist(r,g,b, _rough);
+            dDeepRough = getProjDist(r,g,b, _fescue);
+            
+            minD = Math.min(dOB, dSand, dWaste, dTee, dGreen, dForegreen, dFairway, dSemiRough, dRough, dDeepRough, dWater);
+        }
         
         if (minD === dSand) biomeType = 'SAND';
         else if (minD === dWaste) biomeType = 'WASTE';
