@@ -8108,6 +8108,15 @@
             
             if (window.syncWaterVisual) window.syncWaterVisual();
             
+            let trisEl = document.getElementById('perf-tris');
+            if (trisEl) {
+                let tris = 0;
+                if (typeof renderer !== 'undefined' && renderer.info && renderer.info.render) {
+                    tris = renderer.info.render.triangles;
+                }
+                trisEl.innerText = tris.toLocaleString();
+            }
+            
             console.log('Terrain resampled to', newSegs, 'segments');
         }, 50);
     };
