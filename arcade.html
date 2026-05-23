@@ -66,6 +66,32 @@
 
 <div id="ui-layer">
 
+    <!-- PERFORMANCE HUD (Builder Only) -->
+    <div id="perf-hud" style="display:none; position:absolute; top:10px; left:50%; transform:translateX(-50%); background:rgba(15,23,42,0.9); backdrop-filter:blur(10px); border:1px solid #334155; border-radius:8px; padding:10px 15px; z-index:99; width:220px; flex-direction:column; gap:8px;">
+        <div style="display:flex; justify-content:space-between; font-size:10px; font-weight:bold; color:#94a3b8; text-transform:uppercase;">
+            <span>Perf. Budget</span>
+            <span id="perf-status">🟢 GOOD</span>
+        </div>
+        <div>
+            <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:2px;">
+                <span style="color:#f8fafc;">📐 Tris</span>
+                <span id="perf-tris" style="color:#38bdf8; font-weight:bold;">0</span>
+            </div>
+            <div style="width:100%; height:4px; background:#334155; border-radius:2px; overflow:hidden;">
+                <div id="perf-tris-bar" style="width:0%; height:100%; background:#4ade80;"></div>
+            </div>
+        </div>
+        <div>
+            <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:2px;">
+                <span style="color:#f8fafc;">💾 RAM (Assets)</span>
+                <span id="perf-mem" style="color:#38bdf8; font-weight:bold;">0 MB</span>
+            </div>
+            <div style="width:100%; height:4px; background:#334155; border-radius:2px; overflow:hidden;">
+                <div id="perf-mem-bar" style="width:0%; height:100%; background:#4ade80;"></div>
+            </div>
+        </div>
+    </div>
+
     <!-- HAMBURGER MENU BUTTON -->
     <button id="hamburger-btn" onclick="toggleHamburgerMenu()">
         <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -430,6 +456,17 @@
                 <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; margin-top:10px;">Sculpt Strength</label>
                 <input type="range" id="strength-slider" min="1" max="10" value="2" oninput="window.sculptStrength = parseInt(this.value) * 0.01; document.getElementById('strength-val').textContent = this.value + 'x'" style="width:140px; accent-color:#f59e0b; cursor:pointer;" title="Change strength">
                 <span id="strength-val" style="color:#f59e0b; font-size:10px; font-weight:bold;">2x</span>
+            </div>
+            
+            <div id="terrain-res-container" style="display:flex; flex-direction:column; margin-top:10px; padding-top:10px; border-top:1px solid #334155;">
+                <label style="color:#eab308; font-size:10px; font-weight:bold; text-transform:uppercase; margin-bottom:4px;">Terrain Grid</label>
+                <div style="font-size:8px; color:#94a3b8; margin-bottom:6px; line-height:1.2;">Lower = better performance.<br>Updates when you release mouse.</div>
+                <input type="range" id="terrain-res-slider" min="150" max="800" step="50" value="600" onchange="if(window.updateTerrainResolution) window.updateTerrainResolution(parseInt(this.value));" oninput="document.getElementById('terrain-res-val').textContent = this.value + 'x' + this.value;" style="width:140px; accent-color:#eab308; cursor:pointer;">
+                <div style="display:flex; justify-content:space-between; width:140px;">
+                    <span style="color:#64748b; font-size:9px;">150</span>
+                    <span id="terrain-res-val" style="color:#eab308; font-size:10px; font-weight:bold;">600x600</span>
+                    <span style="color:#64748b; font-size:9px;">800</span>
+                </div>
             </div>
             <div id="flatten-hud" style="display:none; color:#38bdf8; font-size:11px; font-weight:bold; margin-top:6px; padding:6px 10px; background:#1e293b; border-radius:6px;">Flatten Target: 0.0m</div>
             
@@ -3521,6 +3558,16 @@
     window._arcadeScene = scene;
     window._arcadeRenderer = renderer;
     window._arcadeCamera = camera;
+    
+    // Set initial Terrain Grid slider value to match TERRAIN_SEGS (400 or 600)
+    setTimeout(() => {
+        let slider = document.getElementById('terrain-res-slider');
+        let valLabel = document.getElementById('terrain-res-val');
+        if(slider && valLabel) {
+            slider.value = TERRAIN_SEGS;
+            valLabel.textContent = TERRAIN_SEGS + 'x' + TERRAIN_SEGS;
+        }
+    }, 100);
     window._arcadePlaneGeo = planeGeo;
     window._arcadePCtx = pCtx;
     window._arcadeMapTex = mapTex;
@@ -5508,6 +5555,7 @@
         
         let totalBytes = heightmapBytes + treeBytes + roadBytes + targetBytes + holeBytes + textureBytes;
         let totalMB = totalBytes / (1024 * 1024);
+        window.lastEstimatedMB = totalMB;
         
         let memCur = document.getElementById('mem-current');
         let memBar = document.getElementById('mem-bar');
@@ -7962,6 +8010,107 @@
         }
     }
     
+    window.updateTerrainResolution = function(newSegs) {
+        if (!window._arcadeScene || !window._arcadePlaneGeo || !window.getTerrainHeight) return;
+        
+        let oldGeo = window._arcadePlaneGeo;
+        let oldSegs = window.TERRAIN_SEGS;
+        let size = window.TERRAIN_SIZE;
+        
+        let hud = document.getElementById('perf-tris');
+        if (hud) hud.innerHTML = '<span style="color:#eab308; font-weight:bold;">🔄 Resampling...</span>';
+        
+        setTimeout(() => {
+            let newGeo = new THREE.PlaneGeometry(size, size, newSegs, newSegs);
+            newGeo.attributes.position.setUsage(THREE.DynamicDrawUsage);
+            
+            let posArray = newGeo.attributes.position.array;
+            let half = size / 2;
+            let step = size / newSegs;
+            
+            // Save old waterData for resampling
+            let oldWaterData = window.waterData ? new Float32Array(window.waterData) : null;
+            
+            function sampleHeight(geo, worldX, worldZ) {
+                let positions = geo.attributes.position.array;
+                let oldStep = size / oldSegs;
+                let gx = (worldX + half) / oldStep;
+                let gz = (worldZ + half) / oldStep;
+                gx = Math.max(0, Math.min(oldSegs - 1, gx));
+                gz = Math.max(0, Math.min(oldSegs - 1, gz));
+                let ix = Math.floor(gx), iz = Math.floor(gz);
+                let fx = gx - ix, fz = gz - iz;
+                let stride = oldSegs + 1;
+                let i00 = (iz * stride + ix) * 3 + 2;
+                let i10 = (iz * stride + (ix + 1)) * 3 + 2;
+                let i01 = ((iz + 1) * stride + ix) * 3 + 2;
+                let i11 = ((iz + 1) * stride + (ix + 1)) * 3 + 2;
+                let h00 = positions[i00]||0, h10 = positions[i10]||0;
+                let h01 = positions[i01]||0, h11 = positions[i11]||0;
+                return h00*(1-fx)*(1-fz) + h10*fx*(1-fz) + h01*(1-fx)*fz + h11*fx*fz;
+            }
+            
+            function sampleWaterData(worldX, worldZ) {
+                if (!oldWaterData) return -99;
+                let oldStep = size / oldSegs;
+                let gx = (worldX + half) / oldStep;
+                let gz = (worldZ + half) / oldStep;
+                gx = Math.max(0, Math.min(oldSegs - 1, gx));
+                gz = Math.max(0, Math.min(oldSegs - 1, gz));
+                let ix = Math.floor(gx), iz = Math.floor(gz);
+                let fx = gx - ix, fz = gz - iz;
+                let stride = oldSegs + 1;
+                let h00 = oldWaterData[iz * stride + ix];
+                let h10 = oldWaterData[iz * stride + (ix + 1)];
+                let h01 = oldWaterData[(iz + 1) * stride + ix];
+                let h11 = oldWaterData[(iz + 1) * stride + (ix + 1)];
+                if (h00 < -90 && h10 < -90 && h01 < -90 && h11 < -90) return -99;
+                let best = h00 > -90 ? h00 : (h10 > -90 ? h10 : (h01 > -90 ? h01 : h11));
+                return best;
+            }
+            
+            // Resample waterData to new resolution
+            let newVertCount = (newSegs + 1) * (newSegs + 1);
+            let newWaterData = new Float32Array(newVertCount).fill(-99);
+            let newWaterBaseZ = new Float32Array(newVertCount).fill(-99);
+            
+            for (let i = 0; i <= newSegs; i++) {
+                for (let j = 0; j <= newSegs; j++) {
+                    let localX = -half + j * step;
+                    let localY = half - i * step; 
+                    let worldX = localX;
+                    let worldZ = -localY;
+                    
+                    let idx = (i * (newSegs + 1) + j) * 3 + 2;
+                    posArray[idx] = sampleHeight(oldGeo, worldX, worldZ);
+                    
+                    let flatIdx = i * (newSegs + 1) + j;
+                    let wh = sampleWaterData(worldX, worldZ);
+                    newWaterData[flatIdx] = wh;
+                    newWaterBaseZ[flatIdx] = wh;
+                }
+            }
+            
+            newGeo.computeVertexNormals();
+            
+            window._arcadeScene.traverse((child) => {
+                if (child.geometry === oldGeo) child.geometry = newGeo;
+            });
+            
+            window._arcadePlaneGeo = newGeo;
+            window.TERRAIN_SEGS = newSegs;
+            window.waterData = newWaterData;
+            window.waterBaseZ = newWaterBaseZ;
+            
+            planeGeo = newGeo;
+            oldGeo.dispose();
+            
+            if (window.syncWaterVisual) window.syncWaterVisual();
+            
+            console.log('Terrain resampled to', newSegs, 'segments');
+        }, 50);
+    };
+
     window.showLeaderboard = async function(courseCode) {
         if (!courseCode) {
             let params = new URLSearchParams(window.location.search);
@@ -9597,6 +9746,7 @@
         
         let lt = document.getElementById('left-toolbar'); if(lt) lt.style.display = mode === 'BUILD' ? 'grid' : 'none';
         let rt = document.getElementById('right-toolbar'); if(rt) rt.style.display = mode === 'BUILD' ? 'flex' : 'none';
+        let ph = document.getElementById('perf-hud'); if(ph) ph.style.display = mode === 'BUILD' ? 'flex' : 'none';
         let elevHud = document.getElementById('elevation-hud'); if(elevHud) elevHud.style.display = mode === 'BUILD' ? 'flex' : 'none';
         let toolHints = document.getElementById('tool-hints'); if(toolHints) toolHints.style.display = mode === 'BUILD' ? 'block' : 'none';
         let lmStatus = document.getElementById('lm-status'); if(lmStatus) lmStatus.style.display = mode === 'BUILD' ? 'none' : 'flex';
@@ -13579,6 +13729,63 @@ async function executeSaveTemplate() {
     }
     saveBtn.disabled = false;
 }
+
+// --- PERFORMANCE BUDGET TRACKER ---
+setInterval(() => {
+    if (typeof appMode === 'undefined' || appMode !== 'BUILD') return;
+    let ph = document.getElementById('perf-hud');
+    if (!ph || ph.style.display === 'none') return;
+
+    // 1. Calculate Tris
+    let tris = 0;
+    if (typeof renderer !== 'undefined' && renderer.info && renderer.info.render) {
+        tris = renderer.info.render.triangles;
+    }
+    
+    // 2. Calculate Memory (Map Size / Assets)
+    let memMB = window.lastEstimatedMB || 0;
+
+    // 3. Update UI
+    let trisEl = document.getElementById('perf-tris');
+    if(trisEl && !trisEl.innerHTML.includes('Resampling')) {
+        trisEl.innerText = tris.toLocaleString();
+    }
+    let memEl = document.getElementById('perf-mem');
+    if(memEl) {
+        memEl.innerText = memMB.toFixed(1) + ' MB';
+    }
+
+    // Tris Limits: 50k (Green), 150k (Yellow), 150k+ (Red)
+    let trisPct = Math.min((tris / 150000) * 100, 100);
+    let trisBar = document.getElementById('perf-tris-bar');
+    if(trisBar) {
+        trisBar.style.width = trisPct + '%';
+        trisBar.style.background = tris < 50000 ? '#4ade80' : (tris < 150000 ? '#fbbf24' : '#ef4444');
+    }
+
+    // Mem Limits: 20MB (Green), 40MB (Yellow), 40MB+ (Red)
+    let memPct = Math.min((memMB / 40) * 100, 100);
+    let memBar = document.getElementById('perf-mem-bar');
+    if(memBar) {
+        memBar.style.width = memPct + '%';
+        memBar.style.background = memMB < 20 ? '#4ade80' : (memMB < 40 ? '#fbbf24' : '#ef4444');
+    }
+
+    // Status
+    let status = document.getElementById('perf-status');
+    if(status) {
+        if (tris > 150000 || memMB > 40) {
+            status.innerText = '🔴 HIGH';
+            status.style.color = '#ef4444';
+        } else if (tris > 50000 || memMB > 20) {
+            status.innerText = '🟡 MEDIUM';
+            status.style.color = '#fbbf24';
+        } else {
+            status.innerText = '🟢 GOOD';
+            status.style.color = '#4ade80';
+        }
+    }
+}, 2000);
 </script>
 
 </body>
