@@ -3460,7 +3460,7 @@
     
     const TERRAIN_SIZE = 900; 
     const _isMobile = /iPhone|iPad|Android|Mobile/i.test(navigator.userAgent);
-    const TERRAIN_SEGS = _isMobile ? 400 : 600; 
+    let TERRAIN_SEGS = _isMobile ? 400 : 600; 
     let planeGeo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, TERRAIN_SEGS, TERRAIN_SEGS);
     planeGeo.attributes.position.setUsage(THREE.DynamicDrawUsage);
     
@@ -8099,6 +8099,7 @@
             
             window._arcadePlaneGeo = newGeo;
             window.TERRAIN_SEGS = newSegs;
+            TERRAIN_SEGS = newSegs; // Update closure variable to prevent TypeError in updateElevationHUD
             window.waterData = newWaterData;
             window.waterBaseZ = newWaterBaseZ;
             
