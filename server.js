@@ -1325,6 +1325,85 @@ app.delete('/api/templates/:id', async (req, res) => {
     }
 });
 
+// --- POLY.PIZZA API PROXY ---
+const POLY_CACHE_PATH = process.env.POLY_CACHE_PATH || path.join(__dirname, 'poly-cache');
+
+app.get('/api/poly/search', async (req, res) => {
+    try {
+        const apiKey = process.env.POLY_PIZZA_API_KEY;
+        if (!apiKey) {
+            return res.status(503).json({ error: 'Poly.Pizza API key not configured' });
+        }
+        const { q, category, page } = req.query;
+        let url = 'https://api.poly.pizza/v1.1/search?';
+        if (q) url += `q=${encodeURIComponent(q)}&`;
+        if (category !== undefined && category !== '' && category !== 'all') {
+            url += `category=${category}&`;
+        } else {
+            url += `Licence=CC0&`;
+        }
+        url += `page=${page || 0}`;
+        const response = await fetch(url, { headers: { 'x-auth-token': apiKey } });
+        if (!response.ok) {
+            console.error('Poly.Pizza API error:', response.status, response.statusText);
+            return res.status(response.status).json({ error: 'Poly.Pizza API error' });
+        }
+        const data = await response.json();
+        res.json(data);
+    } catch (err) {
+        console.error('Poly search proxy error:', err);
+        res.status(500).json({ error: 'Proxy error' });
+    }
+});
+
+app.get('/api/poly/model/:id', async (req, res) => {
+    try {
+        const apiKey = process.env.POLY_PIZZA_API_KEY;
+        if (!apiKey) return res.status(503).json({ error: 'Poly.Pizza API key not configured' });
+        const response = await fetch(`https://api.poly.pizza/v1.1/model/${req.params.id}`, { headers: { 'x-auth-token': apiKey } });
+        if (!response.ok) return res.status(response.status).json({ error: 'Poly.Pizza API error' });
+        const data = await response.json();
+        res.json(data);
+    } catch (err) {
+        console.error('Poly model proxy error:', err);
+        res.status(500).json({ error: 'Proxy error' });
+    }
+});
+
+app.get('/api/poly/glb/:id', async (req, res) => {
+    try {
+        const modelId = req.params.id;
+        const cachePath = path.join(POLY_CACHE_PATH, `${modelId}.glb`);
+        const fs = require('fs');
+        if (fs.existsSync(cachePath)) {
+            res.set('Content-Type', 'model/gltf-binary');
+            res.set('Cache-Control', 'public, max-age=31536000');
+            return res.sendFile(path.resolve(cachePath));
+        }
+        const apiKey = process.env.POLY_PIZZA_API_KEY;
+        if (!apiKey) return res.status(503).json({ error: 'Poly.Pizza API key not configured' });
+        const meta = await fetch(`https://api.poly.pizza/v1.1/model/${modelId}`, { headers: { 'x-auth-token': apiKey } });
+        if (!meta.ok) return res.status(meta.status).json({ error: 'Model not found on Poly.Pizza' });
+        const data = await meta.json();
+        const glbUrl = data.Download;
+        if (!glbUrl) return res.status(404).json({ error: 'No GLB download URL found' });
+        console.log(`🍕 Downloading Poly.Pizza model: ${data.Title || modelId} → cache`);
+        const glbResponse = await fetch(glbUrl);
+        if (!glbResponse.ok) return res.status(502).json({ error: 'Failed to download GLB from Poly.Pizza CDN' });
+        const arrayBuffer = await glbResponse.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        fs.mkdirSync(POLY_CACHE_PATH, { recursive: true });
+        fs.writeFileSync(cachePath, buffer);
+        console.log(`✅ Cached: ${modelId}.glb (${(buffer.length / 1024).toFixed(1)} KB)`);
+        res.set('Content-Type', 'model/gltf-binary');
+        res.set('Cache-Control', 'public, max-age=31536000');
+        res.send(buffer);
+    } catch (err) {
+        console.error('Poly GLB proxy error:', err);
+        res.status(500).json({ error: 'Proxy error' });
+    }
+});
+
 // --- SERVING STATIC FILES (För Railway Deploy) ---
 // Serve template files (heightmap.bin, biome.jpg, etc.) directly
 app.use('/templates', express.static(path.join(__dirname, 'templates')));

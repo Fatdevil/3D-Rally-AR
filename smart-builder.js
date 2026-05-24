@@ -2608,6 +2608,148 @@ window.executeSplineSmartGreen = function() {
         clearSmartGreen();
     };
 
+    // === PROPS POLYGON FILL: Fill a defined polygon with props ===
+    window.executePropsPolygon = function() {
+        if(typeof smartGreenPoints === 'undefined' || smartGreenPoints.length < 3) return;
+        if(!window.currentNatureType) {
+            if (window.showBuildToast) window.showBuildToast('⚠️ Select an asset first!', '#f59e0b');
+            return;
+        }
+        
+        window.saveUndoState();
+
+        // Build closed curve from points
+        let curve = new THREE.CatmullRomCurve3(smartGreenPoints, true);
+        let numSamples = Math.max(200, smartGreenPoints.length * 40);
+        let densePts = curve.getPoints(numSamples);
+
+        // Find bounding box
+        let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+        densePts.forEach(p => {
+            if (p.x < minX) minX = p.x;
+            if (p.x > maxX) maxX = p.x;
+            if (p.z < minZ) minZ = p.z;
+            if (p.z > maxZ) maxZ = p.z;
+        });
+
+        // Determine spacing: manual override > model-based auto > category defaults
+        let spacing = 3.5;
+        if (window._polySpacingOverride) {
+            spacing = window._polySpacingOverride;
+        } else {
+            // Auto-calculate from model bounding box
+            let model = window.customModels && window.customModels[window.currentNatureType];
+            if (model && model.isObject3D) {
+                let box = new THREE.Box3().setFromObject(model);
+                let size = box.getSize(new THREE.Vector3());
+                let maxWidth = Math.max(size.x, size.z);
+                // Params scale affects final size
+                let params = window.getPlacementParams(window.currentNatureType);
+                let s = params ? params.scale : 1.0;
+                spacing = Math.max(maxWidth * s * 1.2, 1.5);  // 1.2x width for slight gaps
+            } else {
+                // Fallback: category-based
+                let isDense = false;
+                if (document.getElementById('cat-btn-ROCKS') && document.getElementById('cat-btn-ROCKS').classList.contains('active')) isDense = true;
+                if (document.getElementById('cat-btn-PLANTS') && document.getElementById('cat-btn-PLANTS').classList.contains('active')) isDense = true;
+                if (isDense) spacing = 1.5;
+            }
+        }
+
+        // Point in polygon test
+        function pointInPoly(px, pz, polyPts) {
+            let inside = false;
+            for(let i = 0, j = polyPts.length - 1; i < polyPts.length; j = i++) {
+                let xi = polyPts[i].x, zi = polyPts[i].z;
+                let xj = polyPts[j].x, zj = polyPts[j].z;
+                if(((zi > pz) !== (zj > pz)) && (px < (xj - xi) * (pz - zi) / (zj - zi) + xi)) {
+                    inside = !inside;
+                }
+            }
+            return inside;
+        }
+
+        let estimatedCount = 0;
+        let validPoints = [];
+        for (let z = minZ; z <= maxZ; z += spacing) {
+            for (let x = minX; x <= maxX; x += spacing) {
+                let randX = x + (Math.random() - 0.5) * spacing * 0.8;
+                let randZ = z + (Math.random() - 0.5) * spacing * 0.8;
+
+                if (pointInPoly(randX, randZ, densePts)) {
+                    // Check biomes if respect biomes is checked
+                    let canPlace = true;
+                    if (window.forestRespectBiomes && window.terrainBiomeData) {
+                        let pxX = Math.floor(((randX + window.TERRAIN_SIZE/2) / window.TERRAIN_SIZE) * 4096);
+                        let pxZ = Math.floor(((randZ + window.TERRAIN_SIZE/2) / window.TERRAIN_SIZE) * 4096);
+                        pxX = Math.max(0, Math.min(4095, pxX));
+                        pxZ = Math.max(0, Math.min(4095, pxZ));
+                        let idx4 = (pxZ * 4096 + pxX) * 4;
+                        let r = window.terrainBiomeData[idx4];
+                        let g = window.terrainBiomeData[idx4+1];
+                        if(g > 150 && r < 180) canPlace = false; // Green/Fairway/Tee biomes
+                        if(r > 190 && g > 180) canPlace = false; // Bunker/Sand biomes
+                    }
+                    
+                    // Check water
+                    if (canPlace) {
+                        let surf = window.localGetTerrainAt(randX, -randZ);
+                        if (surf) {
+                            let waterH = window.getWaterHeightAt ? window.getWaterHeightAt(randX, -randZ) : -99;
+                            if (waterH > surf.z) canPlace = false;
+                        }
+                    }
+
+                    if (canPlace) {
+                        validPoints.push({x: randX, z: randZ});
+                        estimatedCount++;
+                    }
+                }
+            }
+        }
+
+        if (estimatedCount > 300) {
+            let proceed = window.confirm(`⚠️ WARNING: You are about to place ${estimatedCount} props at once!\n\nThis may cause severe lag or freeze the browser depending on the 3D model complexity.\n\nDo you want to proceed?`);
+            if (!proceed) {
+                if (window.showBuildToast) window.showBuildToast('❌ Polygon fill cancelled.', '#ef4444');
+                return; // Cancel placement
+            }
+        }
+
+        let placedCount = 0;
+        let placedTypes = new Set();
+        for (let i = 0; i < validPoints.length; i++) {
+            let p = validPoints[i];
+            let randX = p.x;
+            let randZ = p.z;
+            let params = window.getPlacementParams(window.currentNatureType);
+            if (params && params.type) {
+                if (typeof window.createTree === 'function') {
+                    window.createTree(params.type, randX, randZ, params.scale, params.rot, '#ffffff', '#ffffff', params.yOffset, params.brightness, true);
+                    placedTypes.add(params.type);
+                    placedCount++;
+                }
+            } else if (placedCount === 0 && !window._warnedPolyProps) {
+                // No valid placement params — warn once
+                if (window.showBuildToast) window.showBuildToast('⚠️ Asset not loaded yet — try again!', '#f59e0b');
+                window._warnedPolyProps = true;
+                setTimeout(() => window._warnedPolyProps = false, 3000);
+            }
+        }
+
+        // Rebuild visual pools once after all props are placed
+        placedTypes.forEach(type => {
+            if (typeof window.rebuildInstancePool === 'function') {
+                window.rebuildInstancePool(type);
+            }
+        });
+
+        if (window.showBuildToast) window.showBuildToast('🌳 Filled ' + placedCount + ' props (spacing: ' + spacing.toFixed(1) + 'm)', '#4ade80');
+        
+        // Clear polygon
+        if (typeof clearSmartGreen === 'function') clearSmartGreen();
+    };
+
 // ================================================================
 //  TERRAIN STAMP SYSTEM
 //  Capture terrain heightmaps and stamp them elsewhere.
@@ -3682,6 +3824,80 @@ window.executeSmartRoad = function() {
         let lastPt = smartGreenPoints[smartGreenPoints.length - 1];
         window._lastRoadEndPoint = { x: lastPt.x, y: lastPt.y, z: lastPt.z };
     }
+    clearSmartGreen();
+};
+
+
+window.executeRidgeMountain = function() {
+    if (!window.splinePoints || window.splinePoints.length < 2) {
+        if (window.showBuildToast) window.showBuildToast('Requires at least 2 points', '#ef4444');
+        return;
+    }
+    
+    window.saveUndoState();
+    if (window.showBuildToast) window.showBuildToast('Building mountain ridge...', '#38bdf8');
+    
+    let targetHeight = parseFloat(document.getElementById('sculpt-strength').value) || 20.0;
+    
+    // Auto width based on height (slope ratio 1:2.5)
+    let ridgeWidth = Math.abs(targetHeight) * 2.5;
+    if (ridgeWidth < 12) ridgeWidth = 12;
+    
+    const positions = window.terrainGeometry.attributes.position.array;
+    let modified = false;
+    
+    function distToSegment(p, v, w) {
+        const l2 = (v.x - w.x)**2 + (v.z - w.z)**2;
+        if (l2 == 0) return Math.sqrt((p.x - v.x)**2 + (p.z - v.z)**2);
+        let t = ((p.x - v.x) * (w.x - v.x) + (p.z - v.z) * (w.z - v.z)) / l2;
+        t = Math.max(0, Math.min(1, t));
+        const proj = { x: v.x + t * (w.x - v.x), z: v.z + t * (w.z - v.z) };
+        return Math.sqrt((p.x - proj.x)**2 + (p.z - proj.z)**2);
+    }
+    
+    for (let i = 0; i < positions.length; i += 3) {
+        let vx = positions[i];
+        let vy = positions[i+1];
+        let vz = positions[i+2];
+        
+        let p = { x: vx, z: vz };
+        let minDist = Infinity;
+        
+        for (let j = 0; j < window.splinePoints.length - 1; j++) {
+            let v1 = window.splinePoints[j];
+            let v2 = window.splinePoints[j+1];
+            let d = distToSegment(p, v1, v2);
+            if (d < minDist) minDist = d;
+        }
+        
+        if (minDist < ridgeWidth) {
+            let nDist = minDist / ridgeWidth;
+            let baseFalloff = (Math.cos(nDist * Math.PI) + 1) * 0.5; // Cosine falloff 1 to 0
+            
+            // Add varied noise
+            let noiseVal = 0;
+            if (typeof noise2D !== 'undefined') {
+                noiseVal += noise2D(vx * 0.04, vz * 0.04) * 0.6;
+                noiseVal += noise2D(vx * 0.1, vz * 0.1) * 0.3;
+            } else {
+                noiseVal = (Math.random() - 0.5) * 0.4;
+            }
+            
+            // Taper noise at edges
+            let noiseMod = noiseVal * targetHeight * 0.35 * baseFalloff;
+            let newY = vy + (targetHeight * baseFalloff) + noiseMod;
+            
+            positions[i+1] = newY;
+            modified = true;
+        }
+    }
+    
+    if (modified) {
+        window.terrainGeometry.attributes.position.needsUpdate = true;
+        window.terrainGeometry.computeVertexNormals();
+        if(window.updateTerrainCollider) window.updateTerrainCollider();
+    }
+    
     clearSmartGreen();
 };
 
