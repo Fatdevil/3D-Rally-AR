@@ -10203,7 +10203,7 @@
                     removeMeasureAt(lastHitPoint);
                 }
             }
-        } else if(currentTool === 'SPLINE' || (currentTool === 'MTN' && window._mtnToolMode === 'SPLINE')) {
+        } else if(currentTool === 'SPLINE' || (currentTool === 'MTN' && (window._mtnToolMode === 'SPLINE' || window._mtnToolMode === 'RIDGE'))) {
             if(e.button === 0 && lastHitPoint) {
                 splinePoints.push(lastHitPoint.clone());
                 updateSplinePreview();
@@ -11713,7 +11713,7 @@
         splineSpheres = [];
         if(splineLineMesh) { scene.remove(splineLineMesh); splineLineMesh = null; }
 
-        let isMtnSpline = (currentTool === 'MTN' && window._mtnToolMode === 'SPLINE');
+        let isMtnSpline = (currentTool === 'MTN' && (window._mtnToolMode === 'SPLINE' || window._mtnToolMode === 'RIDGE'));
         let dotColor = isMtnSpline ? 0x38bdf8 : 0xec4899;
         let startColor = isMtnSpline ? 0x60a5fa : 0x38bdf8;
 
