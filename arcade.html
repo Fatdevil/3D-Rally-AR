@@ -891,7 +891,7 @@
                 </div>
                 
                 <div style="display:flex; gap:6px; margin-top:8px;">
-                    <button onclick="if(typeof window.executeSplineMountain === 'function') window.executeSplineMountain();" 
+                    <button onclick="if(window._mtnToolMode === 'RIDGE' && typeof window.executeRidgeMountain === 'function') window.executeRidgeMountain(); else if (typeof window.executeSplineMountain === 'function') window.executeSplineMountain();" 
                             style="flex:1; background:#38bdf8; color:#0f172a; border:none; padding:8px 6px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:4px;">
                         ⛰️ Build Mountain
                     </button>
@@ -918,7 +918,7 @@
                     document.getElementById('mtn-mode-spline').style.color = mode === 'SPLINE' ? '#0f172a' : '#94a3b8';
                     document.getElementById('mtn-paint-content').style.display = mode === 'PAINT' ? 'block' : 'none';
                     document.getElementById('mtn-stamp-content').style.display = mode === 'STAMP' ? 'block' : 'none';
-                    document.getElementById('mtn-spline-content').style.display = mode === 'SPLINE' ? 'block' : 'none';
+                    document.getElementById('mtn-spline-content').style.display = (mode === 'SPLINE' || mode === 'RIDGE') ? 'block' : 'none';
                     
                     if (typeof window.clearSpline === 'function') {
                         window.clearSpline();
