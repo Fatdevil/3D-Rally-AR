@@ -5558,7 +5558,8 @@
             pool.meshes.forEach((iMesh, mi) => {
                 let off = pool.subOffsets[mi];
                 _iPos.set(t.x + (off.x * t.scale), (t.y || 0) + (off.y * t.scale), t.z + (off.z * t.scale));
-                _iQuat.setFromAxisAngle(_yAxis, t.rot || 0);
+                let _eul = new THREE.Euler(t.tilt || 0, t.rot || 0, t.roll || 0, 'YXZ');
+                _iQuat.setFromEuler(_eul);
                 let sy = t.scale * (off.sy || 1.0);
                 if (off.cs) {
                     _iScale.set(t.scale * off.cs.x, sy * off.cs.y, t.scale * off.cs.z);
@@ -5633,7 +5634,7 @@
     // === WIND SWAY ENGINE INIT ===
     if (window.WindSway) window.WindSway.init(scene);
 
-    function createTree(type, x, z, scale, rot, color, trunkColor) {
+    function createTree(type, x, z, scale, rot, color, trunkColor, tilt = 0, roll = 0) {
         // Raycast for ground Y
         let groundY = 0;
         let downRay = new THREE.Raycaster(new THREE.Vector3(x, 200, z), new THREE.Vector3(0, -1, 0));
@@ -5646,7 +5647,7 @@
         }
 
         // Push data
-        window.placedTrees.push({ type: type, x: x, z: z, y: groundY, scale: scale, rot: rot, color: color, trunkColor: trunkColor });
+        window.placedTrees.push({ type: type, x: x, z: z, y: groundY, scale: scale, rot: rot, tilt: tilt, roll: roll, color: color, trunkColor: trunkColor });
 
         // Ensure asset is loading
         if (window.ASSET_REGISTRY[type] && window.ASSET_REGISTRY[type].file && !window.customModels[type]) {
@@ -7357,7 +7358,7 @@
                             if (tmplData.trees && tmplData.trees.length > 0 && typeof window.createTree === 'function') {
                                 for (let ti = 0; ti < tmplData.trees.length; ti++) {
                                     let tt = tmplData.trees[ti];
-                                    window.createTree(tt.type || 'default', tt.x, tt.z, tt.s || 1, tt.r || 0, tt.c || undefined, tt.tc || undefined);
+                                    window.createTree(tt.type || 'default', tt.x, tt.z, tt.s || 1, tt.r || 0, tt.c || undefined, tt.tc || undefined, tt.tilt || 0, tt.roll || 0);
                                 }
                                 console.log('  ✅ Placed ' + tmplData.trees.length + ' template trees');
                             }
@@ -7844,7 +7845,7 @@
                     }
 
                     if(arr.trees && Array.isArray(arr.trees)) {
-                        arr.trees.forEach(t => createTree(t.type || t.t, t.x, t.z, t.s, t.r, t.c, t.tc));
+                        arr.trees.forEach(t => createTree(t.type || t.t, t.x, t.z, t.s, t.r, t.c, t.tc, t.tilt, t.roll));
                     }
                     
                     // Restore panorama and surrounding for current hole
@@ -9785,7 +9786,7 @@
         window.placedTrees.length = 0;
         destroyAllPools();
         if (state.trees) {
-            state.trees.forEach(t => createTree(t.type, t.x, t.z, t.scale, t.rot));
+            state.trees.forEach(t => createTree(t.type, t.x, t.z, t.scale, t.rot, t.color, t.trunkColor, t.tilt, t.roll));
         }
         
         if(state.holes) {
@@ -11513,7 +11514,7 @@
             let selectedType = currentNatureType;
             let s = 1.0 + (Math.random() * 0.4 - 0.2); // 0.8 to 1.2 x base size
             let r = Math.random() * Math.PI * 2;
-            createTree(selectedType, lastHitPoint.x, lastHitPoint.z, s, r);
+            createTree(selectedType, lastHitPoint.x, lastHitPoint.z, s, r, undefined, undefined, params.tilt, params.roll);
             return;
         }
 
@@ -12057,7 +12058,7 @@
                         
                         let s = 1.0 + (Math.random() * 0.4 - 0.2); 
                         let rRot = Math.random() * Math.PI * 2;
-                        createTree(type, randX, randZ, s, rRot);
+                        createTree(type, randX, randZ, s, rRot, undefined, undefined, params.tilt, params.roll);
                     }
                 } else if (currentTool === 'FLATTEN') {
                     // Mjukutjämning mot just den höjden man klickade på! Perfekt för platåer och upphöjda greener.
