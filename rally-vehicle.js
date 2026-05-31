@@ -30,7 +30,7 @@ const CFG = {
     BRAKE_BIAS: 0.60,  // 60% front, 40% rear (default rally)
     // FAS1-H1: Suspension per wheel
     SPRING_RATE: 25000,        // N/m — rally gravel spec
-    DAMPER: 4000,              // Ns/m — compression damping
+    DAMPER: 5500,              // Ns/m — near-critical damping (ζ≈1); was 4000 which caused visual bounce after landing
     SUSPENSION_TRAVEL: 0.15,   // m — max compression from rest
     WHEEL_RADIUS: 0.35,        // m — matches visual wheel geo
     // Wheel positions relative to car center (local space)
@@ -1150,65 +1150,57 @@ function updateVehicle(dt) {
     car.position.x += car.velocity.x * dt;
     car.position.z += car.velocity.z * dt;
 
-    // === TERRAIN FOLLOWING ===
-    // CRITICAL: sample terrain at the NEW position (car.position.x/z was just updated above).
-    // avgGroundY came from the suspension loop which ran BEFORE the position update — still stale.
-    // A fresh single-point sample here is more accurate for airborne detection and height following.
-    // This also eliminates the hilltop "ollie": old code used the crest height even after the car
-    // had already moved onto the downslope, snapping it up before releasing it airborne.
+    // === TERRAIN FOLLOWING with HYSTERESIS ===
+    // Fresh terrain sample at current (new) x/z position.
     let groundY;
     if (typeof window.localGetTerrainAt === 'function') {
         groundY = window.localGetTerrainAt(car.position.x, -car.position.z).z;
     } else {
         groundY = terrain.z;
     }
+    let restY = groundY + CFG.CAR_HEIGHT;
+
     if (!car._landingGrace) car._landingGrace = 0;
     if (car._landingGrace > 0) car._landingGrace -= dt;
 
-    // Airborne threshold: small base + gentle speed scaling.
-    // Reduced multiplier (0.003) and cap (0.12) vs old values (0.005 / 0.20) so the car
-    // doesn't cling to crest height too long before cleanly releasing into the jump.
-    let airborneThresh = 0.05 + clamp(Math.abs(car.speed) * 0.003, 0, 0.12);
-    let isAirborne = car.position.y > groundY + CFG.CAR_HEIGHT + airborneThresh
-                     && car._landingGrace <= 0;
-
+    // HYSTERESIS: different thresholds for leaving vs landing.
+    // On ground: needs a 0.35 m gap to actually lift off — rolling down a slope
+    //   (which falls ~0.05-0.10 m/frame at speed) keeps the car planted.
+    //   Only a real ramp, kicker or cliff edge creates a gap this large.
+    // In air: lands as soon as position reaches restY (0.05 m tolerance).
+    // This eliminates the 6-7 micro-bounce chatter on downhill landings where
+    //   the car alternated between airborne and grounded every few frames.
+    let gap = car.position.y - restY;
+    let isAirborne = car.onGround
+        ? (gap > 0.35 && car._landingGrace <= 0)   // hard to leave ground
+        : (gap > 0.05);                             // easy to stay landed
 
     if (isAirborne) {
         car.onGround = false;
         car.velocity.y -= CFG.GRAVITY * CFG.GRAVITY_AIR_MULT * dt;
-        car.velocity.y = Math.max(car.velocity.y, -50); // terminal velocity cap
+        car.velocity.y = Math.max(car.velocity.y, -50);
         car.position.y += car.velocity.y * dt;
-        // Air control
-        if(Math.abs(input.steer)>0.1)
+        if (Math.abs(input.steer) > 0.1)
             car.heading += input.steer * CFG.AIR_CONTROL * dt;
-        if(car.position.y <= groundY + CFG.CAR_HEIGHT) {
+        if (car.position.y <= restY) {
             // === LANDING ===
-            car.position.y = groundY + CFG.CAR_HEIGHT;
-            let landingImpact = -car.velocity.y; // positive = hard impact
-            // Kill vertical velocity completely — no bounce.
-            // The bounce felt wrong: car came in at 100km/h, vertical component got
-            // reflected upward making the whole car trajectory arc back into the air.
+            car.position.y = restY;
+            let landingImpact = -car.velocity.y;  // m/s downward (positive)
             car.velocity.y = 0;
-            // Camera shake proportional to impact
-            if (landingImpact > 4 && window.rallyCamera) {
+            if (landingImpact > 4 && window.rallyCamera)
                 window.rallyCamera.triggerShake(landingImpact * 0.5);
-            }
-            // Damage from very hard landing
-            if (window.rallyDamage && landingImpact > 8) {
+            if (window.rallyDamage && landingImpact > 8)
                 window.rallyDamage.applyDamage(landingImpact);
-            }
             car.onGround = true;
-            // Landing grace: prevents re-triggering airborne for 0.15s after touch-down
-            // so the dynamic threshold doesn't immediately kick car back into the air
-            // on steep downhill landings where the ground falls away quickly.
-            car._landingGrace = 0.15;
+            // Impact-scaled planted period: soft landing = 0.18 s, hard = up to 0.5 s.
+            // Keeps the car on the ground long enough to get traction immediately.
+            car._landingGrace = clamp(0.12 + landingImpact * 0.02, 0.18, 0.5);
         }
     } else {
         car.onGround = true;
         car.velocity.y = 0;
-        // Tight terrain following: 85% snap per frame at 60fps eliminates downhill float
         let followRate = 1 - Math.pow(0.15, dt * 60);
-        car.position.y += (groundY + CFG.CAR_HEIGHT - car.position.y) * followRate;
+        car.position.y += (restY - car.position.y) * followRate;
     }
 
     // World bounds
