@@ -1172,7 +1172,7 @@ function updateVehicle(dt) {
     //   the car alternated between airborne and grounded every few frames.
     let gap = car.position.y - restY;
     let isAirborne = car.onGround
-        ? (gap > 0.35 && car._landingGrace <= 0)   // hard to leave ground
+        ? (gap > 0.20 && car._landingGrace <= 0)   // real jump/cliff only — gentle upward follow prevents artificial ollie
         : (gap > 0.05);                             // easy to stay landed
 
     if (isAirborne) {
@@ -1199,8 +1199,19 @@ function updateVehicle(dt) {
     } else {
         car.onGround = true;
         car.velocity.y = 0;
-        let followRate = 1 - Math.pow(0.15, dt * 60);
-        car.position.y += (restY - car.position.y) * followRate;
+        let error = restY - car.position.y;
+        if (error < 0) {
+            // Car is ABOVE restY (floating) → snap down fast so it doesn't hover on downhills
+            let followDown = 1 - Math.pow(0.15, dt * 60); // ~0.85 at 60fps
+            car.position.y += error * followDown;
+        } else {
+            // Ground is ABOVE car (bump/uphill) → push up gently so bumps pass naturally.
+            // Fast upward snap was the "ollie": car got snapped up 85% over each bump,
+            // then gap > leaveThresh triggered airborne from an artificially high position.
+            let followUp = 1 - Math.pow(0.60, dt * 60); // ~0.25 at 60fps — smooth ride-over
+            car.position.y += error * followUp;
+        }
+
     }
 
     // World bounds
