@@ -1117,7 +1117,14 @@ function updateVehicle(dt) {
     car.position.z += car.velocity.z * dt;
 
     // === TERRAIN FOLLOWING ===
-    let groundY = terrain.z;
+    // CRITICAL: Re-sample terrain at the NEW position (after X/Z move above).
+    // terrain.z was sampled at the OLD position at the top of this function.
+    // On uphills the car moves forward → ground is HIGHER at new pos → using old
+    // groundY would snap the car DOWN into the mountain. Re-sample fixes this.
+    let groundTerrain = (typeof window.localGetTerrainAt === 'function')
+        ? window.localGetTerrainAt(car.position.x, -car.position.z)
+        : terrain;
+    let groundY = groundTerrain.z;
     if (!car._landingGrace) car._landingGrace = 0;
     if (car._landingGrace > 0) car._landingGrace -= dt;
 
