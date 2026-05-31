@@ -3208,12 +3208,18 @@ window.executeSmartRoad = function() {
         let tz = next.z - prev.z;
         let tLen = Math.sqrt(tx*tx + tz*tz);
         
-        if (tLen < 0.001 && i > 0) {
-            // Om punkterna är identiska (t.ex. dubbelklick på slutet), använd förra riktningen
-            tx = roadData[i-1].tx;
-            tz = roadData[i-1].tz;
-            nx = roadData[i-1].nx;
-            nz = roadData[i-1].nz;
+        if (tLen < 0.001) {
+            if (i > 0) {
+                tx = roadData[i-1].tx;
+                tz = roadData[i-1].tz;
+                nx = roadData[i-1].nx;
+                nz = roadData[i-1].nz;
+            } else {
+                tx = 1;
+                tz = 0;
+                nx = 0;
+                nz = 1;
+            }
         } else {
             tx /= tLen;
             tz /= tLen;
@@ -3283,6 +3289,26 @@ window.executeSmartRoad = function() {
     let gzStart = Math.max(0, Math.floor((pathMinZ + window.TERRAIN_SIZE/2) / step));
     let gzEnd = Math.min(window.TERRAIN_SEGS, Math.ceil((pathMaxZ + window.TERRAIN_SIZE/2) / step));
 
+    // Cache to prevent redundant findNearestRoad lookups (reused in step 6, 7 and 9)
+    let nearestCacheW = gxEnd - gxStart + 1;
+    let nearestCacheH = gzEnd - gzStart + 1;
+    let nearestCache = new Int32Array(nearestCacheW * nearestCacheH);
+    nearestCache.fill(-2); // -2 = uncomputed
+
+    function getNearestRoadCached(gx, gz, vx, vz) {
+        let cx = gx - gxStart;
+        let cz = gz - gzStart;
+        if (cx < 0 || cx >= nearestCacheW || cz < 0 || cz >= nearestCacheH) {
+            return findNearestRoad(vx, vz);
+        }
+        let cacheIdx = cz * nearestCacheW + cx;
+        let val = nearestCache[cacheIdx];
+        if (val !== -2) return val;
+        let res = findNearestRoad(vx, vz);
+        nearestCache[cacheIdx] = res;
+        return res;
+    }
+
     let maxCut = 0, maxFill = 0;
     if(doFoundation) {
     // === STEP 6: Sculpt terrain ===
@@ -3293,8 +3319,8 @@ window.executeSmartRoad = function() {
             let vx = positions[idx*3];
             let vz = -positions[idx*3+1];
 
-            // Find closest road center point (spatial grid — O(1) amortized)
-            let bestRIdx = findNearestRoad(vx, vz);
+            // Find closest road center point (spatial grid — O(1) amortized, cached)
+            let bestRIdx = getNearestRoadCached(gx, gz, vx, vz);
             
             // Refine using true line-segment distance for perfectly smooth edges
             let bestDistSq = Infinity;
@@ -3389,7 +3415,7 @@ window.executeSmartRoad = function() {
                 let vx = positions[idx*3];
                 let vz = -positions[idx*3+1];
 
-                let _ni7 = findNearestRoad(vx, vz);
+                let _ni7 = getNearestRoadCached(gx, gz, vx, vz);
                 if (_ni7 < 0) continue;
                 let dx7 = vx - roadData[_ni7].x, dz7 = vz - roadData[_ni7].z;
                 let distSq7 = dx7*dx7 + dz7*dz7;
@@ -3512,7 +3538,7 @@ window.executeSmartRoad = function() {
                 let vidx = bgz * stride + bgx;
                 let bvx = positions[vidx*3], bvz = -positions[vidx*3+1];
                 let bDistSq = Infinity;
-                let bNearIdx = findNearestRoad(bvx, bvz);
+                let bNearIdx = getNearestRoadCached(bgx, bgz, bvx, bvz);
                 if (bNearIdx >= 0) {
                     let ddx = bvx - roadData[bNearIdx].x, ddz = bvz - roadData[bNearIdx].z;
                     bDistSq = ddx*ddx + ddz*ddz;

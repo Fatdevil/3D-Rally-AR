@@ -6663,13 +6663,13 @@
                     binary += String.fromCharCode.apply(null, compressed.subarray(i, i + CHUNK));
                 }
                 let heightmapH16 = 'H16|' + btoa(binary);
-                // STORAGE FIX: downsample 4096→2048 to reduce PNG size from ~3MB to ~800KB
+                // STORAGE FIX: downsample 4096→1024 to reduce PNG size and avoid localStorage quota errors
                 let biomemap = null;
                 if (typeof pCtx !== 'undefined' && pCtx) {
                     let exportCanvas = document.createElement('canvas');
-                    exportCanvas.width = exportCanvas.height = 2048;
+                    exportCanvas.width = exportCanvas.height = 1024;
                     let ectx = exportCanvas.getContext('2d');
-                    ectx.drawImage(pCtx.canvas, 0, 0, 2048, 2048);
+                    ectx.drawImage(pCtx.canvas, 0, 0, 1024, 1024);
                     biomemap = exportCanvas.toDataURL('image/png');
                 }
                 let ok = ArcadeStorage.saveTerrainSnapshot(heightmapH16, biomemap, TERRAIN_SEGS, _saveId);
