@@ -551,6 +551,14 @@ function updateVehicle(dt) {
     dt = Math.min(dt, 0.05);
     readInput();
 
+    // Direction vectors
+    let fwd = new THREE.Vector3(Math.sin(car.heading), 0, Math.cos(car.heading));
+    let right = new THREE.Vector3(Math.cos(car.heading), 0, -Math.sin(car.heading));
+
+    // Decompose velocity
+    let forwardVel = car.velocity.dot(fwd);
+    let lateralVel = car.velocity.dot(right);
+
     // Terrain + surface
     let terrain = {z:0, normal:[0,0,1], type:'ROUGH'};
     if(typeof window.localGetTerrainAt==='function')
@@ -707,7 +715,10 @@ function updateVehicle(dt) {
             // 1/1.06 = 0.943 → pow(0.943, 60*0.0167) = pow(0.943, 1) = 0.943 per 60fps-frame
             // This is intentionally strong — rain should slow you noticeably.
             // Previous: pow(1/drag, dt) gave ~0.1% per frame — barely noticeable.
-            car.velocity.multiplyScalar(Math.pow(1.0 / weatherDrag, 60 * dt));
+            let dragFactor = Math.pow(1.0 / weatherDrag, 60 * dt);
+            car.velocity.multiplyScalar(dragFactor);
+            forwardVel *= dragFactor;
+            lateralVel *= dragFactor;
         }
     }
 
@@ -737,13 +748,6 @@ function updateVehicle(dt) {
         }
     }
 
-    // Direction vectors
-    let fwd = new THREE.Vector3(Math.sin(car.heading), 0, Math.cos(car.heading));
-    let right = new THREE.Vector3(Math.cos(car.heading), 0, -Math.sin(car.heading));
-
-    // Decompose velocity
-    let forwardVel = car.velocity.dot(fwd);
-    let lateralVel = car.velocity.dot(right);
     car.speed = forwardVel;
     // prevForwardVel is saved AFTER speed cap below (C4 fix: avoids false acceleration spikes at cap)
 
