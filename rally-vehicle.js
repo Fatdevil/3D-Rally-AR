@@ -886,7 +886,7 @@ function updateVehicle(dt) {
         let frontBias = 1.0 - rearBias;
         let frontAxleLoad = car.wheelLoad[0] + car.wheelLoad[1];
         let rearAxleLoad = car.wheelLoad[2] + car.wheelLoad[3];
-        let drivenAxleLoad = frontAxleLoad * frontBias + rearAxleLoad * rearBias;
+        let drivenAxleLoad = (frontBias > 0 && rearBias > 0) ? (frontAxleLoad + rearAxleLoad) : (frontAxleLoad * frontBias + rearAxleLoad * rearBias);
         let normalY = car.onGround ? ((terrain.normal && terrain.normal[2] !== undefined) ? terrain.normal[2] : 1.0) : 0.0;
         // M5 fix: use longGrip for traction (longitudinal grip vs lateral grip)
         let maxTractionForce = drivenAxleLoad * (surface.longGrip || surface.grip) * normalY * CFG.TRACTION_MULT;
@@ -906,9 +906,10 @@ function updateVehicle(dt) {
         // FIX-M3: TORQUE_BIAS for reverse traction
         let normalY = car.onGround ? ((terrain.normal && terrain.normal[2] !== undefined) ? terrain.normal[2] : 1.0) : 0.0;
         let rearBiasRev = CFG.TORQUE_BIAS;
+        let frontBiasRev = 1.0 - rearBiasRev;
         let frontAxleRev = car.wheelLoad[0] + car.wheelLoad[1];
         let rearAxleRev = car.wheelLoad[2] + car.wheelLoad[3];
-        let drivenLoadRev = frontAxleRev * (1.0 - rearBiasRev) + rearAxleRev * rearBiasRev;
+        let drivenLoadRev = (frontBiasRev > 0 && rearBiasRev > 0) ? (frontAxleRev + rearAxleRev) : (frontAxleRev * frontBiasRev + rearAxleRev * rearBiasRev);
         let maxTractionAccel = drivenLoadRev / CFG.MASS * surface.grip * normalY * CFG.TRACTION_MULT;
         accel = Math.min(accel, maxTractionAccel);
         
