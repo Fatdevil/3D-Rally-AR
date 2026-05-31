@@ -41,7 +41,7 @@ const CFG = {
     // FAS2-H2: Gearbox & engine
     GEAR_RATIOS: [0, 3.5, 2.2, 1.6, 1.2, 0.95],  // [neutral, 1st..5th]
     FINAL_DRIVE: 4.1,          // Final drive ratio
-    WHEEL_CIRCUMFERENCE: 2.0,  // m (2π × 0.318) — legacy, use WHEEL_RADIUS instead
+    WHEEL_CIRCUMFERENCE: 2 * Math.PI * 0.35,  // m — derived from WHEEL_RADIUS (was 2.0 = 2π×0.318, gave 10% RPM error)
     TRACTION_MULT: 2.5,        // arcade traction multiplier (>1 = more grip than physics)
     MAX_RPM: 7500,
     IDLE_RPM: 1200,
@@ -656,7 +656,10 @@ function updateVehicle(dt) {
     // === FAS1-K1: WEIGHT TRANSFER ===
     // Calculate per-wheel vertical loads based on longitudinal + lateral acceleration
     baseLoad = CFG.MASS * CFG.GRAVITY / 4;  // static load per wheel
-    let fwdAccelK1 = (car.speed - car.prevForwardVel) / Math.max(dt, 0.001);
+    // BUG-1 FIX: use forwardVel (this frame's start value) not car.speed (previous frame's value).
+    // car.speed is written late (line ~770), so at this point it still holds last frame's forwardVel.
+    // Old formula gave: -(acceleration from last frame) → wrong sign → front loaded on gas, rear on braking.
+    let fwdAccelK1 = (forwardVel - car.prevForwardVel) / Math.max(dt, 0.001);
     // Lateral acceleration: v²/R from actual steering geometry
     let latAccelK1 = 0;
     if (car.onGround && Math.abs(input.steer) > 0.01 && Math.abs(forwardVel) > 1) {
@@ -950,11 +953,16 @@ function updateVehicle(dt) {
         longiForce = Math.max(longiForce, effectiveBrakeAccel * CFG.MASS);
     }
 
-    // K2: Apply friction circle — if combined lat+long exceeds budget, scale both down
+    // K2: Apply friction circle — if combined lat+long exceeds budget, scale both down.
+    // BUG-2 FIX: latForce must be in Newtons, not m/s × N.
+    // Old: lateralVel × grip × totalLoad  (units: m/s × N = N·m/s ≠ N) → latForce up to 30 000 N·m/s
+    //      vs frictionBudget ~15 000 N → frictionScale crushed to 0.5 in every normal corner.
+    // New: CFG.MASS × |latAccelK1|  (units: kg × m/s² = N) → correctly sized lateral demand.
+    // latAccelK1 is 0 when not steering so frictionScale stays 1.0 in straights.
     {
-        let latForce = Math.abs(lateralVel) * surface.grip * totalLoad;
-        let longForce = Math.abs(longiForce);
-        let combined = Math.sqrt(latForce * latForce + longForce * longForce);
+        let latForce  = CFG.MASS * Math.abs(latAccelK1);   // N = kg × m/s² ✓
+        let longForce = Math.abs(longiForce);               // N ✓
+        let combined  = Math.sqrt(latForce * latForce + longForce * longForce);
         if (combined > frictionBudget && combined > 0) {
             car.frictionScale = frictionBudget / combined;
         } else {
