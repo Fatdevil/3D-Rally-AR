@@ -26,7 +26,7 @@
             for (let s of (plan.sculpts || [])) {
                 sculptTerrain(s.x, s.z, s.radius, s.height, s.falloff || 'smooth');
                 pcb(++done, total, 'Sculpting: ' + (s.label || 'terrain'));
-                await sleep(30);
+                await sleep(80); // Longer yield to prevent Chrome "page unresponsive"
             }
             if ((plan.sculpts || []).length > 0) {
                 updateTerrainGeometry();
@@ -80,7 +80,7 @@
             for (let road of (plan.roads || [])) {
                 buildRoad(road);
                 pcb(++done, total, 'Building road');
-                await sleep(100);
+                await sleep(200); // Roads are heavy — longer yield
             }
 
             // 4. Place trees (skip any on/near roads or in water)
@@ -161,6 +161,37 @@
 
             pcb(total, total, '✅ World built!');
             console.log('🎨 ScanBuilder: Build complete!');
+
+            // ── AUTO-REPOSITION CAMERA above terrain ──
+            // After build, camera may be inside mountains. Move it to a bird's-eye view.
+            try {
+                let cam = window.camera;
+                let ctrl = window.controls;
+                if (cam && ctrl) {
+                    // Find terrain center height
+                    let centerY = 0;
+                    if (window.getTerrainHeight) {
+                        centerY = window.getTerrainHeight(0, 0);
+                    }
+                    // Find max terrain height for safe camera position
+                    let maxY = centerY;
+                    let geo = window._arcadePlaneGeo;
+                    if (geo) {
+                        let pos = geo.attributes.position.array;
+                        for (let vi = 2; vi < pos.length; vi += 3) {
+                            if (pos[vi] > maxY) maxY = pos[vi];
+                        }
+                    }
+                    // Position camera well above the highest point
+                    let safeY = maxY + 150;
+                    cam.position.set(0, safeY, 200);
+                    ctrl.target.set(0, centerY, 0);
+                    ctrl.update();
+                    console.log('📷 Camera repositioned: y=' + safeY.toFixed(0) + ' (terrain max=' + maxY.toFixed(0) + ')');
+                }
+            } catch (camErr) {
+                console.warn('📷 Camera reposition failed:', camErr.message);
+            }
         }
     };
 
@@ -276,7 +307,7 @@
         // Set smart-builder state
         window._smartRoadWidth = road.width || 10;
         window._smartRoadSurface = mapMaterial(road.material);
-        window._smartRoadFoundation = false; // Lay road directly on terrain without sculpting (prevents spiky artifacts)
+        window._smartRoadFoundation = true;  // Cut through terrain (flatten under road) so roads don't get buried under mountains
         window._smartRoadShoulder = 4;
         window._smartRoadBanking = 0; // 0 degree banking for natural terrain contouring
         window._smartRoadGradeDown = 0.75; // More generous downhill limit (75% grade)
