@@ -6606,14 +6606,14 @@
                 let rallyData = {
                     start: raceConfig.start ? {x: raceConfig.start.x, y: raceConfig.start.y, z: raceConfig.start.z, rotation: raceConfig.start.rotation} : null,
                     finish: raceConfig.finish ? {x: raceConfig.finish.x, y: raceConfig.finish.y, z: raceConfig.finish.z, rotation: raceConfig.finish.rotation} : null,
-                    checkpoints: raceConfig.checkpoints.map(cp => ({x: cp.x, y: cp.y, z: cp.z, radius: cp.radius || 10})),
+                    checkpoints: (raceConfig.checkpoints || []).map(cp => ({x: cp.x, y: cp.y, z: cp.z, radius: cp.radius || 15})),
                     bestTime: raceConfig.bestTime,
                     laps: raceConfig.laps || 1,
                     missedCheckpointRule: raceConfig.missedCheckpointRule,
                     usePbr: raceConfig.usePbr !== false,
                     // ROAD PIPELINE FIX: serialize road geometry for rally.html
                     // rally.html rebuilds sampledPoints from nodes (saves ~80% storage)
-                    roads: (window._builtRoads || []).map(function(r) {
+                    roads: (window._builtRoads || (window.roadSystem && window.roadSystem.roads) || []).map(function(r) {
                         return {
                             id: r.id,
                             nodes: r.nodes,
@@ -15196,7 +15196,7 @@ function selectTimeOfDay(time, el) {
     el.classList.add('selected');
 }
 
-function launchRace() {
+async function launchRace() {
     // Store pre-race settings for rally.html
     sessionStorage.setItem('prerace_power_multiplier', _preracePowerMultiplier);
     sessionStorage.setItem('prerace_time_of_day', _preraceTimeOfDay);
@@ -15211,14 +15211,20 @@ function launchRace() {
         window.setSunsetMode(true);
     }
     
-    // Save level with time-of-day applied, then redirect
-    if (typeof saveLevel === 'function') {
-        saveLevel();
+    // Save level — yield to main thread between heavy operations
+    // to prevent Chrome "page unresponsive" dialog
+    try {
+        if (typeof saveLevel === 'function') {
+            saveLevel();
+        }
+    } catch (e) {
+        console.error('🏁 saveLevel failed:', e.message);
     }
     
-    setTimeout(function() {
-        window.location.href = 'rally.html';
-    }, 300);
+    // Yield to main thread so the browser can paint/breathe
+    await new Promise(function(r) { setTimeout(r, 50); });
+    
+    window.location.href = 'rally.html';
 }
 </script>
 

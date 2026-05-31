@@ -126,11 +126,31 @@
             done += treeBatch.length;
 
             // 5. Set up race (rally mode)
-            if (plan.race) {
-                setupRace(plan.race);
-                pcb(++done, total, 'Setting up race gates');
-                await sleep(50);
+            // Always run — if plan.race is missing, auto-generate from road data
+            let raceData = plan.race || {};
+            // Auto-detect start/finish from first road if not specified
+            if (!raceData.start && (window._builtRoads || []).length > 0) {
+                let firstRoad = window._builtRoads[0];
+                let pts = firstRoad.sampledPoints;
+                if (pts && pts.length >= 2) {
+                    raceData.start = { x: pts[0].x, z: pts[0].z, heading: 0 };
+                    let last = pts[pts.length - 1];
+                    let first = pts[0];
+                    let dx = last.x - first.x, dz = last.z - first.z;
+                    let dist = Math.sqrt(dx*dx + dz*dz);
+                    if (dist < 30) {
+                        // Loop track — start = finish
+                        raceData.finish = { x: pts[0].x, z: pts[0].z, heading: 0 };
+                        raceData.laps = raceData.laps || 3;
+                    } else {
+                        raceData.finish = { x: last.x, z: last.z, heading: 0 };
+                    }
+                    console.log('🏁 Auto-detected start/finish from road endpoints');
+                }
             }
+            setupRace(raceData);
+            pcb(++done, total, 'Setting up race gates');
+            await sleep(50);
 
             // 6. Set up golf holes
             for (let hole of (plan.holes || [])) {
@@ -491,34 +511,199 @@
             }
         }
 
-        // Place CHECKPOINTS and build their meshes
+        // ── AUTO-GENERATE CHECKPOINTS from road data ──
+        // No AI needed — system reads road sampledPoints and places 6-8 checkpoints:
+        // 1. Compute curvature at each road point
+        // 2. Pick curve apexes (highest curvature = furthest from straight line)
+        // 3. Fill gaps with evenly-spaced points to prevent shortcuts
+        let autoCheckpoints = [];
         if (race.checkpoints && race.checkpoints.length > 0) {
-            window.raceConfig.checkpoints = race.checkpoints.map(function(cp) {
+            // Use explicit checkpoints if provided (backward compat)
+            autoCheckpoints = race.checkpoints.map(function(cp) {
                 let snappedCp = snapToRoadIfNeeded(cp, 0) || cp;
                 let cy = window.getTerrainHeight ? window.getTerrainHeight(snappedCp.x, snappedCp.z) : 0;
-                return { x: snappedCp.x, y: cy, z: snappedCp.z, radius: cp.radius || 12 };
+                return { x: snappedCp.x, y: cy, z: snappedCp.z, radius: cp.radius || 15 };
             });
+        } else {
+            // AUTO-GENERATE from road geometry
+            autoCheckpoints = autoGenerateCheckpoints();
+        }
 
-            if (scene && window.THREE) {
-                window.raceConfig.checkpoints.forEach(function(cp, i) {
-                    try {
-                        let ring = new THREE.Mesh(
-                            new THREE.TorusGeometry((cp.radius || 12) * 0.5, 0.25, 8, 24),
-                            new THREE.MeshLambertMaterial({ color: 0xfacc15, transparent: true, opacity: 0.7 })
-                        );
-                        ring.rotation.x = Math.PI / 2;
-                        ring.position.set(cp.x, cp.y + 3, cp.z);
-                        scene.add(ring);
-                        window.raceConfig.checkpointMeshes.push({ ring: ring, label: null });
-                    } catch(e) {
-                        console.error('ScanBuilder: Failed to create checkpoint mesh:', e);
-                    }
-                });
-            }
+        window.raceConfig.checkpoints = autoCheckpoints;
+
+        // Build checkpoint meshes (visible yellow torus rings)
+        if (scene && window.THREE && autoCheckpoints.length > 0) {
+            autoCheckpoints.forEach(function(cp, i) {
+                try {
+                    let ring = new THREE.Mesh(
+                        new THREE.TorusGeometry((cp.radius || 15) * 0.5, 0.3, 8, 24),
+                        new THREE.MeshLambertMaterial({ color: 0xfacc15, transparent: true, opacity: 0.7 })
+                    );
+                    ring.rotation.x = Math.PI / 2;
+                    ring.position.set(cp.x, cp.y + 3, cp.z);
+                    scene.add(ring);
+                    window.raceConfig.checkpointMeshes.push({ ring: ring, label: null });
+                } catch(e) {
+                    console.error('ScanBuilder: Failed to create checkpoint mesh:', e);
+                }
+            });
+            console.log('🏁 Auto-checkpoints placed:', autoCheckpoints.length);
         }
 
         // Set laps
         window.raceConfig.laps = race.laps || 1;
+    }
+
+    // ── AUTO-GENERATE CHECKPOINTS ──
+    // Analyzes built road geometry and places 6-8 strategic checkpoints.
+    // Algorithm:
+    //   1. Collect all sampledPoints from _builtRoads
+    //   2. Compute curvature (angle change) at each point
+    //   3. Find curve apexes (local maxima of curvature)
+    //   4. Pick top N apex points as "must-have" checkpoints
+    //   5. Fill remaining slots with evenly-spaced points to prevent shortcuts
+    //   6. Sort checkpoints in road-order
+    function autoGenerateCheckpoints() {
+        let roads = window._builtRoads || [];
+        if (roads.length === 0) {
+            console.warn('🏁 autoGenerateCheckpoints: No roads found');
+            return [];
+        }
+
+        // Collect all sampled points into a single path
+        // For multi-road courses, concatenate; for single road, use directly
+        let allPoints = [];
+        for (let ri = 0; ri < roads.length; ri++) {
+            let pts = roads[ri].sampledPoints;
+            if (!pts || pts.length < 2) continue;
+            for (let pi = 0; pi < pts.length; pi++) {
+                allPoints.push({ x: pts[pi].x, y: pts[pi].y || 0, z: pts[pi].z, roadIdx: ri, ptIdx: pi });
+            }
+        }
+
+        if (allPoints.length < 10) {
+            console.warn('🏁 autoGenerateCheckpoints: Too few road points (' + allPoints.length + ')');
+            return [];
+        }
+
+        // Step 1: Compute cumulative arc length for each point
+        let arcLength = [0];
+        for (let i = 1; i < allPoints.length; i++) {
+            let dx = allPoints[i].x - allPoints[i-1].x;
+            let dz = allPoints[i].z - allPoints[i-1].z;
+            arcLength.push(arcLength[i-1] + Math.sqrt(dx*dx + dz*dz));
+        }
+        let totalLength = arcLength[allPoints.length - 1];
+
+        // Step 2: Compute curvature at each point (angle change over ~10m window)
+        let curvature = new Float32Array(allPoints.length);
+        let WINDOW = 5; // look-ahead/behind points
+        for (let i = WINDOW; i < allPoints.length - WINDOW; i++) {
+            let prev = allPoints[i - WINDOW];
+            let curr = allPoints[i];
+            let next = allPoints[i + WINDOW];
+
+            let ax = curr.x - prev.x, az = curr.z - prev.z;
+            let bx = next.x - curr.x, bz = next.z - curr.z;
+
+            let lenA = Math.sqrt(ax*ax + az*az);
+            let lenB = Math.sqrt(bx*bx + bz*bz);
+            if (lenA < 0.01 || lenB < 0.01) continue;
+
+            // Cross product magnitude = sin(angle) * |a| * |b|
+            let cross = Math.abs(ax * bz - az * bx);
+            curvature[i] = cross / (lenA * lenB); // = |sin(angle)|
+        }
+
+        // Step 3: Find curve apexes (local maxima of curvature)
+        // Minimum curvature threshold — ignore gentle bends
+        let CURVATURE_THRESHOLD = 0.15; // ~8.6° turn
+        let MIN_APEX_SPACING = totalLength * 0.08; // Apexes must be ≥8% of track apart
+
+        let apexes = []; // {index, curvature, arcLen}
+        for (let i = WINDOW + 2; i < allPoints.length - WINDOW - 2; i++) {
+            if (curvature[i] < CURVATURE_THRESHOLD) continue;
+            // Is this a local maximum? (higher than neighbors ±2)
+            if (curvature[i] >= curvature[i-1] && curvature[i] >= curvature[i+1] &&
+                curvature[i] >= curvature[i-2] && curvature[i] >= curvature[i+2]) {
+                apexes.push({ index: i, curv: curvature[i], dist: arcLength[i] });
+            }
+        }
+
+        // Sort by curvature (sharpest first)
+        apexes.sort(function(a, b) { return b.curv - a.curv; });
+
+        // Step 4: Pick top apexes respecting minimum spacing
+        let TARGET_CHECKPOINTS = Math.min(8, Math.max(4, Math.round(totalLength / 150))); // ~1 per 150m, clamped 4-8
+        let selectedIndices = []; // indices into allPoints
+
+        for (let ai = 0; ai < apexes.length && selectedIndices.length < Math.ceil(TARGET_CHECKPOINTS * 0.6); ai++) {
+            let apex = apexes[ai];
+            // Check spacing vs already selected
+            let tooClose = false;
+            for (let si = 0; si < selectedIndices.length; si++) {
+                let existingDist = arcLength[selectedIndices[si]];
+                if (Math.abs(apex.dist - existingDist) < MIN_APEX_SPACING) {
+                    tooClose = true;
+                    break;
+                }
+            }
+            if (!tooClose) {
+                selectedIndices.push(apex.index);
+            }
+        }
+
+        // Step 5: Fill remaining slots with evenly-spaced points
+        // Skip first 5% and last 5% (too close to start/finish)
+        let usedDistances = selectedIndices.map(function(idx) { return arcLength[idx]; });
+        let MARGIN = totalLength * 0.05;
+        let remaining = TARGET_CHECKPOINTS - selectedIndices.length;
+
+        if (remaining > 0) {
+            let spacing = (totalLength - 2 * MARGIN) / (remaining + 1);
+            for (let fi = 0; fi < remaining; fi++) {
+                let targetDist = MARGIN + spacing * (fi + 1);
+                // Check it's not too close to an existing checkpoint
+                let tooClose = false;
+                for (let ud = 0; ud < usedDistances.length; ud++) {
+                    if (Math.abs(targetDist - usedDistances[ud]) < MIN_APEX_SPACING * 0.5) {
+                        tooClose = true;
+                        break;
+                    }
+                }
+                if (tooClose) continue;
+
+                // Find nearest road point to this arc distance
+                let bestIdx = 0;
+                let bestDiff = Infinity;
+                for (let pi = 0; pi < allPoints.length; pi++) {
+                    let diff = Math.abs(arcLength[pi] - targetDist);
+                    if (diff < bestDiff) { bestDiff = diff; bestIdx = pi; }
+                }
+                selectedIndices.push(bestIdx);
+                usedDistances.push(arcLength[bestIdx]);
+            }
+        }
+
+        // Step 6: Sort by arc length (road order) and build checkpoint objects
+        selectedIndices.sort(function(a, b) { return arcLength[a] - arcLength[b]; });
+
+        let roadWidth = (roads[0] && roads[0].width) || 10;
+        let cpRadius = Math.max(15, roadWidth + 5); // road width + 5m margin
+
+        let checkpoints = [];
+        for (let ci = 0; ci < selectedIndices.length; ci++) {
+            let pt = allPoints[selectedIndices[ci]];
+            let cy = 0;
+            if (window.getTerrainHeight) cy = window.getTerrainHeight(pt.x, pt.z);
+            checkpoints.push({ x: pt.x, y: cy, z: pt.z, radius: cpRadius });
+        }
+
+        console.log('🏁 Auto-generated ' + checkpoints.length + ' checkpoints from ' +
+            allPoints.length + ' road points (track: ' + Math.round(totalLength) + 'm, ' +
+            apexes.length + ' curve apexes found)');
+
+        return checkpoints;
     }
 
     // ── GOLF HOLE SETUP ──
@@ -556,7 +741,7 @@
              + (plan.trees || []).length
              + (plan.water || []).length
              + (plan.holes || []).length
-             + (plan.race ? 1 : 0);
+             + 1; // race setup always runs (auto-generates if needed)
     }
 
     // Simple box blur (applied multiple times ≈ gaussian)
