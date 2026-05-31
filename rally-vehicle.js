@@ -1151,21 +1151,27 @@ function updateVehicle(dt) {
     car.position.z += car.velocity.z * dt;
 
     // === TERRAIN FOLLOWING ===
-    // CRITICAL: Re-sample terrain at the NEW position (after X/Z move above).
-    // terrain.z was sampled at the OLD position at the top of this function.
-    // On uphills the car moves forward → ground is HIGHER at new pos → using old
-    // groundY would snap the car DOWN into the mountain. Re-sample fixes this.
-    // Use avgGroundY (average of four wheel contact points) instead of a single centre sample.
-    // Gives correct height at crests (lifts slightly) and dips (settles in).
-    // Falls back to terrain.z if suspension loop hasn't populated it yet (first frame).
-    let groundY = (avgGroundY !== 0) ? avgGroundY : terrain.z;
+    // CRITICAL: sample terrain at the NEW position (car.position.x/z was just updated above).
+    // avgGroundY came from the suspension loop which ran BEFORE the position update — still stale.
+    // A fresh single-point sample here is more accurate for airborne detection and height following.
+    // This also eliminates the hilltop "ollie": old code used the crest height even after the car
+    // had already moved onto the downslope, snapping it up before releasing it airborne.
+    let groundY;
+    if (typeof window.localGetTerrainAt === 'function') {
+        groundY = window.localGetTerrainAt(car.position.x, -car.position.z).z;
+    } else {
+        groundY = terrain.z;
+    }
     if (!car._landingGrace) car._landingGrace = 0;
     if (car._landingGrace > 0) car._landingGrace -= dt;
 
-    // While in landing grace period, treat as grounded even if position is slightly above ground
-    let airborneThresh = 0.05 + clamp(Math.abs(car.speed) * 0.005, 0, 0.20);
+    // Airborne threshold: small base + gentle speed scaling.
+    // Reduced multiplier (0.003) and cap (0.12) vs old values (0.005 / 0.20) so the car
+    // doesn't cling to crest height too long before cleanly releasing into the jump.
+    let airborneThresh = 0.05 + clamp(Math.abs(car.speed) * 0.003, 0, 0.12);
     let isAirborne = car.position.y > groundY + CFG.CAR_HEIGHT + airborneThresh
                      && car._landingGrace <= 0;
+
 
     if (isAirborne) {
         car.onGround = false;
