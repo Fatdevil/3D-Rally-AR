@@ -10339,7 +10339,7 @@
             rallyCopy = {
                 start: window.raceConfig.start ? JSON.parse(JSON.stringify(window.raceConfig.start)) : null,
                 finish: window.raceConfig.finish ? JSON.parse(JSON.stringify(window.raceConfig.finish)) : null,
-                checkpoints: window.raceConfig.checkpoints.map(cp => ({x: cp.x, y: cp.y, z: cp.z, radius: cp.radius || 10})),
+                checkpoints: (window.raceConfig.checkpoints || []).map(cp => ({x: cp.x, y: cp.y, z: cp.z, radius: cp.radius || 15})),
                 missedCheckpointRule: window.raceConfig.missedCheckpointRule
             };
         }
@@ -15197,6 +15197,8 @@ function selectTimeOfDay(time, el) {
 }
 
 async function launchRace() {
+    console.log('🏁 launchRace() called');
+    
     // Store pre-race settings for rally.html
     sessionStorage.setItem('prerace_power_multiplier', _preracePowerMultiplier);
     sessionStorage.setItem('prerace_time_of_day', _preraceTimeOfDay);
@@ -15204,26 +15206,30 @@ async function launchRace() {
     
     console.log('🏁 RACE! Power: ' + _preracePowerMultiplier + 'x | Time: ' + _preraceTimeOfDay);
     
-    // Apply time of day before redirect
+    // Apply time of day before save
     if (_preraceTimeOfDay === 'night' && typeof window.setNightMode === 'function') {
         window.setNightMode(true);
     } else if (_preraceTimeOfDay === 'sunset' && typeof window.setSunsetMode === 'function') {
         window.setSunsetMode(true);
     }
     
-    // Save level — yield to main thread between heavy operations
-    // to prevent Chrome "page unresponsive" dialog
+    // Save level — use window.saveLevel (defined inside IIFE, exposed on window)
     try {
-        if (typeof saveLevel === 'function') {
-            saveLevel();
+        if (typeof window.saveLevel === 'function') {
+            console.log('🏁 Calling saveLevel...');
+            window.saveLevel();
+            console.log('🏁 saveLevel done');
+        } else {
+            console.warn('🏁 saveLevel not found on window');
         }
     } catch (e) {
-        console.error('🏁 saveLevel failed:', e.message);
+        console.error('🏁 saveLevel failed:', e.message, e.stack);
     }
     
     // Yield to main thread so the browser can paint/breathe
-    await new Promise(function(r) { setTimeout(r, 50); });
+    await new Promise(function(r) { setTimeout(r, 100); });
     
+    console.log('🏁 Redirecting to rally.html...');
     window.location.href = 'rally.html';
 }
 </script>
