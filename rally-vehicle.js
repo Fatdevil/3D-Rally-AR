@@ -984,34 +984,33 @@ function updateVehicle(dt) {
     }
 
     // === LATERAL CORRECTION (THE DRIFT MAGIC) ===
-    // K2: frictionScale reduces lateral grip when longitudinal force is high
-    // H6: camber improves lateral grip — applied per-axle for asymmetric setups
-    // H9 fix: use per-axle camber instead of average for more accurate grip distribution
-    let frontCamberGrip = camberGripFront;
-    let rearCamberGrip = camberGripRear * rearToeGrip;
-    // Weighted by axle load ratio for net effect on lateral correction
-    let frontLoadFrac = (car.wheelLoad[0] + car.wheelLoad[1]) / Math.max(totalLoad, 1);
-    let rearLoadFrac = 1.0 - frontLoadFrac;
-    let weightedCamberGrip = frontCamberGrip * frontLoadFrac + rearCamberGrip * rearLoadFrac;
-    let effectiveGripFactor = car.gripFactor * car.frictionScale * weightedCamberGrip;
-    // FIX-M3: TORQUE_BIAS lateral effect — driven axle loses lateral grip under power
-    // RWD + throttle = rear loses lateral grip = oversteer tendency
-    // FWD + throttle = front loses lateral grip = understeer tendency
-    if (input.throttle > 0.1 && car.onGround) {
-        let powerSaturation = input.throttle * clamp(Math.abs(forwardVel) / 30, 0, 1) * 0.15;
-        // RWD bias > 0.5: reduce rear grip → oversteer (less lateral correction)
-        // FWD bias < 0.5: reduce front grip → understeer (steering less effective)
-        let rearLoss = powerSaturation * CFG.TORQUE_BIAS;       // max at RWD (1.0)
-        let frontLoss = powerSaturation * (1.0 - CFG.TORQUE_BIAS); // max at FWD (0.0→1.0)
-        // Rear loss reduces lateral grip directly (oversteer)
-        effectiveGripFactor *= (1.0 - rearLoss);
-        // C6 fix: FWD understeer — frontLoss saved for steering reduction below
-        car._frontLossThisFrame = frontLoss;
+    // LANDING FIX: Only apply lateral grip correction when on the ground.
+    // Airborne: the car has no tyre contact so there is no lateral grip to correct.
+    // Applying it airborne was eating horizontal speed the moment the car touched down.
+    if (car.onGround) {
+        // K2: frictionScale reduces lateral grip when longitudinal force is high
+        // H6: camber improves lateral grip — applied per-axle for asymmetric setups
+        let frontCamberGrip = camberGripFront;
+        let rearCamberGrip = camberGripRear * rearToeGrip;
+        let frontLoadFrac = (car.wheelLoad[0] + car.wheelLoad[1]) / Math.max(totalLoad, 1);
+        let rearLoadFrac = 1.0 - frontLoadFrac;
+        let weightedCamberGrip = frontCamberGrip * frontLoadFrac + rearCamberGrip * rearLoadFrac;
+        let effectiveGripFactor = car.gripFactor * car.frictionScale * weightedCamberGrip;
+        // FIX-M3: TORQUE_BIAS lateral effect
+        if (input.throttle > 0.1) {
+            let powerSaturation = input.throttle * clamp(Math.abs(forwardVel) / 30, 0, 1) * 0.15;
+            let rearLoss = powerSaturation * CFG.TORQUE_BIAS;
+            let frontLoss = powerSaturation * (1.0 - CFG.TORQUE_BIAS);
+            effectiveGripFactor *= (1.0 - rearLoss);
+            car._frontLossThisFrame = frontLoss;
+        } else {
+            car._frontLossThisFrame = 0;
+        }
+        let lateralRetain = Math.pow(1-effectiveGripFactor, 60*dt);
+        car.velocity.addScaledVector(right, lateralVel*(lateralRetain-1));
     } else {
         car._frontLossThisFrame = 0;
     }
-    let lateralRetain = Math.pow(1-effectiveGripFactor, 60*dt);
-    car.velocity.addScaledVector(right, lateralVel*(lateralRetain-1));
 
     // Handbrake extra drag
     let dragMult = CFG.DRAG * (1.0 - surface.dragAdd);
@@ -1119,11 +1118,15 @@ function updateVehicle(dt) {
 
     // === TERRAIN FOLLOWING ===
     let groundY = terrain.z;
-    // H7 fix: reduced airborne deadzone from 0.3m to 0.05m
-    // Dynamic deadzone: scales with speed to prevent going airborne on steep downhills
-    let speedT = Math.abs(car.speed);
-    let airborneThresh = 0.05 + clamp(speedT * 0.005, 0, 0.20);
-    if(car.position.y > groundY + CFG.CAR_HEIGHT + airborneThresh) {
+    if (!car._landingGrace) car._landingGrace = 0;
+    if (car._landingGrace > 0) car._landingGrace -= dt;
+
+    // While in landing grace period, treat as grounded even if position is slightly above ground
+    let airborneThresh = 0.05 + clamp(Math.abs(car.speed) * 0.005, 0, 0.20);
+    let isAirborne = car.position.y > groundY + CFG.CAR_HEIGHT + airborneThresh
+                     && car._landingGrace <= 0;
+
+    if (isAirborne) {
         car.onGround = false;
         car.velocity.y -= CFG.GRAVITY * CFG.GRAVITY_AIR_MULT * dt;
         car.velocity.y = Math.max(car.velocity.y, -50); // terminal velocity cap
@@ -1132,25 +1135,32 @@ function updateVehicle(dt) {
         if(Math.abs(input.steer)>0.1)
             car.heading += input.steer * CFG.AIR_CONTROL * dt;
         if(car.position.y <= groundY + CFG.CAR_HEIGHT) {
+            // === LANDING ===
             car.position.y = groundY + CFG.CAR_HEIGHT;
-            // Landing absorption
-            let landingImpact = -car.velocity.y; // positive m/s downward
-            if(car.velocity.y < -5) car.visualPitch = clamp(car.velocity.y*0.5, -8, 0);
-            car.velocity.y *= -0.15 * surface.landing;
-            if(Math.abs(car.velocity.y)<0.5) car.velocity.y=0;
-            car.onGround = true;
-            // Damage from hard landing
+            let landingImpact = -car.velocity.y; // positive = hard impact
+            // Kill vertical velocity completely — no bounce.
+            // The bounce felt wrong: car came in at 100km/h, vertical component got
+            // reflected upward making the whole car trajectory arc back into the air.
+            car.velocity.y = 0;
+            // Camera shake proportional to impact
+            if (landingImpact > 4 && window.rallyCamera) {
+                window.rallyCamera.triggerShake(landingImpact * 0.5);
+            }
+            // Damage from very hard landing
             if (window.rallyDamage && landingImpact > 8) {
                 window.rallyDamage.applyDamage(landingImpact);
-                if (window.rallyCamera) window.rallyCamera.triggerShake(landingImpact);
             }
+            car.onGround = true;
+            // Landing grace: prevents re-triggering airborne for 0.15s after touch-down
+            // so the dynamic threshold doesn't immediately kick car back into the air
+            // on steep downhill landings where the ground falls away quickly.
+            car._landingGrace = 0.15;
         }
     } else {
         car.onGround = true;
         car.velocity.y = 0;
-        // FAS0-H8: Time-normalized terrain following (was hardcoded 0.3)
-        // Increased follow rate from 0.3 to 0.85 (by changing base from 0.7 to 0.15) to prevent floating/bouncing on downhills
-        let followRate = 1 - Math.pow(0.15, dt * 60);  // ~0.85 at 60fps, framerate-independent
+        // Tight terrain following: 85% snap per frame at 60fps eliminates downhill float
+        let followRate = 1 - Math.pow(0.15, dt * 60);
         car.position.y += (groundY + CFG.CAR_HEIGHT - car.position.y) * followRate;
     }
 
