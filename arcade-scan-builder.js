@@ -307,13 +307,13 @@
         // Set smart-builder state
         window._smartRoadWidth = road.width || 10;
         window._smartRoadSurface = mapMaterial(road.material);
-        window._smartRoadFoundation = true;  // Cut through terrain (flatten under road) so roads don't get buried under mountains
+        window._smartRoadFoundation = road.foundation === true;  // Only cut through terrain if plan specifies it
         window._smartRoadShoulder = 4;
-        window._smartRoadBanking = 0; // 0 degree banking for natural terrain contouring
+        window._smartRoadBanking = road.banking || 0; // Respektera planens inställning
         window._smartRoadGradeDown = 0.75; // More generous downhill limit (75% grade)
         window._smartRoadGradeUp = 0.60;   // More generous uphill limit (60% grade)
-        window._smartRoadBarrierL = 'STAKES';
-        window._smartRoadBarrierR = 'STAKES';
+        window._smartRoadBarrierL = road.barrierL || 'NONE'; // Respektera planens inställning
+        window._smartRoadBarrierR = road.barrierR || 'NONE'; // Respektera planens inställning
         window._smartRoadEdgeL = 'NONE';
         window._smartRoadEdgeR = 'NONE';
         window._smartShapeClosed = isLoop;
