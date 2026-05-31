@@ -1148,7 +1148,8 @@ function updateVehicle(dt) {
         car.onGround = true;
         car.velocity.y = 0;
         // FAS0-H8: Time-normalized terrain following (was hardcoded 0.3)
-        let followRate = 1 - Math.pow(0.7, dt * 60);  // ~0.3 at 60fps, framerate-independent
+        // Increased follow rate from 0.3 to 0.85 (by changing base from 0.7 to 0.15) to prevent floating/bouncing on downhills
+        let followRate = 1 - Math.pow(0.15, dt * 60);  // ~0.85 at 60fps, framerate-independent
         car.position.y += (groundY + CFG.CAR_HEIGHT - car.position.y) * followRate;
     }
 
