@@ -588,9 +588,16 @@ function updateVehicle(dt) {
         car.slopePitch = lerp(car.slopePitch, targetSlopePitch, 15 * dt);
         car.slopeRoll = lerp(car.slopeRoll, targetSlopeRoll, 15 * dt);
     } else {
-        // Airborne: slowly decay slope pitch and roll towards 0 (gravity alignment)
-        car.slopePitch = lerp(car.slopePitch, 0, 2.0 * dt);
-        car.slopeRoll = lerp(car.slopeRoll, 0, 2.0 * dt);
+        // Airborne: pitch nose toward the velocity trajectory (descend = nose down)
+        // hSpeed = horizontal speed, velocity.y < 0 when falling
+        // atan2(vy, hSpeed) is negative when falling → negate to get nose-down pitch.
+        // Lerp factor 2.5 matches the decay-to-zero speed so orientation is smooth.
+        let hSpeedAir = Math.sqrt(car.velocity.x*car.velocity.x + car.velocity.z*car.velocity.z);
+        let trajPitch = Math.atan2(car.velocity.y, Math.max(hSpeedAir, 0.5)); // radians, <0 when falling
+        // Negate: negative trajPitch (falling) should give negative slopePitch = nose down
+        // (matches ground formula sign convention where downhill = negative slopePitch)
+        car.slopePitch = lerp(car.slopePitch, -trajPitch * 0.95, 2.5 * dt);
+        car.slopeRoll  = lerp(car.slopeRoll, 0, 2.0 * dt);
     }
 
     let euler = new THREE.Euler(car.slopePitch, car.heading, car.slopeRoll, 'YXZ');
@@ -717,12 +724,10 @@ function updateVehicle(dt) {
         weatherGripMult = window.rallyWeather.getWeatherGrip(car.surfaceKey);
         // Weather also modifies drag
         let weatherDrag = window.rallyWeather.getDragMult();
-        if (weatherDrag > 1.0) {
-            // Weather drag: scale with 60*dt for framerate-independence
-            // getDragMult() returns values like 1.02-1.06, converting:
-            // 1/1.06 = 0.943 → pow(0.943, 60*0.0167) = pow(0.943, 1) = 0.943 per 60fps-frame
-            // This is intentionally strong — rain should slow you noticeably.
-            // Previous: pow(1/drag, dt) gave ~0.1% per frame — barely noticeable.
+        if (weatherDrag > 1.0 && car.onGround) {
+            // Weather drag only applies on the ground (rain doesn't drain a jumping car).
+            // getDragMult() returns values like 1.02-1.06.
+            // 1/1.06 = 0.943 → pow(0.943, 60*dt) per frame — framerate-independent.
             let dragFactor = Math.pow(1.0 / weatherDrag, 60 * dt);
             car.velocity.multiplyScalar(dragFactor);
             forwardVel *= dragFactor;
@@ -1012,9 +1017,17 @@ function updateVehicle(dt) {
         car._frontLossThisFrame = 0;
     }
 
-    // Handbrake extra drag
-    let dragMult = CFG.DRAG * (1.0 - surface.dragAdd);
-    if(input.handbrake) dragMult = Math.min(dragMult, CFG.HANDBRAKE_DRAG);
+    // Drag: in air → pure aero (CFG.DRAG only, no surface friction or handbrake).
+    // On ground → full drag including surface friction.
+    // Without this guard, surface.dragAdd ≈ 0.015 causes ~70% speed loss per second
+    // in the air, crashing 100 km/h jumps down to ~10 km/h on landing.
+    let dragMult;
+    if (car.onGround) {
+        dragMult = CFG.DRAG * (1.0 - surface.dragAdd);
+        if (input.handbrake) dragMult = Math.min(dragMult, CFG.HANDBRAKE_DRAG);
+    } else {
+        dragMult = CFG.DRAG;  // light aerodynamic drag only — no tyre/surface friction in air
+    }
     car.velocity.multiplyScalar(Math.pow(dragMult, 60*dt));
 
     // Natural decel at low speed
