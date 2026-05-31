@@ -581,8 +581,9 @@ function updateVehicle(dt) {
     if (car.slopeRoll === undefined) car.slopeRoll = 0;
     if (car.onGround) {
         let nx = terrain.normal[0]||0, nz = terrain.normal[1]||0;
-        let targetSlopePitch = (nx*Math.sin(car.heading) + nz*Math.cos(car.heading)) * 0.95;
-        let targetSlopeRoll = (-nx*Math.cos(car.heading) + nz*Math.sin(car.heading)) * 0.95;
+        // Negate pitch and roll to correct the orientation sign (so nose points down when going downhill)
+        let targetSlopePitch = -(nx*Math.sin(car.heading) + nz*Math.cos(car.heading)) * 0.95;
+        let targetSlopeRoll = -(-nx*Math.cos(car.heading) + nz*Math.sin(car.heading)) * 0.95;
         // Smoothly follow terrain slope when on ground
         car.slopePitch = lerp(car.slopePitch, targetSlopePitch, 15 * dt);
         car.slopeRoll = lerp(car.slopeRoll, targetSlopeRoll, 15 * dt);
