@@ -960,8 +960,8 @@
 
 
     // ── Initialize ──
-    let terrainLoaded = loadTerrain();
     let spawnPos = resolveSpawnPosition(); // may be null
+    let terrainLoaded = loadTerrain();
 
     if (terrainLoaded) {
         // TIMING FIX: wait for biome img.onload (roads + trees) before spawning car

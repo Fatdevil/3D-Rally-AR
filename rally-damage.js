@@ -87,14 +87,16 @@ function getModifiers() {
     let accelMult = 1.0;
     let maxSpeedMult = 1.0;
 
-    if (damage > 0.3 && damage <= 0.6) {
-        steerMult = 1 - DMG.STEER_PENALTY_30;
-    } else if (damage > 0.6 && damage <= 0.9) {
-        steerMult = 1 - DMG.STEER_PENALTY_60;
-        accelMult = 1 - DMG.ENGINE_PENALTY_60;
-    } else if (damage > 0.9) {
-        steerMult = 1 - DMG.STEER_PENALTY_60;
-        accelMult = 1 - DMG.ENGINE_PENALTY_60 * 1.5;
+    // Smooth linear interpolation — no discontinuities
+    // Steering: 0% penalty at 0 damage, 40% at 90%+ damage
+    steerMult = 1.0 - lerp(0, DMG.STEER_PENALTY_60, clamp(damage / 0.9, 0, 1));
+    // Engine: kicks in above 30% damage, 20% at 90%
+    if (damage > 0.3) {
+        accelMult = 1.0 - lerp(0, DMG.ENGINE_PENALTY_60, clamp((damage - 0.3) / 0.6, 0, 1));
+    }
+    // 90%+ damage: extra engine penalty
+    if (damage > 0.9) {
+        accelMult *= 0.85;
     }
 
     maxSpeedMult = Math.max(DMG.MAX_SPEED_FLOOR, 1 - damage * 0.7);

@@ -121,6 +121,22 @@ function triggerRespawn() {
     car.prevForwardVel = 0;
     car.isDrifting = false;
     
+    // Reset dynamic physics state
+    car.suspPos = [0,0,0,0];
+    car.suspVel = [0,0,0,0];
+    car.normalForce = [0,0,0,0];
+    car.wheelLoad = [0,0,0,0];
+    car.rpm = 1200;
+    car.turboPressure = 0;
+    car.shiftTimer = 0;
+    car.gear = 1;
+    car.visualRoll = 0;
+    car.visualPitch = 0;
+    car.slipAngleDeg = 0;
+    car.gripFactor = 0.9;
+    car.frictionScale = 1.0;
+    car.diffLockState = 0;
+    
     // Invulnerability
     car._invulnerable = CFG.INVULNERABILITY;
     
@@ -133,7 +149,7 @@ function triggerRespawn() {
     // Update mesh immediately
     if (car.mesh) {
         car.mesh.position.copy(car.position);
-        car.mesh.rotation.y = -car.heading;
+        car.mesh.rotation.y = car.heading;
         car.mesh.rotation.x = 0;
         car.mesh.rotation.z = 0;
     }

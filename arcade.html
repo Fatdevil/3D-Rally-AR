@@ -29,7 +29,12 @@
 <script src="smart-builder.js"></script>
 <script src="arcade-scan-builder.js"></script>
 <script src="terrain-auto-paint.js"></script>
+<script src="terrain-chunks.js?v=1"></script>
+<script src="terrain-shells.js?v=1"></script>
 <script src="template-mask.js"></script>
+<script src="engine-registry.js"></script>
+<script src="theme-registry.js"></script>
+<script src="plate-registry.js"></script>
 <!-- POLY.PIZZA LIBRARY MODAL -->
         <style>
         .poly-model-card { background:rgba(30,41,59,0.7); border-radius:10px; cursor:pointer; overflow:hidden; border: 1px solid rgba(255,255,255,0.05); transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s; }
@@ -396,12 +401,32 @@
             let btn = document.getElementById('btn-pro-toggle');
             let isPro = tb.classList.toggle('pro-mode');
             btn.textContent = isPro ? '⚡ PRO MODE' : '🔧 BASIC MODE';
+            
+            // Sync pro-mode class to sub-tool strips
+            ['sculpt-subtool-strip', 'objects-subtool-strip'].forEach(id => {
+                let strip = document.getElementById(id);
+                if (strip) {
+                    if (isPro) strip.classList.add('pro-mode');
+                    else strip.classList.remove('pro-mode');
+                }
+            });
+            
             ArcadeStorage.setProMode(isPro);
-            // If switching to BASIC and current tool is a pro-tool, fallback to INSPECT
+            
+            // Fallback for active pro tools when switching to BASIC
             if (!isPro && typeof currentTool !== 'undefined') {
-                let proTools = ['FLATTEN','RAMP','NOISE','WATER','SPLINE','SMART_BUILDER','RIDGE','FOREST','ERASER','COLORIZE'];
+                let proTools = ['FLATTEN','RAMP','NOISE','WATER','RIDGE','COLORIZE','POLY','JUMP','MASK_LOCK'];
                 if (proTools.includes(currentTool)) {
-                    if (typeof setTool === 'function') setTool('INSPECT');
+                    let sculptFamily = ['FLATTEN','RAMP','RIDGE','NOISE'];
+                    let objectsFamily = ['COLORIZE','POLY'];
+                    
+                    if (sculptFamily.includes(currentTool)) {
+                        if (typeof setTool === 'function') setTool('SCULPT');
+                    } else if (objectsFamily.includes(currentTool)) {
+                        if (typeof setTool === 'function') setTool('PROPS');
+                    } else {
+                        if (typeof setTool === 'function') setTool('INSPECT');
+                    }
                 }
             }
         };
@@ -412,6 +437,10 @@
                 let btn = document.getElementById('btn-pro-toggle');
                 if (tb) { tb.classList.add('pro-mode'); }
                 if (btn) { btn.textContent = '⚡ PRO MODE'; }
+                ['sculpt-subtool-strip', 'objects-subtool-strip'].forEach(id => {
+                    let strip = document.getElementById(id);
+                    if (strip) strip.classList.add('pro-mode');
+                });
             }
             
             // Rename SMART builder based on context
@@ -430,13 +459,7 @@
     <!-- PRO UI: VÄNSTER VERKTYGSLISTA -->
     <div id="left-toolbar">
         <button id="tool-inspect" onclick="setTool('INSPECT')"><span style="font-size:16px;">👀</span> INSPECT</button>
-        <button id="tool-sculpt" onclick="setTool('SCULPT')" class="active"><span style="font-size:16px;">⛰️</span> SCULPT</button>
-        <button id="tool-smooth" onclick="setTool('SMOOTH')"><span style="font-size:16px;">🧽</span> SMOOTH</button>
-        <button id="tool-flatten" onclick="setTool('FLATTEN')" class="pro-tool"><span style="font-size:16px;">📐</span> FLATTEN</button>
-        <button id="tool-ramp" onclick="setTool('RAMP')" class="pro-tool"><span style="font-size:16px;">📉</span> RAMP</button>
-        <button id="tool-ridge" onclick="setTool('RIDGE')" class="pro-tool"><span style="font-size:16px;">📊</span> RIDGE</button>
-        <button id="tool-mtn" onclick="setTool('MTN')"><span style="font-size:16px;">🏔️</span> MTN</button>
-        <button id="tool-noise" onclick="setTool('NOISE')" class="pro-tool"><span style="font-size:16px;">🌊</span> NOISE</button>
+        <button id="tool-sculpt-group" onclick="setTool('SCULPT')" class="active"><span style="font-size:16px;">⛰️</span> SCULPT</button>
         
         <div style="height:1px; background:#475569; width:100%; margin:4px 0; grid-column:1 / -1;"></div>
         
@@ -447,7 +470,7 @@
         
         <div style="height:1px; background:#475569; width:100%; margin:4px 0; grid-column:1 / -1;"></div>
         
-        <button id="tool-props" onclick="setTool('PROPS')"><span style="font-size:16px;">🌴</span> PROPS</button>
+        <button id="tool-objects-group" onclick="setTool('PROPS')"><span style="font-size:16px;">🌴</span> OBJECTS</button>
         <button id="tool-block" onclick="setTool('BLOCK')"><span style="font-size:16px;">🧱</span> BLOCK</button>
         <button id="tool-mask-lock" onclick="setTool('MASK_LOCK')" class="pro-tool" title="Click polygon around areas kids cannot draw on"><span style="font-size:16px;">🔒</span> LOCK</button>
         <div style="visibility:hidden;"></div> <!-- Placeholder -->
@@ -457,8 +480,6 @@
         <button id="tool-jump" onclick="setTool('JUMP')" class="pro-tool"><span style="font-size:16px;">🚀</span> JUMP</button>
         <button id="tool-measure" onclick="setTool('MEASURE')"><span style="font-size:16px;">📏</span> MEASURE</button>
         <button id="tool-eraser" onclick="setTool('ERASER')"><span style="font-size:16px;">🗑️</span> ERASER</button>
-        <button id="tool-colorize" onclick="setTool('COLORIZE')" class="pro-tool"><span style="font-size:16px;">🎨</span> COLORIZE</button>
-        <button id="tool-poly" onclick="setTool('POLY')" class="pro-tool"><span style="font-size:16px;">🍕</span> POLY</button>
         <div style="height:1px; background:#475569; width:100%; margin:4px 0; grid-column:1 / -1;"></div>
         <button onclick="performUndo()" style="color:#f87171; grid-column:1 / -1;"><span style="font-size:16px;">↩️</span> UNDO</button>
         <button id="btn-pro-toggle" onclick="toggleProMode()">⚡ PRO MODE</button>
@@ -486,15 +507,31 @@
         </div>
 
         <div id="tab-content-TOOLS" style="display:flex; flex-direction:column; gap:10px;">
+            <!-- SCULPT SUB-TOOL SELECTOR STRIP -->
+            <div id="sculpt-subtool-strip" class="prop-panel" style="display:none; flex-direction:row; flex-wrap:wrap; gap:4px; padding:8px; justify-content:center; max-width:200px;">
+                <div style="width:100%; text-align:center; color:#64748b; font-size:9px; font-weight:bold; text-transform:uppercase; letter-spacing:1px; margin-bottom:2px;">Sculpt Tools</div>
+                <button onclick="setTool('SCULPT')" id="sub-sculpt" class="subtool-btn active"><span>⛰️</span> Sculpt</button>
+                <button onclick="setTool('SMOOTH')" id="sub-smooth" class="subtool-btn"><span>🧽</span> Smooth</button>
+                <button onclick="setTool('MTN')" id="sub-mtn" class="subtool-btn"><span>🏔️</span> MTN</button>
+                <button onclick="setTool('FLATTEN')" id="sub-flatten" class="subtool-btn pro-sub"><span>📐</span> Flatten</button>
+                <button onclick="setTool('RAMP')" id="sub-ramp" class="subtool-btn pro-sub"><span>📉</span> Ramp</button>
+                <button onclick="setTool('RIDGE')" id="sub-ridge" class="subtool-btn pro-sub"><span>📊</span> Ridge</button>
+                <button onclick="setTool('NOISE')" id="sub-noise" class="subtool-btn pro-sub"><span>🌊</span> Noise</button>
+            </div>
+
+            <!-- OBJECTS SUB-TOOL SELECTOR STRIP -->
+            <div id="objects-subtool-strip" class="prop-panel" style="display:none; flex-direction:row; flex-wrap:wrap; gap:4px; padding:8px; justify-content:center; max-width:200px;">
+                <div style="width:100%; text-align:center; color:#64748b; font-size:9px; font-weight:bold; text-transform:uppercase; letter-spacing:1px; margin-bottom:2px;">Object Tools</div>
+                <button onclick="setTool('PROPS')" id="sub-props" class="subtool-btn active"><span>🌴</span> Props</button>
+                <button onclick="setTool('COLORIZE')" id="sub-colorize" class="subtool-btn pro-sub"><span>🎨</span> Colorize</button>
+                <button onclick="setTool('POLY')" id="sub-poly" class="subtool-btn pro-sub"><span>🍕</span> Poly</button>
+            </div>
+
             <!-- Inställningar för skulptering -->
             <div id="sculpt-settings-group" class="prop-panel" style="display:flex;">
-            <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">Brush Size</label>
-            <input type="range" id="brush-slider" min="2" max="25" value="6" oninput="updateBrushSize()" style="width:140px; accent-color:#38bdf8; cursor:pointer;" title="Change size">
-            <div style="display:flex; justify-content:space-between; width:100%; gap:4px;">
-                <button onclick="setBrushMultiplier(1, this)" class="brush-mult-btn active" style="background:#38bdf8; color:#0f172a; border:none; padding:6px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">1x</button>
-                <button onclick="setBrushMultiplier(4, this)" class="brush-mult-btn" style="background:#334155; color:#94a3b8; border:none; padding:6px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">4x</button>
-                <button onclick="setBrushMultiplier(10, this)" class="brush-mult-btn" style="background:#334155; color:#94a3b8; border:none; padding:6px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">10x</button>
-            </div>
+            <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; display:flex; justify-content:space-between; width:100%;">Brush Size <span id="brush-size-val" style="color:#38bdf8;">6m</span></label>
+            <input type="range" id="brush-slider" min="0" max="100" value="23" step="1" oninput="updateBrushSize()" style="width:100%; accent-color:#38bdf8; cursor:pointer;" title="2m – 250m">
+            <div style="display:flex; justify-content:space-between; color:#64748b; font-size:8px; margin-top:-2px; width:100%;"><span>2m</span><span>250m</span></div>
             <div style="display:flex; gap:4px; width:100%; margin-top:4px;">
                 <button id="brush-shape-round" onclick="setBrushShape('ROUND')" style="background:#38bdf8; color:#0f172a; border:none; padding:6px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">○ Round</button>
                 <button id="brush-shape-square" onclick="setBrushShape('SQUARE')" style="background:#334155; color:#94a3b8; border:none; padding:6px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">▢ Square</button>
@@ -507,21 +544,11 @@
                 <span id="strength-val" style="color:#f59e0b; font-size:10px; font-weight:bold;">2x</span>
             </div>
             
-            <div id="terrain-res-container" style="display:flex; flex-direction:column; margin-top:10px; padding-top:10px; border-top:1px solid #334155;">
-                <label style="color:#eab308; font-size:10px; font-weight:bold; text-transform:uppercase; margin-bottom:4px;">Terrain Grid</label>
-                <div style="font-size:8px; color:#94a3b8; margin-bottom:6px; line-height:1.2;">Lower = better performance.<br>Updates when you release mouse.</div>
-                <input type="range" id="terrain-res-slider" min="150" max="800" step="50" value="600" onchange="if(window.updateTerrainResolution) window.updateTerrainResolution(parseInt(this.value));" oninput="document.getElementById('terrain-res-val').textContent = this.value + 'x' + this.value;" style="width:140px; accent-color:#eab308; cursor:pointer;">
-                <div style="display:flex; justify-content:space-between; width:140px;">
-                    <span style="color:#64748b; font-size:9px;">150</span>
-                    <span id="terrain-res-val" style="color:#eab308; font-size:10px; font-weight:bold;">600x600</span>
-                    <span style="color:#64748b; font-size:9px;">800</span>
-                </div>
-            </div>
             <div id="flatten-hud" style="display:none; color:#38bdf8; font-size:11px; font-weight:bold; margin-top:6px; padding:6px 10px; background:#1e293b; border-radius:6px;">Flatten Target: 0.0m</div>
             
             
             <!-- RAMP SPECIFIC SETTINGS -->
-            <div id="ramp-settings" style="display:none; flex-direction:column; gap:5px; margin-top:10px; padding-top:10px; border-top:1px solid #334155;">
+            <div id="ramp-settings" style="display:none; flex-direction:column; gap:5px; margin-top:10px; padding-top:10px; border-top:1px solid #334155; max-width:140px;">
                 <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">Ramp End Height</label>
                 <label style="color:#e2e8f0; font-size:11px; display:flex; align-items:center; gap:5px; cursor:pointer;">
                     <input type="checkbox" id="ramp-snap-cb" checked onchange="window.rampSnapToGround = this.checked; document.getElementById('ramp-offset-container').style.opacity = this.checked ? '0.3' : '1'; document.getElementById('ramp-offset-slider').disabled = this.checked;" style="accent-color:#f59e0b; cursor:pointer;">
@@ -532,7 +559,7 @@
                         <input type="range" id="ramp-offset-slider" min="-15" max="15" step="1" value="0" disabled oninput="document.getElementById('ramp-offset-val').textContent = (this.value > 0 ? '+' : '') + this.value + 'm'; window.rampEndOffset = parseFloat(this.value);" style="width:140px; accent-color:#f59e0b; cursor:pointer;" title="Offset relative to start">
                         <span id="ramp-offset-val" style="color:#f59e0b; font-weight:bold; font-size:12px; min-width:30px;">0m</span>
                     </div>
-                    <div style="color:#94a3b8; font-size:10px;">Uncheck 'Match Ground' to build Jumps (+m) or flat Plateaus (0m).</div>
+                    <div style="color:#94a3b8; font-size:9px; line-height:1.2; word-wrap:break-word;">Uncheck 'Match Ground' to build Jumps (+m) or flat Plateaus (0m).</div>
                 </div>
             </div>
             
@@ -540,16 +567,6 @@
                 <input type="checkbox" id="retro-filter-cb" onchange="toggleRetroFilter()" style="accent-color:#38bdf8; cursor:pointer;">
                 Sharp Edges (Retro)
             </label>
-
-            <div style="margin-top:8px; padding-top:8px; border-top:1px solid #334155;">
-                <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; display:flex; align-items:center; gap:5px; cursor:pointer;" title="Prevents sculpting below minimum height — disable for deep ravines">
-                    <input type="checkbox" id="floor-lock-cb" checked onchange="window.terrainFloorEnabled = this.checked;" style="accent-color:#f59e0b; cursor:pointer;">
-                    🔒 Floor Lock
-                    <span id="floor-lock-val" style="color:#f59e0b; margin-left:auto;">-2.0m</span>
-                </label>
-                <input type="range" id="floor-level-slider" min="-10" max="0" value="-2" step="0.5" oninput="window.terrainFloorLevel = parseFloat(this.value); document.getElementById('floor-lock-val').textContent = parseFloat(this.value).toFixed(1) + 'm';" style="width:100%; accent-color:#f59e0b; cursor:pointer; margin-top:3px;">
-                <div style="display:flex; justify-content:space-between; color:#475569; font-size:8px;"><span>Deep -10m</span><span>Surface 0m</span></div>
-            </div>
 
         </div>
 
@@ -1334,6 +1351,26 @@
                     </div>
                 </div>
 
+                <!-- 🌿 Grass 3D Shell -->
+                <div style="margin-top:10px; padding-top:10px; border-top:1px solid #334155;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="color:#cbd5e1; font-size:11px; font-weight:600;">🌿 Grass 3D</span>
+                        <span id="grass-quality-label" style="color:#4ade80; font-size:11px; font-weight:bold;">OFF</span>
+                    </div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:3px; margin-top:5px;">
+                        <button id="grass-q-off" onclick="setGrassQuality('OFF')" style="background:#4ade80; color:#0f172a; border:none; padding:5px 2px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer;">OFF</button>
+                        <button id="grass-q-low" onclick="setGrassQuality('LOW')" style="background:#334155; color:#94a3b8; border:none; padding:5px 2px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer;">LOW</button>
+                        <button id="grass-q-med" onclick="setGrassQuality('MED')" style="background:#334155; color:#94a3b8; border:none; padding:5px 2px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer;">MED</button>
+                        <button id="grass-q-high" onclick="setGrassQuality('HIGH')" style="background:#334155; color:#94a3b8; border:none; padding:5px 2px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer;">HIGH</button>
+                    </div>
+                    <div id="grass-height-controls" style="display:none; margin-top:6px;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;"><span style="color:#94a3b8; font-size:9px; font-weight:bold;">Rough Height</span><span id="grass-rough-h-val" style="color:#4ade80; font-size:9px; font-weight:bold;">30cm</span></div>
+                        <input type="range" id="grass-rough-height" min="10" max="80" value="30" step="5" oninput="updateGrassHeight()" style="width:100%; accent-color:#4ade80; cursor:pointer;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:2px; margin-top:4px;"><span style="color:#94a3b8; font-size:9px; font-weight:bold;">Deep Rough Height</span><span id="grass-deep-h-val" style="color:#2d6b14; font-size:9px; font-weight:bold;">60cm</span></div>
+                        <input type="range" id="grass-deep-height" min="20" max="120" value="60" step="5" oninput="updateGrassHeight()" style="width:100%; accent-color:#2d6b14; cursor:pointer;">
+                    </div>
+                </div>
+
                 <!-- WEATHER (inside ENV panel) -->
                 <div style="margin-top:10px; padding-top:10px; border-top:1px solid #334155;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
@@ -1351,6 +1388,40 @@
             </div>
         </div>
         </div> <!-- End of tab-content-ENV -->
+
+        <script>
+        window.setGrassQuality = function(q) {
+            if (!window._terrainShells) return;
+            window._terrainShells.setQuality(q);
+            // Update button states
+            ['off','low','med','high'].forEach(function(k) {
+                let btn = document.getElementById('grass-q-' + k);
+                if (btn) {
+                    btn.style.background = k.toUpperCase() === q ? '#4ade80' : '#334155';
+                    btn.style.color = k.toUpperCase() === q ? '#0f172a' : '#94a3b8';
+                }
+            });
+            let label = document.getElementById('grass-quality-label');
+            if (label) label.textContent = q;
+            // Show/hide height controls
+            let hc = document.getElementById('grass-height-controls');
+            if (hc) hc.style.display = q === 'OFF' ? 'none' : 'block';
+        };
+
+        window.updateGrassHeight = function() {
+            if (!window._terrainShells) return;
+            let rh = parseFloat(document.getElementById('grass-rough-height').value);
+            let dh = parseFloat(document.getElementById('grass-deep-height').value);
+            window._terrainShells.roughHeight = rh / 100; // cm → meters
+            window._terrainShells.deepHeight = dh / 100;
+            document.getElementById('grass-rough-h-val').textContent = rh + 'cm';
+            document.getElementById('grass-deep-h-val').textContent = dh + 'cm';
+            // Rebuild shells with new heights
+            if (window._terrainShells.quality !== 'OFF') {
+                window._terrainShells.refresh();
+            }
+        };
+        </script>
 
         <div id="tab-content-MAP" style="display:none; flex-direction:column; gap:10px;">
             <!-- Terrain Analysis Panel -->
@@ -1372,6 +1443,35 @@
                 <div style="color:#64748b; font-size:9px; margin-top:4px;">Slope: 🟢&lt;3% 🟡3-8% 🔴&gt;8% | Elev: 🔵Low 🟢Mid 🔴High</div>
             </div>
         </div>
+
+            <!-- Terrain Settings (moved from TOOLS tab — global settings) -->
+            <div id="terrain-global-settings" class="prop-panel" style="display:flex;">
+                <label onclick="window.togglePanel('terrain-settings-content', this)" style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
+                    <span>⚙️ Terrain Settings</span>
+                    <span class="chevron" style="color:#475569;">▼</span>
+                </label>
+                <div id="terrain-settings-content" style="display:flex; flex-direction:column; gap:5px; margin-top:8px;">
+                    <div id="terrain-res-container" style="display:flex; flex-direction:column;">
+                        <label style="color:#eab308; font-size:10px; font-weight:bold; text-transform:uppercase; margin-bottom:4px;">Terrain Grid</label>
+                        <div style="font-size:8px; color:#94a3b8; margin-bottom:6px; line-height:1.2;">Lower = better performance.<br>Updates when you release mouse.</div>
+                        <input type="range" id="terrain-res-slider" min="150" max="800" step="50" value="600" onchange="if(window.updateTerrainResolution) window.updateTerrainResolution(parseInt(this.value));" oninput="document.getElementById('terrain-res-val').textContent = this.value + 'x' + this.value;" style="width:100%; accent-color:#eab308; cursor:pointer;">
+                        <div style="display:flex; justify-content:space-between; width:100%;">
+                            <span style="color:#64748b; font-size:9px;">150</span>
+                            <span id="terrain-res-val" style="color:#eab308; font-size:10px; font-weight:bold;">600x600</span>
+                            <span style="color:#64748b; font-size:9px;">800</span>
+                        </div>
+                    </div>
+                    <div style="margin-top:6px; padding-top:6px; border-top:1px solid #334155;">
+                        <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; display:flex; align-items:center; gap:5px; cursor:pointer;" title="Prevents sculpting below minimum height — disable for deep ravines">
+                            <input type="checkbox" id="floor-lock-cb" checked onchange="window.terrainFloorEnabled = this.checked;" style="accent-color:#f59e0b; cursor:pointer;">
+                            🔒 Floor Lock
+                            <span id="floor-lock-val" style="color:#f59e0b; margin-left:auto;">-2.0m</span>
+                        </label>
+                        <input type="range" id="floor-level-slider" min="-10" max="0" value="-2" step="0.5" oninput="window.terrainFloorLevel = parseFloat(this.value); document.getElementById('floor-lock-val').textContent = parseFloat(this.value).toFixed(1) + 'm';" style="width:100%; accent-color:#f59e0b; cursor:pointer; margin-top:3px;">
+                        <div style="display:flex; justify-content:space-between; color:#475569; font-size:8px;"><span>Deep -10m</span><span>Surface 0m</span></div>
+                    </div>
+                </div>
+            </div>
         </div> <!-- End of tab-content-MAP -->
 
     </div>
@@ -2751,6 +2851,10 @@
 
         window.pCtx.putImageData(imgData, 0, 0);
         if (window.mapTex) window.mapTex.needsUpdate = true;
+        // Sync 3D grass system with blended terrain colors
+        window.terrainBiomeData = window.pCtx.getImageData(0, 0, 4096, 4096).data;
+        if (window.rebuildRoughMask) window.rebuildRoughMask();
+        if (window._terrainShells) window._terrainShells.refresh();
 
         const ms = (performance.now() - t0).toFixed(0);
         console.log('🎨 Blend ' + intensity + '%: ' + changed + ' px, ' + skipped + ' skipped, ' + ms + 'ms');
@@ -4376,7 +4480,103 @@
     window._arcadePlaneGeo = planeGeo;
     window._arcadePCtx = pCtx;
     window._arcadeMapTex = mapTex;
-    
+
+    // === ROUGH MASK TEXTURE (used by TerrainShellManager for grass placement) ===
+    // R channel = rough intensity, G channel = deep rough intensity, B = semi-rough
+    window.roughMaskCanvas = document.createElement('canvas');
+    window.roughMaskCanvas.width = 4096; window.roughMaskCanvas.height = 4096;
+    window.roughMaskCtx = window.roughMaskCanvas.getContext('2d', { willReadFrequently: true });
+    window.roughMaskCtx.fillStyle = '#ff0000';  // Default: all rough (R=255, G=0)
+    window.roughMaskCtx.fillRect(0, 0, 4096, 4096);
+    window.roughMaskTex = new THREE.CanvasTexture(window.roughMaskCanvas);
+    window.roughMaskTex.magFilter = THREE.NearestFilter;
+    window.roughMaskTex.minFilter = THREE.NearestFilter;
+    window.roughMaskTex.premultiplyAlpha = false;
+
+    window.rebuildRoughMask = function() {
+        if (!window.terrainBiomeData) return;
+        let mData = window.roughMaskCtx.createImageData(4096, 4096);
+        let tData = window.terrainBiomeData;
+        let cfg = window.CURRENT_BIOME_CONFIG || {};
+
+        // Parse all 4 grass biome colors
+        let rHex = cfg.roughColor || '#4a782b';
+        let rR = parseInt(rHex.slice(1,3),16), rG = parseInt(rHex.slice(3,5),16), rB = parseInt(rHex.slice(5,7),16);
+        let dHex = cfg.fescueColor || '#2d4c1a';
+        let dR = parseInt(dHex.slice(1,3),16), dG = parseInt(dHex.slice(3,5),16), dB = parseInt(dHex.slice(5,7),16);
+        let sHex = cfg.semiColor || '#6b9e3d';
+        let sR = parseInt(sHex.slice(1,3),16), sG = parseInt(sHex.slice(3,5),16), sB = parseInt(sHex.slice(5,7),16);
+        let fHex = cfg.foregreenColor || '#8bc45d';
+        let fR = parseInt(fHex.slice(1,3),16), fG = parseInt(fHex.slice(3,5),16), fB = parseInt(fHex.slice(5,7),16);
+        // Bunker sand color
+        let bHex = cfg.bunkerColor || '#e0d8a4';
+        let bR = parseInt(bHex.slice(1,3),16), bG = parseInt(bHex.slice(3,5),16), bB = parseInt(bHex.slice(5,7),16);
+        // Exclusion colors: green and fairway should NEVER get 3D grass/sand
+        let gHex = cfg.greenColor || '#98ce68';
+        let gR2 = parseInt(gHex.slice(1,3),16), gG2 = parseInt(gHex.slice(3,5),16), gB2 = parseInt(gHex.slice(5,7),16);
+        let wHex = cfg.fairwayColor || '#7db952';
+        let wR = parseInt(wHex.slice(1,3),16), wG = parseInt(wHex.slice(3,5),16), wB = parseInt(wHex.slice(5,7),16);
+
+        // Threshold per biome type
+        let threshRD = 3500;   // rough & deep rough (noisy paint)
+        let threshSF = 2500;   // semi-rough & foregreen (cleaner)
+        let threshBK = 3000;   // bunker sand
+
+        for (let i = 0; i < tData.length; i += 4) {
+            let r = tData[i], g = tData[i+1], b = tData[i+2];
+
+            let distRough = (r-rR)*(r-rR) + (g-rG)*(g-rG) + (b-rB)*(b-rB);
+            let distDeep  = (r-dR)*(r-dR) + (g-dG)*(g-dG) + (b-dB)*(b-dB);
+            let distSemi  = (r-sR)*(r-sR) + (g-sG)*(g-sG) + (b-sB)*(b-sB);
+            let distFore  = (r-fR)*(r-fR) + (g-fG)*(g-fG) + (b-fB)*(b-fB);
+            let distSand  = (r-bR)*(r-bR) + (g-bG)*(g-bG) + (b-bB)*(b-bB);
+
+            // Exclusion: if closer to green or fairway, it's NOT grass
+            let distGreen   = (r-gR2)*(r-gR2) + (g-gG2)*(g-gG2) + (b-gB2)*(b-gB2);
+            let distFairway = (r-wR)*(r-wR) + (g-wG)*(g-wG) + (b-wB)*(b-wB);
+            let noGrass = Math.min(distGreen, distFairway);
+
+            // Exclusive closest-match: only one channel per pixel
+            let bestDist = Infinity;
+            let bestType = -1;
+            if (distRough < threshRD && distRough < bestDist && distRough < noGrass) { bestDist = distRough; bestType = 0; }
+            if (distDeep  < threshRD && distDeep  < bestDist && distDeep  < noGrass) { bestDist = distDeep;  bestType = 1; }
+            if (distSemi  < threshSF && distSemi  < bestDist && distSemi  < noGrass) { bestDist = distSemi;  bestType = 2; }
+            if (distFore  < threshSF && distFore  < bestDist && distFore  < noGrass) { bestDist = distFore;  bestType = 3; }
+            if (distSand  < threshBK && distSand  < bestDist)                        { bestDist = distSand;  bestType = 4; }
+
+            // R=rough(255)/foregreen(128), G=deep(255)/sand(128), B=semi(255), A=always 255
+            mData.data[i]     = bestType === 0 ? 255 : (bestType === 3 ? 128 : 0);
+            mData.data[i + 1] = bestType === 1 ? 255 : (bestType === 4 ? 128 : 0);
+            mData.data[i + 2] = bestType === 2 ? 255 : 0;
+            mData.data[i + 3] = 255;
+        }
+        window.roughMaskCtx.putImageData(mData, 0, 0);
+        window.roughMaskTex.needsUpdate = true;
+
+        // Update shell uniforms
+        if (window._terrainShells) {
+            for (let s of window._terrainShells.shells) {
+                s.mat.uniforms.uRoughMask.value = window.roughMaskTex;
+            }
+        }
+        console.log('🌿 RoughMask rebuilt for Rally terrain');
+    };
+
+    // === SHELL TEXTURING: Volumetric 3D grass for rough/deep rough ===
+    if (window.TerrainShellManager) {
+        window._terrainShells = new TerrainShellManager(planeGeo, plane, scene, mapTex, window.roughMaskTex);
+    }
+
+    // === TERRAIN CHUNKING: Split into 8x8 frustum-culled chunks with distance LOD ===
+    window._chunksEnabled = true;  // ON by default (LOD locked during play, throttled, hysteresis)
+    if (window.TerrainChunkManager) {
+        window._terrainGridSegs = window._terrainGridSegs || TERRAIN_SEGS;
+        let tGrid = window._terrainGridSegs;
+        window._terrainChunks = new TerrainChunkManager(planeGeo, plane, scene, planeMat, 8, { terrainGrid: tGrid });
+        window._terrainChunks.setEnabled(window._chunksEnabled);
+    }
+
     // === SURROUNDING GROUND PLANE (eliminates edge-of-world void) ===
     let surroundSize = 20000;
     let sShape = new THREE.Shape();
@@ -6401,39 +6601,43 @@
         let _saveId = Date.now();
         
         // Rally mode: save raceConfig alongside holes (holes kept for backward compat)
-        if (window.EDITOR_MODE === 'rally') {
-            let rallyData = {
-                start: raceConfig.start ? {x: raceConfig.start.x, y: raceConfig.start.y, z: raceConfig.start.z, rotation: raceConfig.start.rotation} : null,
-                finish: raceConfig.finish ? {x: raceConfig.finish.x, y: raceConfig.finish.y, z: raceConfig.finish.z, rotation: raceConfig.finish.rotation} : null,
-                checkpoints: raceConfig.checkpoints.map(cp => ({x: cp.x, y: cp.y, z: cp.z, radius: cp.radius || 10})),
-                bestTime: raceConfig.bestTime,
-                laps: raceConfig.laps || 1,
-                missedCheckpointRule: raceConfig.missedCheckpointRule,
-                usePbr: raceConfig.usePbr !== false,
-                // ROAD PIPELINE FIX: serialize road geometry for rally.html
-                // rally.html rebuilds sampledPoints from nodes (saves ~80% storage)
-                roads: (window._builtRoads || []).map(function(r) {
-                    return {
-                        id: r.id,
-                        nodes: r.nodes,
-                        width: r.width,
-                        material: r.material
-                    };
-                }),
-                // ENVIRONMENT: save visual atmosphere so rally.html can match the builder
-                environment: {
-                    biomeId: window.ACTIVE_BIOME || 'ALL',
-                    weather: window.ParticleEngine ? window.ParticleEngine.getWeather() : 'CLEAR',
-                    skyColor: (window.CURRENT_BIOME_CONFIG && window.CURRENT_BIOME_CONFIG.skyColor) ? window.CURRENT_BIOME_CONFIG.skyColor : 0x87ceeb,
-                    fogColor: scene.fog ? scene.fog.color.getHex() : 0x87ceeb,
-                    fogNear: scene.fog ? scene.fog.near : 400,
-                    fogFar: scene.fog ? scene.fog.far : 900,
-                    waterTableLevel: window.waterTableLevel != null ? window.waterTableLevel : -10,
-                },
-            };
-            ArcadeStorage.saveCustomLevel({ targets: dumpTargets, holes: dumpHoles, rally: rallyData, trees: dumpTrees, _saveId: _saveId, share_code: currentEditCode || window._loadedCourseShareCode || null });
-        } else {
-            ArcadeStorage.saveCustomLevel({ targets: dumpTargets, holes: dumpHoles, trees: dumpTrees, _saveId: _saveId, share_code: currentEditCode || window._loadedCourseShareCode || null });
+        try {
+            if (window.EDITOR_MODE === 'rally') {
+                let rallyData = {
+                    start: raceConfig.start ? {x: raceConfig.start.x, y: raceConfig.start.y, z: raceConfig.start.z, rotation: raceConfig.start.rotation} : null,
+                    finish: raceConfig.finish ? {x: raceConfig.finish.x, y: raceConfig.finish.y, z: raceConfig.finish.z, rotation: raceConfig.finish.rotation} : null,
+                    checkpoints: raceConfig.checkpoints.map(cp => ({x: cp.x, y: cp.y, z: cp.z, radius: cp.radius || 10})),
+                    bestTime: raceConfig.bestTime,
+                    laps: raceConfig.laps || 1,
+                    missedCheckpointRule: raceConfig.missedCheckpointRule,
+                    usePbr: raceConfig.usePbr !== false,
+                    // ROAD PIPELINE FIX: serialize road geometry for rally.html
+                    // rally.html rebuilds sampledPoints from nodes (saves ~80% storage)
+                    roads: (window._builtRoads || []).map(function(r) {
+                        return {
+                            id: r.id,
+                            nodes: r.nodes,
+                            width: r.width,
+                            material: r.material
+                        };
+                    }),
+                    // ENVIRONMENT: save visual atmosphere so rally.html can match the builder
+                    environment: {
+                        biomeId: window.ACTIVE_BIOME || 'ALL',
+                        weather: window.ParticleEngine ? window.ParticleEngine.getWeather() : 'CLEAR',
+                        skyColor: (window.CURRENT_BIOME_CONFIG && window.CURRENT_BIOME_CONFIG.skyColor) ? window.CURRENT_BIOME_CONFIG.skyColor : 0x87ceeb,
+                        fogColor: scene.fog ? scene.fog.color.getHex() : 0x87ceeb,
+                        fogNear: scene.fog ? scene.fog.near : 400,
+                        fogFar: scene.fog ? scene.fog.far : 900,
+                        waterTableLevel: window.waterTableLevel != null ? window.waterTableLevel : -10,
+                    },
+                };
+                ArcadeStorage.saveCustomLevel({ targets: dumpTargets, holes: dumpHoles, rally: rallyData, trees: dumpTrees, _saveId: _saveId, share_code: currentEditCode || window._loadedCourseShareCode || null });
+            } else {
+                ArcadeStorage.saveCustomLevel({ targets: dumpTargets, holes: dumpHoles, trees: dumpTrees, _saveId: _saveId, share_code: currentEditCode || window._loadedCourseShareCode || null });
+            }
+        } catch (storageErr) {
+            console.warn('⚠️ saveCustomLevel failed (storage full?):', storageErr.message);
         }
 
         // ── Terrain snapshot for rally.html ──────────────────────────────
@@ -7379,6 +7583,33 @@
             let scanTemplateId = sessionStorage.getItem('scan_template_id');
             sessionStorage.removeItem('scan_template_id');
             
+            // ── ENGINE + THEME CONFIG ──
+            let scanEngineKey = sessionStorage.getItem('scan_engine_key') || 'rally';
+            let scanThemeKey = sessionStorage.getItem('scan_theme_key') || 'none';
+            sessionStorage.removeItem('scan_engine_key');
+            sessionStorage.removeItem('scan_theme_key');
+            
+            // Store globally for build pipeline and game
+            window.ACTIVE_ENGINE_KEY = scanEngineKey;
+            window.ACTIVE_THEME_KEY = scanThemeKey;
+            if (window.ENGINE_REGISTRY) window.ACTIVE_ENGINE = window.ENGINE_REGISTRY[scanEngineKey];
+            if (window.THEME_REGISTRY) window.ACTIVE_THEME = window.THEME_REGISTRY[scanThemeKey];
+            
+            console.log('🎮 Engine: ' + scanEngineKey + ' | Theme: ' + scanThemeKey);
+            
+            // ── RANDOM PLATE SELECTION (surprise!) ──
+            let plateResult = null;
+            if (window.selectRandomPlate && !scanTemplateId) {
+                try {
+                    plateResult = await window.selectRandomPlate(scanEngineKey, scanThemeKey);
+                    if (plateResult && plateResult.key !== 'blank') {
+                        console.log('🎁 Surprise plate: ' + plateResult.plate.label);
+                    }
+                } catch (plateErr) {
+                    console.warn('⚠️ Plate selection failed:', plateErr);
+                }
+            }
+            
             if (scanPlan && window.ScanBuilder) {
                 // Force rally editor mode
                 if (scanMode === 'rally' && typeof window.setEditorMode === 'function') {
@@ -7508,16 +7739,75 @@
                     }
                 });
                 
+                // ── Apply engine buildConfig: grass, water, environment ──
+                let bc = null;
+                try { bc = JSON.parse(sessionStorage.getItem('scan_build_config')); } catch(e) {}
+                if (bc) {
+                    console.log('🏗️ Applying buildConfig:', JSON.stringify(bc));
+                    
+                    // Grass
+                    if (bc.grassQuality && window.setGrassQuality) {
+                        window.setGrassQuality(bc.grassQuality);
+                        console.log('  🌾 Grass: ' + bc.grassQuality);
+                    }
+                    if (window._terrainShells) {
+                        if (bc.grassRoughHeight) window._terrainShells.roughHeight = bc.grassRoughHeight / 100;
+                        if (bc.grassDeepHeight) window._terrainShells.deepHeight = bc.grassDeepHeight / 100;
+                        if (window._terrainShells.refresh) window._terrainShells.refresh();
+                    }
+                    
+                    // Water Table
+                    if (bc.waterTableLevel != null) {
+                        window.waterTableLevel = bc.waterTableLevel;
+                        let wSlider = document.getElementById('water-table-slider');
+                        if (wSlider) wSlider.value = bc.waterTableLevel;
+                        let wVal = document.getElementById('water-table-val');
+                        if (wVal) wVal.textContent = bc.waterTableLevel + 'm';
+                        console.log('  💧 Water table: ' + bc.waterTableLevel + 'm');
+                    }
+                    if (bc.waterType && window.setWaterType) {
+                        window.setWaterType(bc.waterType);
+                        console.log('  💧 Water type: ' + bc.waterType);
+                    }
+                    if (bc.waterColor && window.waterMat) {
+                        window.waterMat.color.set(bc.waterColor);
+                        console.log('  💧 Water color: ' + bc.waterColor);
+                    }
+                    
+                    // Environment
+                    if (bc.timeOfDay != null && window.setTimeOfDay) {
+                        window.setTimeOfDay(bc.timeOfDay);
+                        console.log('  🌤️ Time of day: ' + bc.timeOfDay);
+                    }
+                    if (bc.fogDensity != null && window.updateFogDensity) {
+                        window.updateFogDensity(bc.fogDensity);
+                        console.log('  🌫️ Fog density: ' + bc.fogDensity);
+                    }
+                    if (bc.skyColor && scene) {
+                        scene.background = new THREE.Color(bc.skyColor);
+                        if (scene.fog) scene.fog.color = new THREE.Color(bc.skyColor);
+                        console.log('  🌤️ Sky: ' + bc.skyColor);
+                    }
+                    
+                    // Biome
+                    if (bc.biome && bc.biome !== 'GLOBAL' && window.changeBiome) {
+                        window.changeBiome(bc.biome);
+                        console.log('  🌍 Biome: ' + bc.biome);
+                    }
+                }
+                sessionStorage.removeItem('scan_build_config');
+                
                 // Save the level
                 if (typeof saveLevel === 'function') {
                     setTimeout(function() { saveLevel(); }, 200);
                 }
                 
                 if (autoPlay) {
-                    // Auto-play: save and redirect to rally.html
+                    // Show pre-race screen instead of instant redirect
                     setTimeout(function() {
-                        window.location.href = 'rally.html';
-                    }, 1000);
+                        if (loader) loader.classList.add('hidden');
+                        showPreRaceScreen(scanEngineKey);
+                    }, 800);
                     return;
                 } else {
                     // Stay in builder
@@ -7984,6 +8274,10 @@
         
         setTimeout(() => {
             if (typeof pCtx !== 'undefined') window.terrainBiomeData = pCtx.getImageData(0, 0, 4096, 4096).data;
+            // Rebuild rough mask and refresh grass shells after map load
+            if (window.rebuildRoughMask) window.rebuildRoughMask();
+            if (window._terrainShells) window._terrainShells.refresh();
+            if (window._terrainChunks) window._terrainChunks.syncAll();
             let loader = document.getElementById('global-loader');
             if (loader) loader.classList.add('hidden');
         }, 800);
@@ -8929,6 +9223,12 @@
             }
             
             console.log('Terrain resampled to', newSegs, 'segments');
+
+            // Refresh shell/chunk systems with new geometry
+            if (window._terrainShells) window._terrainShells.updateGeometry(newGeo);
+            if (window._terrainChunks) {
+                window._terrainChunks.rebuild(newGeo, plane);
+            }
         }, 50);
     };
 
@@ -9749,22 +10049,18 @@
             btn.style.color = "#fff";
         }
     };
-    window.setBrushMultiplier = function(mult, btn) {
-        brushMultiplier = mult;
-        document.querySelectorAll('.brush-mult-btn').forEach(b => {
-             b.style.background = '#334155';
-             b.style.color = '#94a3b8';
-        });
-        if (btn) {
-             btn.style.background = '#38bdf8';
-             btn.style.color = '#0f172a';
-        }
-        updateBrushSize();
-    };
+    // Legacy compat — multiplier buttons removed, log slider handles full range
+    window.setBrushMultiplier = function() { updateBrushSize(); };
 
     window.updateBrushSize = function() {
-        let val = document.getElementById('brush-slider') ? document.getElementById('brush-slider').value : 6;
-        currentBrushSize = parseFloat(val) * brushMultiplier;
+        let slider = document.getElementById('brush-slider');
+        let t = slider ? parseFloat(slider.value) / 100.0 : 0.23;
+        // Logarithmic mapping: 2m at t=0, ~250m at t=1
+        currentBrushSize = 2 * Math.pow(125, t);
+        currentBrushSize = Math.round(currentBrushSize * 10) / 10; // 0.1m precision
+        // Update display
+        let valEl = document.getElementById('brush-size-val');
+        if (valEl) valEl.textContent = (currentBrushSize >= 10 ? Math.round(currentBrushSize) : currentBrushSize.toFixed(1)) + 'm';
         if(sculptBrushCursor) {
             sculptBrushCursor.geometry.dispose();
             if(currentBrushShape === 'SQUARE') {
@@ -10008,6 +10304,12 @@
             if (ruleEl) ruleEl.value = raceConfig.missedCheckpointRule;
             if (typeof updateSBHoleDisplay === 'function') updateSBHoleDisplay();
         }
+
+        // Refresh grass shells and chunks after undo
+        window.terrainBiomeData = pCtx.getImageData(0, 0, 4096, 4096).data;
+        if (window.rebuildRoughMask) window.rebuildRoughMask();
+        if (window._terrainShells) window._terrainShells.refresh();
+        if (window._terrainChunks) window._terrainChunks.syncAll();
     };
     
     function saveUndoState() {
@@ -10504,6 +10806,18 @@
                 if(window.contourLinesActive) window.updateContourLines();
                 if(window.elevationHeatmapActive) window.updateElevationHeatmap();
             }
+            // Refresh grass shells and chunks after any terrain tool
+            if (currentTool === 'PAINT' || currentTool === 'COLORIZE') {
+                // Paint changed surface colors → rebuild rough mask for grass placement
+                window.terrainBiomeData = pCtx.getImageData(0, 0, 4096, 4096).data;
+                if (window.rebuildRoughMask) window.rebuildRoughMask();
+                if (window._terrainShells) window._terrainShells.refresh();
+            }
+            // Height changes → sync chunk meshes
+            if (window._terrainChunks && currentTool !== 'PAINT' && currentTool !== 'COLORIZE') {
+                window._terrainChunks.syncAll();
+                if (window._terrainShells) window._terrainShells.refresh();
+            }
         }
     }, false);
     
@@ -10777,43 +11091,57 @@
                         scene.add(newMesh);
                     }
                     
-                    // Smart Road barriers: re-sample terrain height per child mesh
+                    // Smart Road barriers: re-sample terrain height per instance
                     if (obj.type === 'fences' && obj.mesh && obj.mesh.children) {
                         let children = obj.mesh.children;
-                        // First pass: update Y positions
+                        
+                        let tempMatrix = new THREE.Matrix4();
+                        let tempPos = new THREE.Vector3();
+                        let tempRot = new THREE.Quaternion();
+                        let tempScale = new THREE.Vector3();
+                        let dummyLook = new THREE.Object3D();
+                        
                         for (let ci = 0; ci < children.length; ci++) {
                             let child = children[ci];
-                            let newY = getH(child.position.x, child.position.z);
-                            let bt = child.userData && child.userData.barrierType;
-                            if (bt === 'STAKES') {
-                                // Stakes: check if this is a tip (white, higher offset) or pole
-                                // Tips are placed at h+1.55, poles at h+0.7
-                                let isTip = child.material && child.material.color && child.material.color.r > 0.9 && child.material.color.g > 0.9;
-                                child.position.y = newY + (isTip ? 1.55 : 0.7);
-                            } else {
-                                let halfH = bt === 'WOOD' ? 0.6 : 0.4;
-                                child.position.y = newY + halfH;
-                            }
-                        }
-                        // Second pass: re-orient WOOD/STEEL segments (skip STAKES - they're vertical)
-                        for (let ci = 0; ci < children.length - 1; ci++) {
-                            let curr = children[ci];
-                            let next = children[ci + 1];
-                            let bt = curr.userData && curr.userData.barrierType;
-                            if (bt === 'STAKES') continue; // Stakes are vertical, no orientation needed
-                            curr.lookAt(next.position.x, next.position.y, next.position.z);
-                        }
-                        // Last WOOD/STEEL segment: look back toward previous
-                        if (children.length >= 2) {
-                            let last = children[children.length - 1];
-                            let bt = last.userData && last.userData.barrierType;
-                            if (bt !== 'STAKES') {
-                                let prev = children[children.length - 2];
-                                last.lookAt(
-                                    last.position.x + (last.position.x - prev.position.x),
-                                    last.position.y + (last.position.y - prev.position.y),
-                                    last.position.z + (last.position.z - prev.position.z)
-                                );
+                            if (child.isInstancedMesh) {
+                                let bt = child.userData && child.userData.barrierType;
+                                if (!bt) continue;
+                                
+                                for (let i = 0; i < child.count; i++) {
+                                    child.getMatrixAt(i, tempMatrix);
+                                    tempMatrix.decompose(tempPos, tempRot, tempScale);
+                                    
+                                    // Query terrain height at instance's x, z
+                                    let newY = getH(tempPos.x, tempPos.z);
+                                    
+                                    if (bt === 'STAKES') {
+                                        let isTip = child.userData.isTip;
+                                        tempPos.y = newY + (isTip ? 1.55 : 0.7);
+                                    } else {
+                                        let halfH = bt === 'WOOD' ? 0.6 : (bt === 'STONE' ? (tempScale.y / 2) : 0.4);
+                                        
+                                        // For segment-based barriers (WOOD, STEEL, STONE), pitch to follow the terrain slope
+                                        let dir = new THREE.Vector3(0, 0, 1).applyQuaternion(tempRot).normalize();
+                                        let halfLen = tempScale.z / 2;
+                                        let startPos = tempPos.clone().sub(dir.clone().multiplyScalar(halfLen));
+                                        let endPos = tempPos.clone().add(dir.clone().multiplyScalar(halfLen));
+                                        
+                                        let newH_start = getH(startPos.x, startPos.z);
+                                        let newH_end = getH(endPos.x, endPos.z);
+                                        
+                                        tempPos.y = (newH_start + newH_end) / 2 + halfH;
+                                        
+                                        // Re-calculate rotation to follow new Z slope
+                                        dummyLook.position.copy(startPos);
+                                        dummyLook.position.y = newH_start + halfH;
+                                        dummyLook.lookAt(endPos.x, newH_end + halfH, endPos.z);
+                                        tempRot.copy(dummyLook.quaternion);
+                                    }
+                                    
+                                    tempMatrix.compose(tempPos, tempRot, tempScale);
+                                    child.setMatrixAt(i, tempMatrix);
+                                }
+                                child.instanceMatrix.needsUpdate = true;
                             }
                         }
                     }
@@ -10859,14 +11187,13 @@
         
         currentTool = toolName;
         
-        let tools = ['inspect', 'sculpt', 'smooth', 'flatten', 'ramp', 'noise', 'water', 'spline', 'paint', 'mtn', 'smartbuilder', 'testputt', 'ridge', 'props', 'block', 'jump', 'measure', 'eraser', 'colorize', 'mask-lock'];
+        let tools = ['inspect', 'sculpt-group', 'paint', 'water', 'spline', 'smartbuilder', 'objects-group', 'block', 'mask-lock', 'jump', 'measure', 'eraser'];
         
         tools.forEach(t => {
             let btn = document.getElementById('tool-' + t);
             if(btn) {
                 let isPro = btn.classList.contains('pro-tool');
-                if(t === 'testputt') btn.className = 'sys-btn';
-                else btn.className = isPro ? 'pro-tool' : '';
+                btn.className = isPro ? 'pro-tool' : '';
             }
         });
         
@@ -10875,12 +11202,48 @@
         if (activeBtn) {
             let isPro = activeBtn.classList.contains('pro-tool');
             let base = isPro ? 'pro-tool ' : '';
-            if (toolName === 'MTN') activeBtn.className = base + 'active-yellow';
-            else if (toolName === 'SMART_BUILDER') activeBtn.className = base + 'active-green';
+            if (toolName === 'SMART_BUILDER') activeBtn.className = base + 'active-green';
             else if (toolName === 'MEASURE') activeBtn.className = base + 'active-yellow';
-            else if (toolName === 'TEST_PUTT') activeBtn.className = 'sys-btn active';
             else if (toolName === 'ERASER') activeBtn.className = base + 'active-red';
             else activeBtn.className = base + 'active';
+        }
+
+        // --- SCULPT GROUP HIGH-LIGHTING AND SUB-STRIP TOGGLE ---
+        const SCULPT_FAMILY = ['SCULPT', 'SMOOTH', 'FLATTEN', 'RAMP', 'RIDGE', 'MTN', 'NOISE'];
+        let sculptGroupBtn = document.getElementById('tool-sculpt-group');
+        let sculptSubStrip = document.getElementById('sculpt-subtool-strip');
+        if (SCULPT_FAMILY.includes(toolName)) {
+            if (sculptGroupBtn) sculptGroupBtn.className = 'active';
+            if (sculptSubStrip) sculptSubStrip.style.display = 'flex';
+            SCULPT_FAMILY.forEach(st => {
+                let sb = document.getElementById('sub-' + st.toLowerCase());
+                if (sb) {
+                    let isProSub = sb.classList.contains('pro-sub');
+                    sb.className = 'subtool-btn' + (isProSub ? ' pro-sub' : '') + (st === toolName ? ' active' : '');
+                }
+            });
+        } else {
+            if (sculptGroupBtn) sculptGroupBtn.className = '';
+            if (sculptSubStrip) sculptSubStrip.style.display = 'none';
+        }
+        
+        // --- OBJECTS GROUP HIGH-LIGHTING AND SUB-STRIP TOGGLE ---
+        const OBJECTS_FAMILY = ['PROPS', 'COLORIZE', 'POLY'];
+        let objectsGroupBtn = document.getElementById('tool-objects-group');
+        let objectsSubStrip = document.getElementById('objects-subtool-strip');
+        if (OBJECTS_FAMILY.includes(toolName)) {
+            if (objectsGroupBtn) objectsGroupBtn.className = 'active';
+            if (objectsSubStrip) objectsSubStrip.style.display = 'flex';
+            OBJECTS_FAMILY.forEach(st => {
+                let sb = document.getElementById('sub-' + st.toLowerCase());
+                if (sb) {
+                    let isProSub = sb.classList.contains('pro-sub');
+                    sb.className = 'subtool-btn' + (isProSub ? ' pro-sub' : '') + (st === toolName ? ' active' : '');
+                }
+            });
+        } else {
+            if (objectsGroupBtn) objectsGroupBtn.className = '';
+            if (objectsSubStrip) objectsSubStrip.style.display = 'none';
         }
         
         document.getElementById('color-picker-group').style.display = (toolName === 'BLOCK') ? 'flex' : 'none';
@@ -10931,7 +11294,7 @@
             maskLockGroup.style.display = (toolName === 'MASK_LOCK') ? 'flex' : 'none';
         }
         document.getElementById('putt-settings-group').style.display = (toolName === 'TEST_PUTT') ? 'flex' : 'none';
-        document.getElementById('sculpt-settings-group').style.display = (toolName === 'SCULPT' || toolName === 'SMOOTH' || toolName === 'FLATTEN' || toolName === 'PAINT' || toolName === 'WATER' || toolName === 'RIDGE' || toolName === 'NOISE' || toolName === 'RAMP') ? 'flex' : 'none';
+        document.getElementById('sculpt-settings-group').style.display = (toolName === 'SCULPT' || toolName === 'SMOOTH' || toolName === 'FLATTEN' || toolName === 'PAINT' || toolName === 'WATER' || toolName === 'RIDGE' || toolName === 'NOISE' || toolName === 'RAMP' || toolName === 'COLORIZE') ? 'flex' : 'none';
         
         let rampSettings = document.getElementById('ramp-settings');
         if (rampSettings) rampSettings.style.display = (toolName === 'RAMP') ? 'flex' : 'none';
@@ -11166,6 +11529,10 @@
         if (typeof window.terrainBiomeData !== 'undefined') {
             window.terrainBiomeData = pCtx.getImageData(0,0,4096,4096).data;
         }
+        // Refresh grass shells and chunks after terrain clear
+        if (window.rebuildRoughMask) window.rebuildRoughMask();
+        if (window._terrainShells) window._terrainShells.refresh();
+        if (window._terrainChunks) window._terrainChunks.syncAll();
         
         wCtx.fillStyle = '#000000';
         wCtx.fillRect(0,0,4096,4096);
@@ -12086,8 +12453,9 @@
                     if (gx < TERRAIN_SEGS) { nSum += positions[(gz*_smoothStride + gx+1)*3 + 2]; nCount++; }
                     if (nCount > 0) {
                         let localAvg = nSum / nCount;
-                        // Clamp interpolation to prevent overshoot oscillation at high multipliers
-                        let smoothFactor = Math.min(0.3 * brushMultiplier * falloff, 0.95);
+                        // Smooth intensity scales with brush size: small brush = gentle, large = aggressive
+                        let sizeBoost = Math.max(1, currentBrushSize / 6);  // 6m = baseline (1x)
+                        let smoothFactor = Math.min(0.3 * sizeBoost * falloff, 0.95);
                         positions[i*3 + 2] += (localAvg - positions[i*3 + 2]) * smoothFactor;
                     }
                     updatePos = true;
@@ -13312,6 +13680,13 @@ window.triggerExplosion = function(x, y, z) {
         renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
         renderer.setScissor(0, 0, window.innerWidth, window.innerHeight);
         renderer.setScissorTest(true);
+
+        // Distance-based LOD: auto-downsize far chunks (throttled internally)
+        if (window._terrainChunks) window._terrainChunks.updateDistanceLOD(camera);
+
+        // Shell texturing: lighting sync + distance visibility
+        if (window._terrainShells) window._terrainShells.update(performance.now() / 1000, camera);
+
         renderer.render(scene, camera);
         
         // --- GSPRO AIM BILLBOARD PROJECTION ---
@@ -14674,6 +15049,177 @@ setInterval(() => {
         }
     }
 }, 2000);
+</script>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- PRE-RACE SCREEN (Mario Kart style)        -->
+<!-- ══════════════════════════════════════════ -->
+<style>
+    .prerace-overlay {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.85);
+        z-index: 10000; display: none;
+        flex-direction: column; align-items: center; justify-content: center;
+        gap: 20px; padding: 20px;
+        animation: preraceFadeIn 0.5s ease;
+    }
+    .prerace-overlay.visible { display: flex; }
+    @keyframes preraceFadeIn { from { opacity: 0; } to { opacity: 1; } }
+    
+    .prerace-title {
+        font-family: 'Inter', sans-serif; font-size: 2.2em; font-weight: 900;
+        color: #fff; text-align: center; text-transform: uppercase;
+        letter-spacing: 2px; text-shadow: 0 0 30px rgba(74,222,128,0.5);
+    }
+    .prerace-section {
+        text-align: center; margin: 4px 0;
+    }
+    .prerace-section h3 {
+        font-family: 'Inter', sans-serif; color: #94a3b8;
+        font-size: 14px; font-weight: 700; text-transform: uppercase;
+        letter-spacing: 1px; margin: 0 0 8px;
+    }
+    .prerace-options {
+        display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;
+    }
+    .prerace-card {
+        width: 120px; padding: 16px 12px; border-radius: 16px;
+        background: linear-gradient(135deg, #1e293b, #0f172a);
+        border: 2px solid #334155; cursor: pointer;
+        transition: all 0.2s; text-align: center;
+        font-family: 'Inter', sans-serif;
+    }
+    .prerace-card:hover { border-color: #4ade80; transform: scale(1.05); }
+    .prerace-card.selected {
+        border-color: #4ade80; background: linear-gradient(135deg, #166534, #14532d);
+        box-shadow: 0 0 25px rgba(74,222,128,0.4); transform: scale(1.05);
+    }
+    .prerace-card .card-emoji { font-size: 36px; display: block; margin-bottom: 4px; }
+    .prerace-card .card-label { color: #fff; font-size: 16px; font-weight: 800; }
+    .prerace-card .card-desc { color: #94a3b8; font-size: 11px; margin-top: 2px; }
+    
+    .prerace-race-btn {
+        padding: 18px 60px; background: linear-gradient(135deg, #ef4444, #dc2626);
+        color: #fff; border: none; border-radius: 20px;
+        font-size: 24px; font-weight: 900; cursor: pointer;
+        text-transform: uppercase; letter-spacing: 3px;
+        box-shadow: 0 4px 30px rgba(239,68,68,0.5);
+        transition: all 0.3s; margin-top: 8px;
+        font-family: 'Inter', sans-serif;
+    }
+    .prerace-race-btn:hover {
+        transform: scale(1.08);
+        box-shadow: 0 6px 40px rgba(239,68,68,0.7);
+    }
+</style>
+
+<div id="prerace-overlay" class="prerace-overlay">
+    <div class="prerace-title">🏁 GET READY!</div>
+    
+    <!-- Power Class -->
+    <div class="prerace-section">
+        <h3>⚡ Power Class</h3>
+        <div class="prerace-options" id="prerace-power-cards"></div>
+    </div>
+    
+    <!-- Time of Day -->
+    <div class="prerace-section">
+        <h3>🌅 Time of Day</h3>
+        <div class="prerace-options">
+            <div class="prerace-card selected" onclick="selectTimeOfDay('day', this)">
+                <span class="card-emoji">☀️</span>
+                <span class="card-label">Day</span>
+            </div>
+            <div class="prerace-card" onclick="selectTimeOfDay('sunset', this)">
+                <span class="card-emoji">🌅</span>
+                <span class="card-label">Sunset</span>
+            </div>
+            <div class="prerace-card" onclick="selectTimeOfDay('night', this)">
+                <span class="card-emoji">🌙</span>
+                <span class="card-label">Night</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- RACE Button -->
+    <button class="prerace-race-btn" onclick="launchRace()">🏁 RACE!</button>
+</div>
+
+<script>
+// ── Pre-Race Screen Logic ──
+var _preracePowerMultiplier = 1.0;
+var _preraceTimeOfDay = 'day';
+
+function showPreRaceScreen(engineKey) {
+    var overlay = document.getElementById('prerace-overlay');
+    var powerGrid = document.getElementById('prerace-power-cards');
+    
+    // Clear existing power cards
+    powerGrid.innerHTML = '';
+    
+    // Build power cards from engine registry
+    var powerClasses = [];
+    if (window.ENGINE_REGISTRY && window.ENGINE_REGISTRY[engineKey]) {
+        powerClasses = window.ENGINE_REGISTRY[engineKey].powerClasses || [];
+    }
+    if (powerClasses.length === 0) {
+        // Fallback power classes
+        powerClasses = [
+            { label: '50 HP',  emoji: '🐢', desc: 'Easy',   multiplier: 0.6 },
+            { label: '100 HP', emoji: '🏎️', desc: 'Normal', multiplier: 1.0 },
+            { label: '300 HP', emoji: '🔥', desc: 'CHAOS!', multiplier: 1.8 }
+        ];
+    }
+    
+    powerClasses.forEach(function(pc, idx) {
+        var card = document.createElement('div');
+        card.className = 'prerace-card' + (idx === 1 ? ' selected' : '');
+        card.innerHTML = '<span class="card-emoji">' + pc.emoji + '</span>' +
+                         '<span class="card-label">' + pc.label + '</span>' +
+                         '<span class="card-desc">' + pc.desc + '</span>';
+        card.onclick = function() {
+            powerGrid.querySelectorAll('.prerace-card').forEach(function(c) { c.classList.remove('selected'); });
+            card.classList.add('selected');
+            _preracePowerMultiplier = pc.multiplier;
+        };
+        powerGrid.appendChild(card);
+        // Default select middle option
+        if (idx === 1) _preracePowerMultiplier = pc.multiplier;
+    });
+    
+    overlay.classList.add('visible');
+}
+
+function selectTimeOfDay(time, el) {
+    _preraceTimeOfDay = time;
+    el.parentElement.querySelectorAll('.prerace-card').forEach(function(c) { c.classList.remove('selected'); });
+    el.classList.add('selected');
+}
+
+function launchRace() {
+    // Store pre-race settings for rally.html
+    sessionStorage.setItem('prerace_power_multiplier', _preracePowerMultiplier);
+    sessionStorage.setItem('prerace_time_of_day', _preraceTimeOfDay);
+    if (window.ACTIVE_ENGINE_KEY) sessionStorage.setItem('prerace_engine_key', window.ACTIVE_ENGINE_KEY);
+    
+    console.log('🏁 RACE! Power: ' + _preracePowerMultiplier + 'x | Time: ' + _preraceTimeOfDay);
+    
+    // Apply time of day before redirect
+    if (_preraceTimeOfDay === 'night' && typeof window.setNightMode === 'function') {
+        window.setNightMode(true);
+    } else if (_preraceTimeOfDay === 'sunset' && typeof window.setSunsetMode === 'function') {
+        window.setSunsetMode(true);
+    }
+    
+    // Save level with time-of-day applied, then redirect
+    if (typeof saveLevel === 'function') {
+        saveLevel();
+    }
+    
+    setTimeout(function() {
+        window.location.href = 'rally.html';
+    }, 300);
+}
 </script>
 
 </body>

@@ -163,6 +163,22 @@
             max-width: 100%;
             max-height: 100%;
         }
+        #spline-overlay {
+            position: absolute;
+            pointer-events: none;
+            border-radius: 12px;
+            z-index: 10;
+        }
+        #preview-canvas {
+            position: absolute;
+            pointer-events: none;
+            border-radius: 12px;
+            z-index: 15;
+        }
+        @keyframes neonPulse {
+            0%, 100% { opacity: 0.85; }
+            50% { opacity: 1.0; }
+        }
 
         /* ── Bottom Actions ── */
         .bottom-bar {
@@ -205,22 +221,7 @@
             background: #ef4444;
             color: #fff;
         }
-        .btn-upload {
-            background: #8b5cf6;
-            color: #fff;
-        }
 
-        /* ── Style Selector ── */
-        .style-select {
-            padding: 8px 12px;
-            background: #1e293b;
-            border: 1px solid #334155;
-            border-radius: 8px;
-            color: #e2e8f0;
-            font-family: 'Inter', sans-serif;
-            font-size: 11px;
-            font-weight: 700;
-        }
 
         /* ── Processing Overlay ── */
         .processing-overlay {
@@ -307,36 +308,7 @@
             font-weight: 700;
         }
 
-        /* ── Upload Modal ── */
-        .upload-overlay {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(10,14,26,0.92);
-            backdrop-filter: blur(16px);
-            z-index: 1000;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 16px;
-        }
-        .upload-overlay.visible { display: flex; }
-        .upload-zone {
-            width: 320px;
-            height: 240px;
-            border: 3px dashed #334155;
-            border-radius: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 12px;
-            cursor: pointer;
-            transition: border-color 0.2s;
-        }
-        .upload-zone:hover, .upload-zone.dragover { border-color: #4ade80; }
-        .upload-zone .icon { font-size: 48px; }
-        .upload-zone .text { font-size: 14px; color: #94a3b8; font-weight: 600; }
+
 
         /* ── Template Picker ── */
         .template-picker {
@@ -369,44 +341,272 @@
             transition: all 0.2s;
         }
         .picker-blank:hover { border-color: #94a3b8; background: #475569; }
-        /* ── Mobile (<600px) ── */
+
+        /* ── Setup Wizard Cards ── */
+        .picker-card.selected {
+            border-color: #4ade80;
+            background: linear-gradient(135deg, #166534, #14532d);
+            box-shadow: 0 0 25px rgba(74,222,128,0.4);
+            transform: scale(1.05);
+        }
+        .picker-card .card-desc {
+            text-align: center; color: #94a3b8; font-size: 11px;
+            font-weight: 500; margin-top: 2px;
+        }
+        .picker-start-btn {
+            padding: 16px 48px; background: linear-gradient(135deg, #22c55e, #16a34a);
+            color: #fff; border: none; border-radius: 16px;
+            font-size: 18px; font-weight: 900; cursor: pointer;
+            transition: all 0.3s; text-transform: uppercase;
+            letter-spacing: 1px; margin-top: 12px;
+            box-shadow: 0 4px 20px rgba(34,197,94,0.4);
+        }
+        .picker-start-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 30px rgba(34,197,94,0.6);
+        }
+        .picker-category { margin: 16px 0; transition: opacity 0.3s, transform 0.3s; }
+
+        /* ── Mobile Layout Optimization (<600px) ── */
         @media (max-width: 600px) {
-            .toolbar {
-                flex-wrap: nowrap;
-                overflow-x: auto;
-                justify-content: flex-start;
-                padding: 6px 8px;
-                -webkit-overflow-scrolling: touch;
-                scrollbar-width: none;
+            body {
+                position: relative;
+                height: 100vh;
+                overflow: hidden;
             }
-            .toolbar::-webkit-scrollbar { display: none; }
-            .tool-btn .label { display: none; }
-            .tool-btn { width: 40px; height: 40px; font-size: 18px; }
-            .bottom-bar { gap: 4px; padding: 8px 8px; flex-wrap: wrap; }
-            .bottom-bar .action-btn { font-size: 11px; padding: 8px 12px; }
-            .bottom-bar .btn-primary { font-size: 13px; padding: 10px 16px; }
-            .bottom-bar .style-select { font-size: 10px; padding: 6px 8px; }
-            .options-bar { gap: 4px; padding: 4px 8px; }
-            .header h1 { font-size: 14px; }
+
+            /* Full Screen Canvas */
+            .canvas-wrap {
+                position: absolute;
+                inset: 0;
+                width: 100%;
+                height: 100%;
+                z-index: 1;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+            #draw-canvas, #spline-overlay, #preview-canvas {
+                border-radius: 0 !important;
+            }
+
+            /* Floating Header */
+            .header {
+                position: absolute;
+                top: env(safe-area-inset-top, 10px);
+                left: 10px;
+                right: 10px;
+                z-index: 100;
+                background: rgba(15, 23, 42, 0.85);
+                backdrop-filter: blur(16px);
+                border: 1px solid rgba(255, 255, 255, 0.05);
+                border-radius: 12px;
+                padding: 8px 12px;
+                box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+                height: auto;
+            }
+            .header h1 { font-size: 13px; }
+
+            /* Floating Tool Dock at Bottom-Center */
+            .toolbar {
+                position: absolute;
+                bottom: calc(75px + env(safe-area-inset-bottom, 10px));
+                left: 50%;
+                transform: translateX(-50%);
+                width: 90%;
+                max-width: 360px;
+                z-index: 100;
+                background: rgba(15, 23, 42, 0.9);
+                backdrop-filter: blur(20px);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 20px;
+                padding: 8px;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+                display: flex;
+                justify-content: space-around;
+                flex-wrap: nowrap !important;
+                overflow-x: visible !important;
+                gap: 0 !important;
+            }
+            .toolbar .tool-sep { display: none !important; }
+            .tool-btn .label { display: none !important; }
+            .tool-btn {
+                width: 42px !important;
+                height: 42px !important;
+                border-radius: 12px !important;
+                font-size: 19px !important;
+            }
+
+            /* Floating options bars (Jump Size & Road Width) */
+            #jump-size-bar {
+                position: absolute;
+                bottom: calc(140px + env(safe-area-inset-bottom, 10px));
+                left: 50%;
+                transform: translateX(-50%);
+                z-index: 100;
+                background: rgba(15, 23, 42, 0.85);
+                backdrop-filter: blur(12px);
+                border: 1px solid rgba(255, 255, 255, 0.05);
+                border-radius: 12px;
+                padding: 6px 12px;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                width: auto;
+            }
+
+            /* Vertical Road Width Slider on Left Edge */
+            .options-bar:not(#jump-size-bar) {
+                position: absolute;
+                left: 12px;
+                top: 50%;
+                transform: translateY(-50%);
+                z-index: 100;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 8px;
+                background: rgba(15, 23, 42, 0.85);
+                backdrop-filter: blur(12px);
+                border: 1px solid rgba(255, 255, 255, 0.05);
+                padding: 14px 6px;
+                border-radius: 20px;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                width: auto;
+                height: auto;
+            }
+            .options-bar:not(#jump-size-bar) .size-slider {
+                -webkit-appearance: slider-vertical;
+                writing-mode: bt-lr;
+                width: 20px;
+                height: 100px;
+                margin: 4px 0;
+            }
+
+            /* Floating Bottom Actions */
+            .bottom-bar {
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                z-index: 100;
+                background: linear-gradient(to top, rgba(10, 14, 26, 0.95) 75%, rgba(10, 14, 26, 0));
+                border-top: none;
+                padding: 12px 16px;
+                padding-bottom: calc(12px + env(safe-area-inset-bottom, 10px));
+                display: flex;
+                gap: 8px;
+                justify-content: space-between;
+                align-items: center;
+            }
+            .bottom-bar .action-btn {
+                font-size: 11px !important;
+                padding: 8px 12px !important;
+                border-radius: 10px !important;
+                flex: 1;
+                justify-content: center;
+            }
+            .bottom-bar .btn-primary {
+                font-size: 13px !important;
+                padding: 10px 16px !important;
+                flex: 2; /* Make Build button wider */
+            }
+        }
+
+        /* ── Landscape Rotation Overlay ── */
+        .rotate-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: #0f172a;
+            z-index: 99999;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            text-align: center;
+            padding: 24px;
+            font-family: 'Inter', sans-serif;
+        }
+        .rotate-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            max-width: 320px;
+        }
+        .rotate-icon {
+            font-size: 48px;
+            animation: phoneRotate 2s ease-in-out infinite;
+        }
+        @keyframes phoneRotate {
+            0%, 100% { transform: rotate(0deg); }
+            50% { transform: rotate(-90deg); }
+        }
+        .rotate-content h2 {
+            font-size: 20px;
+            font-weight: 900;
+            color: #4ade80;
+            margin: 0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .rotate-content p {
+            font-size: 13px;
+            color: #94a3b8;
+            line-height: 1.5;
+            margin: 0;
+        }
+
+        @media (max-width: 900px) and (orientation: landscape) {
+            #rotate-device-overlay {
+                display: flex !important;
+            }
         }
     </style>
+<script src="engine-registry.js"></script>
+<script src="theme-registry.js"></script>
+<script src="plate-registry.js"></script>
 </head>
 <body>
 
-    <!-- Template Picker (shown on load) -->
-    <div id="template-picker" class="template-picker">
+    <!-- Landscape Orientation Warning Overlay -->
+    <div id="rotate-device-overlay" class="rotate-overlay">
+        <div class="rotate-content">
+            <div class="rotate-icon">📱🔄</div>
+            <h2>Vrid din skärm!</h2>
+            <p>Vänligen vrid tillbaka din telefon till stående läge (portrait) för bästa möjliga ritupplevelse.</p>
+        </div>
+    </div>
+
+    <!-- Setup Wizard (shown on load) -->
+    <div id="setup-wizard" class="template-picker">
         <div class="picker-header">
-            <h1>🎲 CHOOSE YOUR ADVENTURE</h1>
-            <p>Pick a theme — the world is a surprise!</p>
+            <h1>🎨 DRAW-TO-WORLD</h1>
+            <p>Build your own track — choose vehicle and theme!</p>
         </div>
-        <div class="picker-grid" id="picker-grid">
-            <!-- Categories will be populated by JS -->
+        
+        <!-- Step 1: Engine Selection -->
+        <div class="picker-category">
+            <h2>🏎️ Choose Vehicle</h2>
+            <div class="picker-cards" id="engine-cards"></div>
         </div>
-        <button class="picker-blank" onclick="selectTemplate(null)">📄 Blank Canvas (free draw)</button>
+        
+        <!-- Step 2: Theme Selection -->
+        <div class="picker-category" id="theme-step" style="opacity:0.4; pointer-events:none;">
+            <h2>🎨 Choose Theme</h2>
+            <div class="picker-cards" id="theme-cards"></div>
+        </div>
+        
+        <!-- Start Button -->
+        <button class="picker-start-btn" id="start-draw-btn" style="opacity:0.4; pointer-events:none;" onclick="startDrawing()">
+            🚀 START DRAWING!
+        </button>
     </div>
 
     <!-- Header -->
     <div class="header">
+        <button onclick="backToWizard()" style="background:none;border:1px solid #475569;color:#94a3b8;border-radius:8px;padding:4px 12px;cursor:pointer;font-size:13px;font-weight:600;transition:all 0.2s;" onmouseover="this.style.borderColor='#4ade80';this.style.color='#4ade80'" onmouseout="this.style.borderColor='#475569';this.style.color='#94a3b8'">← Back</button>
         <h1>🎨 DRAW-TO-WORLD</h1>
         <div class="header-actions">
             <div class="mode-toggle">
@@ -422,14 +622,14 @@
         <button class="tool-btn" onclick="setTool('mountain')" id="tool-mountain" title="Mountain Stamp">🏔️<span class="label">Mountain</span></button>
         <button class="tool-btn" onclick="setTool('tree')" id="tool-tree" title="Tree Stamp">🌳<span class="label">Tree</span></button>
         <button class="tool-btn" onclick="setTool('water')" id="tool-water" title="Draw Water / Lake">🌊<span class="label">Water</span></button>
-        <button class="tool-btn" onclick="setTool('house')" id="tool-house" title="House Stamp">🏠<span class="label">House</span></button>
+        <button class="tool-btn" style="display:none" onclick="setTool('house')" id="tool-house" title="House Stamp">🏠<span class="label">House</span></button>
         <div class="tool-sep"></div>
-        <button class="tool-btn" onclick="setTool('start')" id="tool-start" title="Start Flag">🏁<span class="label">Start</span></button>
-        <button class="tool-btn" onclick="setTool('checkpoint')" id="tool-checkpoint" title="Checkpoint">⭕<span class="label">Check</span></button>
+        <button class="tool-btn" style="display:none" onclick="setTool('start')" id="tool-start" title="Start Flag">🏁<span class="label">Start</span></button>
+        <button class="tool-btn" style="display:none" onclick="setTool('checkpoint')" id="tool-checkpoint" title="Checkpoint">⭕<span class="label">Check</span></button>
         <button class="tool-btn" onclick="setTool('jump')" id="tool-jump" title="Place Jump Ramp">🚀<span class="label">Jump</span></button>
         <div class="tool-sep"></div>
         <button class="tool-btn" onclick="setTool('eraser')" id="tool-eraser" title="Eraser">🧹<span class="label">Erase</span></button>
-        <button class="tool-btn" onclick="setTool('line')" id="tool-line" title="Straight Line (L)">📏<span class="label">Line</span></button>
+        <button class="tool-btn" style="display:none" onclick="setTool('line')" id="tool-line" title="Straight Line (L)">📏<span class="label">Line</span></button>
     </div>
 
     <!-- Jump Size Picker (shown when JUMP tool active) -->
@@ -450,18 +650,14 @@
     <!-- Canvas -->
     <div class="canvas-wrap" id="canvas-wrap">
         <canvas id="draw-canvas"></canvas>
+        <canvas id="spline-overlay"></canvas>
+        <canvas id="preview-canvas"></canvas>
     </div>
 
     <!-- Bottom Bar -->
     <div class="bottom-bar">
         <button class="action-btn btn-secondary" onclick="undo()">↩️ Undo</button>
         <button class="action-btn btn-secondary btn-danger" onclick="clearCanvas()">🗑️ Clear</button>
-        <button class="action-btn btn-upload" onclick="showUpload()">📷 Photo</button>
-        <select class="style-select" id="style-select">
-            <option value="enhance">✨ Enhance (AI improves)</option>
-            <option value="trace">📋 Trace (copy exact)</option>
-            <option value="generate">🚀 Generate (AI creates)</option>
-        </select>
         <button class="action-btn btn-primary" onclick="buildWorld()">🔮 BUILD MY WORLD</button>
     </div>
 
@@ -489,22 +685,7 @@
         </div>
     </div>
 
-    <!-- Upload Photo Overlay -->
-    <div class="upload-overlay" id="upload-overlay">
-        <div style="font-size:20px; font-weight:900; margin-bottom:8px;">📷 Upload a Photo</div>
-        <div style="font-size:12px; color:#94a3b8; margin-bottom:16px;">Take a photo of your paper drawing</div>
-        <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
-            <div class="icon">📄</div>
-            <div class="text">Tap to take photo or select file</div>
-            <div style="font-size:10px; color:#475569;">Supports JPG, PNG</div>
-        </div>
-        <input type="file" id="file-input" accept="image/*" capture="environment" style="display:none">
-        <img id="upload-preview" style="display:none; max-width:300px; max-height:200px; border-radius:12px; margin-top:8px; border:2px solid #334155;">
-        <div style="display:flex; gap:8px; margin-top:12px;">
-            <button class="action-btn btn-primary" onclick="buildFromUpload()" id="btn-build-upload" style="display:none;">🔮 BUILD THIS</button>
-            <button class="action-btn btn-secondary" onclick="hideUpload()">✕ Cancel</button>
-        </div>
-    </div>
+
 
     <!-- Crossing Warning Modal -->
     <div class="result-overlay" id="crossing-modal">
@@ -540,26 +721,77 @@ let undoStack = [];
 let roadUndoStack = [];
 let placedStamps = [];
 let stampsUndoStack = [];
+let mountainUndoStack = [];
 let maxUndo = 15;
 let lastBuildPlan = null;
-let uploadedImageBase64 = null;
+let splineUndoStack = [];
 let selectedTemplateId = null;
 let templateMaskData = null;    // ImageData of the loaded mask
 let templateMaskCanvas = null;
 let templateMaskCtx = null;
+
+// ── Road Spline Overlay State ──
+let currentRoadPoints = [];     // Raw points collected during current stroke
+let structuredRoads = [];       // All completed road splines [{points: [...], simplified: [...]}]
+let MIN_POINT_DIST = 5;         // Minimum px distance between sampled points
+
+// ── Mountain Contour State ──
+let currentMountainPoints = []; // Points collected during current mountain stroke
+let currentMountainRadius = 0;  // Brush radius used for this stroke
+let structuredMountains = [];   // [{outline: [{x,y}], ridgeLine: [{x,y}], radius: N}]
+
+// ── Water Contour State ──
+let currentWaterPoints = [];    // Points collected during current water stroke
+let currentWaterRadius = 0;     // Brush radius used for this stroke
+let structuredWater = [];       // [{outline: [{x,y}], ridgeLine: [{x,y}], radius: N}]
+let waterUndoStack = [];
 
 // ── Canvas Setup ──
 const canvas = document.getElementById('draw-canvas');
 const ctx = canvas.getContext('2d');
 const roadCanvas = document.createElement('canvas');
 const roadCtx = roadCanvas.getContext('2d');
+const splineCanvas = document.getElementById('spline-overlay');
+const splineCtx = splineCanvas.getContext('2d');
+const previewCanvas = document.getElementById('preview-canvas');
+const previewCtx = previewCanvas.getContext('2d');
+
+function syncSplineCanvas() {
+    // Position overlay exactly on top of draw-canvas
+    let drawRect = canvas.getBoundingClientRect();
+    let wrapRect = document.getElementById('canvas-wrap').getBoundingClientRect();
+    let offLeft = (drawRect.left - wrapRect.left) + 'px';
+    let offTop = (drawRect.top - wrapRect.top) + 'px';
+    let cssW = drawRect.width + 'px';
+    let cssH = drawRect.height + 'px';
+    
+    splineCanvas.style.left = offLeft;
+    splineCanvas.style.top = offTop;
+    splineCanvas.style.width = cssW;
+    splineCanvas.style.height = cssH;
+    splineCanvas.width = canvas.width;
+    splineCanvas.height = canvas.height;
+    
+    previewCanvas.style.left = offLeft;
+    previewCanvas.style.top = offTop;
+    previewCanvas.style.width = cssW;
+    previewCanvas.style.height = cssH;
+    previewCanvas.width = canvas.width;
+    previewCanvas.height = canvas.height;
+    
+    let dpr = Math.min(window.devicePixelRatio || 1, 2);
+    splineCtx.setTransform(1, 0, 0, 1, 0, 0);
+    splineCtx.scale(dpr, dpr);
+    previewCtx.setTransform(1, 0, 0, 1, 0, 0);
+    previewCtx.scale(dpr, dpr);
+}
 
 function resizeCanvas() {
     let wrap = document.getElementById('canvas-wrap');
     let w = wrap.clientWidth - 16;
     let h = wrap.clientHeight - 16;
-    // Keep aspect ratio close to A4 (landscape)
-    let aspect = 1.414;
+    // Keep aspect ratio 1:1 (square) to match the 900x900m build terrain perfectly
+    let aspect = 1.0;
     if (w / h > aspect) {
         canvas.height = h;
         canvas.width = Math.floor(h * aspect);
@@ -589,6 +821,8 @@ function resizeCanvas() {
     roadCtx.fillRect(0, 0, cw, ch);
     roadCtx.lineCap = 'round';
     roadCtx.lineJoin = 'round';
+    // Sync spline overlay after draw-canvas is sized
+    setTimeout(syncSplineCanvas, 0);
 }
 resizeCanvas();
 window.addEventListener('resize', function() {
@@ -610,6 +844,11 @@ window.addEventListener('resize', function() {
     roadCtx.save(); roadCtx.setTransform(1, 0, 0, 1, 0, 0);
     roadCtx.drawImage(tmpRoad, 0, 0, tmpRoad.width, tmpRoad.height, 0, 0, roadCanvas.width, roadCanvas.height);
     roadCtx.restore();
+    // Re-sync spline overlay after resize
+    setTimeout(function() {
+        syncSplineCanvas();
+        redrawAllSplines();
+    }, 10);
 });
 saveUndo();
 
@@ -658,6 +897,23 @@ function startDraw(e) {
         roadCtx.beginPath();
         roadCtx.moveTo(p.x, p.y);
     }
+    
+    // Road spline: start collecting points
+    if (currentTool === 'pen') {
+        currentRoadPoints = [{ x: p.x, y: p.y }];
+    }
+    
+    // Mountain: start collecting points
+    if (currentTool === 'mountain') {
+        currentMountainPoints = [{ x: p.x, y: p.y }];
+        currentMountainRadius = brushSize * 2.5;
+    }
+    
+    // Water: start collecting points
+    if (currentTool === 'water') {
+        currentWaterPoints = [{ x: p.x, y: p.y }];
+        currentWaterRadius = brushSize * 2.0;
+    }
 }
 
 function moveDraw(e) {
@@ -669,7 +925,7 @@ function moveDraw(e) {
     if (currentTool !== 'eraser' && !canDrawAt(p.x, p.y)) return;
     
     if (currentTool === 'pen' || currentTool === 'water' || currentTool === 'mountain') {
-        var colors = { pen: currentColor, water: 'rgba(56, 189, 248, 0.7)', mountain: 'rgba(74, 140, 60, 0.7)' };
+        var colors = { pen: 'rgba(0,0,0,0)', water: 'rgba(56, 189, 248, 0.0)', mountain: 'rgba(74, 140, 60, 0.0)' };
         var widths = { pen: brushSize, water: brushSize * 2, mountain: brushSize * 2.5 };
         ctx.strokeStyle = colors[currentTool];
         ctx.lineWidth = widths[currentTool];
@@ -687,6 +943,33 @@ function moveDraw(e) {
             roadCtx.stroke();
             roadCtx.beginPath();
             roadCtx.moveTo(p.x, p.y);
+            
+            // Collect point for spline (throttled by distance)
+            if (currentRoadPoints.length > 0) {
+                let last = currentRoadPoints[currentRoadPoints.length - 1];
+                let dx = p.x - last.x, dy = p.y - last.y;
+                if (dx * dx + dy * dy >= MIN_POINT_DIST * MIN_POINT_DIST) {
+                    currentRoadPoints.push({ x: p.x, y: p.y });
+                }
+            }
+        }
+        
+        // Collect mountain points
+        // Collect water points
+        if (currentTool === 'water' && currentWaterPoints.length > 0) {
+            let last = currentWaterPoints[currentWaterPoints.length - 1];
+            let dx = p.x - last.x, dy = p.y - last.y;
+            if (dx * dx + dy * dy >= (MIN_POINT_DIST * 2) * (MIN_POINT_DIST * 2)) {
+                currentWaterPoints.push({ x: p.x, y: p.y });
+            }
+        }
+        
+        if (currentTool === 'mountain' && currentMountainPoints.length > 0) {
+            let last = currentMountainPoints[currentMountainPoints.length - 1];
+            let dx = p.x - last.x, dy = p.y - last.y;
+            if (dx * dx + dy * dy >= (MIN_POINT_DIST * 2) * (MIN_POINT_DIST * 2)) {
+                currentMountainPoints.push({ x: p.x, y: p.y });
+            }
         }
     } else if (currentTool === 'eraser') {
         ctx.globalCompositeOperation = 'source-over';
@@ -713,11 +996,23 @@ function moveDraw(e) {
             return Math.sqrt(dx*dx + dy*dy) > eraseRadius;
         });
     }
+    
+    // Live preview while drawing
+    if (currentTool === 'pen' && currentRoadPoints.length >= 2) {
+        renderLivePreview();
+    } else if (currentTool === 'mountain' && currentMountainPoints.length >= 1) {
+        renderLivePreview();
+    } else if (currentTool === 'water' && currentWaterPoints.length >= 1) {
+        renderLivePreview();
+    }
 }
 
 function endDraw(e) {
     if (!isDrawing) return;
     isDrawing = false;
+    
+    // Clear the live preview
+    clearPreview();
     
     if (currentTool === 'line') {
         let p = getPos(e);
@@ -740,6 +1035,97 @@ function endDraw(e) {
     
     ctx.beginPath();
     roadCtx.beginPath();
+    
+    // Road spline: process collected points with auto-smoothing + auto-connect
+    if (currentTool === 'pen' && currentRoadPoints.length >= 3) {
+        // Step 1: Aggressive simplification (removes jitter and zigzags)
+        let simplified = simplifyRDP(currentRoadPoints, 10.0);
+        // Step 2: Smooth remaining sharp corners (2 passes of Chaikin subdivision)
+        if (simplified.length >= 2) {
+            simplified = chaikinSmooth(simplified, 2);
+            
+            // Step 3: Auto-connect to nearby existing roads
+            let CONNECT_DIST = 40; // px — generous for touch/imprecise drawing
+            let newStart = simplified[0];
+            let newEnd = simplified[simplified.length - 1];
+            let merged = false;
+            
+            for (let i = 0; i < structuredRoads.length; i++) {
+                let existing = structuredRoads[i].simplified;
+                let exStart = existing[0];
+                let exEnd = existing[existing.length - 1];
+                
+                let dNewStartToExEnd = Math.hypot(newStart.x - exEnd.x, newStart.y - exEnd.y);
+                let dNewEndToExStart = Math.hypot(newEnd.x - exStart.x, newEnd.y - exStart.y);
+                let dNewStartToExStart = Math.hypot(newStart.x - exStart.x, newStart.y - exStart.y);
+                let dNewEndToExEnd = Math.hypot(newEnd.x - exEnd.x, newEnd.y - exEnd.y);
+                
+                if (dNewStartToExEnd < CONNECT_DIST) {
+                    // New starts where existing ends → append new to existing
+                    structuredRoads[i].simplified = existing.concat(simplified.slice(1));
+                    structuredRoads[i].points = structuredRoads[i].points.concat(currentRoadPoints.slice(1));
+                    merged = true; break;
+                } else if (dNewEndToExStart < CONNECT_DIST) {
+                    // New ends where existing starts → prepend new to existing
+                    structuredRoads[i].simplified = simplified.slice(0, -1).concat(existing);
+                    structuredRoads[i].points = currentRoadPoints.slice(0, -1).concat(structuredRoads[i].points);
+                    merged = true; break;
+                } else if (dNewStartToExStart < CONNECT_DIST) {
+                    // Both start at same spot → reverse new, then prepend
+                    simplified.reverse();
+                    structuredRoads[i].simplified = simplified.slice(0, -1).concat(existing);
+                    let revPoints = currentRoadPoints.slice().reverse();
+                    structuredRoads[i].points = revPoints.slice(0, -1).concat(structuredRoads[i].points);
+                    merged = true; break;
+                } else if (dNewEndToExEnd < CONNECT_DIST) {
+                    // Both end at same spot → reverse new, then append
+                    simplified.reverse();
+                    structuredRoads[i].simplified = existing.concat(simplified.slice(1));
+                    let revPoints = currentRoadPoints.slice().reverse();
+                    structuredRoads[i].points = structuredRoads[i].points.concat(revPoints.slice(1));
+                    merged = true; break;
+                }
+            }
+            
+            if (!merged) {
+                // No nearby road found — create new road segment
+                structuredRoads.push({
+                    points: currentRoadPoints.slice(),
+                    simplified: simplified
+                });
+            }
+            
+            redrawAllSplines();
+        }
+    }
+    currentRoadPoints = [];
+    
+    // Post-stroke: auto-join ALL close segments (greedy multi-pass)
+    if (currentTool === 'pen' && structuredRoads.length > 1) {
+        autoJoinAllRoads();
+    }
+    
+    // Post-stroke: auto-close loops (snap start→end if close)
+    if (currentTool === 'pen') {
+        autoCloseLoops();
+    }
+    
+    // Show encouragement if track still has gaps
+    if (currentTool === 'pen' && structuredRoads.length > 1) {
+        showEncouragementToast();
+    }
+    
+    // Mountain contour: process collected points
+    if (currentTool === 'mountain' && currentMountainPoints.length >= 1) {
+        processMountainStroke(currentMountainPoints, currentMountainRadius);
+    }
+    currentMountainPoints = [];
+    
+    // Water contour: process collected points
+    if (currentTool === 'water' && currentWaterPoints.length >= 1) {
+        processWaterStroke(currentWaterPoints, currentWaterRadius);
+    }
+    currentWaterPoints = [];
 
     // Clean up stamps and redraw them on top after drawing is done
     cleanupStamps();
@@ -765,33 +1151,67 @@ function drawSingleStamp(x, y, type, jSize) {
     };
     
     if (type === 'jump') {
-        // Draw a ramp shape sized by jumpSize
+        // Draw a ramp shape sized by jumpSize — matches auto-jump style
         let currentJSize = jSize || 'M';
-        var rampH = currentJSize === 'S' ? 14 : currentJSize === 'M' ? 22 : 32;
-        var rampW = rampH * 1.8;
+        var sz = currentJSize === 'S' ? 8 : currentJSize === 'M' ? 12 : 18;
         var label = currentJSize === 'S' ? 'S' : currentJSize === 'M' ? 'M' : 'L';
         
-        // Ramp triangle
-        ctx.fillStyle = '#f59e0b';
+        // Find nearest road direction
+        let jumpAngle = -Math.PI / 2; // Default: upward
+        let bestDist = Infinity;
+        for (let road of structuredRoads) {
+            let sp = catmullRomSpline(road.simplified, 10);
+            for (let k = 0; k < sp.length - 1; k++) {
+                let dx = x - sp[k].x, dy = y - sp[k].y;
+                let d = dx * dx + dy * dy;
+                if (d < bestDist) {
+                    bestDist = d;
+                    jumpAngle = Math.atan2(sp[k+1].y - sp[k].y, sp[k+1].x - sp[k].x);
+                }
+            }
+        }
+        
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(jumpAngle);
+        
+        // Glow
         ctx.beginPath();
-        ctx.moveTo(x - rampW/2, y + rampH/2);
-        ctx.lineTo(x + rampW/2, y + rampH/2);
-        ctx.lineTo(x, y - rampH/2);
-        ctx.closePath();
+        ctx.arc(0, 0, sz + 4, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(0, 255, 150, 0.15)';
+        ctx.shadowColor = '#00ff88';
+        ctx.shadowBlur = 12;
         ctx.fill();
-        ctx.strokeStyle = '#92400e';
-        ctx.lineWidth = 2;
+        
+        // Green triangle (points right = forward)
+        ctx.beginPath();
+        ctx.moveTo(-sz * 0.7, sz * 0.5);
+        ctx.lineTo(sz * 0.7, 0);
+        ctx.lineTo(-sz * 0.7, -sz * 0.5);
+        ctx.closePath();
+        ctx.fillStyle = '#4ade80';
+        ctx.globalAlpha = 0.8;
+        ctx.shadowColor = '#22c55e';
+        ctx.shadowBlur = 8;
+        ctx.fill();
+        ctx.strokeStyle = '#86efac';
+        ctx.lineWidth = 1.5;
         ctx.stroke();
         
-        // Arrow up
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold ' + (rampH * 0.6) + 'px sans-serif';
-        ctx.fillText('↗', x, y);
+        // Rocket emoji
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = 1.0;
+        ctx.font = (sz + 4) + 'px serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🚀', 0, -1);
         
         // Size label
-        ctx.font = 'bold ' + (rampH * 0.35) + 'px sans-serif';
-        ctx.fillStyle = '#92400e';
-        ctx.fillText(label, x, y + rampH/2 + rampH * 0.3);
+        ctx.rotate(-jumpAngle); // un-rotate for readable text
+        ctx.font = 'bold ' + (sz * 0.5) + 'px Inter, sans-serif';
+        ctx.fillStyle = 'rgba(34, 197, 94, 0.8)';
+        ctx.fillText(label, 0, sz + 8);
+        ctx.restore();
     } else {
         ctx.fillText(stamps[type] || '❓', x, y);
     }
@@ -872,6 +1292,18 @@ function saveUndo() {
 
     stampsUndoStack.push(JSON.parse(JSON.stringify(placedStamps)));
     if (stampsUndoStack.length > maxUndo) stampsUndoStack.shift();
+    
+    // Save road splines for undo
+    splineUndoStack.push(JSON.parse(JSON.stringify(structuredRoads)));
+    if (splineUndoStack.length > maxUndo) splineUndoStack.shift();
+    
+    // Save mountains for undo
+    mountainUndoStack.push(JSON.parse(JSON.stringify(structuredMountains)));
+    if (mountainUndoStack.length > maxUndo) mountainUndoStack.shift();
+    
+    // Save water for undo
+    waterUndoStack.push(JSON.parse(JSON.stringify(structuredWater)));
+    if (waterUndoStack.length > maxUndo) waterUndoStack.shift();
 }
 
 function undo() {
@@ -888,6 +1320,26 @@ function undo() {
             stampsUndoStack.pop();
             placedStamps = JSON.parse(JSON.stringify(stampsUndoStack[stampsUndoStack.length - 1]));
         }
+        
+        // Restore road splines
+        if (splineUndoStack.length > 1) {
+            splineUndoStack.pop();
+            structuredRoads = JSON.parse(JSON.stringify(splineUndoStack[splineUndoStack.length - 1]));
+        }
+        
+        // Restore mountains
+        if (mountainUndoStack.length > 1) {
+            mountainUndoStack.pop();
+            structuredMountains = JSON.parse(JSON.stringify(mountainUndoStack[mountainUndoStack.length - 1]));
+        }
+        
+        // Restore water
+        if (waterUndoStack.length > 1) {
+            waterUndoStack.pop();
+            structuredWater = JSON.parse(JSON.stringify(waterUndoStack[waterUndoStack.length - 1]));
+        }
+        
+        redrawAllSplines();
     }
 }
 
@@ -903,79 +1355,1479 @@ function clearCanvas() {
     roadCtx.fillRect(0, 0, roadCanvas.width / dpr, roadCanvas.height / dpr);
 
     placedStamps = [];
+    
+    // Clear road splines, mountains, and water
+    structuredRoads = [];
+    currentRoadPoints = [];
+    structuredMountains = [];
+    currentMountainPoints = [];
+    structuredWater = [];
+    currentWaterPoints = [];
+    splineCtx.clearRect(0, 0, splineCanvas.width, splineCanvas.height);
 }
 
-// ── Upload Photo ──
-function showUpload() {
-    document.getElementById('upload-overlay').classList.add('visible');
-    uploadedImageBase64 = null;
-    document.getElementById('upload-preview').style.display = 'none';
-    document.getElementById('btn-build-upload').style.display = 'none';
-}
+// ══════════════════════════════════════════════════════════════
+// ── ROAD SPLINE ENGINE ──
+// Converts freehand road strokes into smooth, neon-rendered
+// spline overlays in real-time. No AI needed!
+// ══════════════════════════════════════════════════════════════
 
-function hideUpload() {
-    document.getElementById('upload-overlay').classList.remove('visible');
-}
-
-document.getElementById('file-input').addEventListener('change', function(e) {
-    let file = e.target.files[0];
-    if (!file) return;
-    let reader = new FileReader();
-    reader.onload = function(ev) {
-        uploadedImageBase64 = ev.target.result;
-        document.getElementById('upload-preview').src = uploadedImageBase64;
-        document.getElementById('upload-preview').style.display = 'block';
-        document.getElementById('btn-build-upload').style.display = 'flex';
-    };
-    reader.readAsDataURL(file);
-});
-
-// Drag-drop
-let uploadZone = document.getElementById('upload-zone');
-uploadZone.addEventListener('dragover', function(e) { e.preventDefault(); this.classList.add('dragover'); });
-uploadZone.addEventListener('dragleave', function() { this.classList.remove('dragover'); });
-uploadZone.addEventListener('drop', function(e) {
-    e.preventDefault();
-    this.classList.remove('dragover');
-    let file = e.dataTransfer.files[0];
-    if (file && file.type.startsWith('image/')) {
-        let reader = new FileReader();
-        reader.onload = function(ev) {
-            uploadedImageBase64 = ev.target.result;
-            document.getElementById('upload-preview').src = uploadedImageBase64;
-            document.getElementById('upload-preview').style.display = 'block';
-            document.getElementById('btn-build-upload').style.display = 'flex';
-        };
-        reader.readAsDataURL(file);
+// ── Ramer-Douglas-Peucker line simplification ──
+// Reduces noisy freehand points to key waypoints
+function simplifyRDP(points, epsilon) {
+    if (points.length <= 2) return points.slice();
+    
+    // Find the point with maximum distance from the line (first→last)
+    let first = points[0], last = points[points.length - 1];
+    let maxDist = 0, maxIdx = 0;
+    
+    for (let i = 1; i < points.length - 1; i++) {
+        let d = pointToLineDist(points[i], first, last);
+        if (d > maxDist) { maxDist = d; maxIdx = i; }
     }
-});
-
-function buildFromUpload() {
-    if (!uploadedImageBase64) return;
-    hideUpload();
-    sendToAI(uploadedImageBase64);
+    
+    if (maxDist > epsilon) {
+        // Recurse on both halves
+        let left = simplifyRDP(points.slice(0, maxIdx + 1), epsilon);
+        let right = simplifyRDP(points.slice(maxIdx), epsilon);
+        return left.slice(0, -1).concat(right);
+    } else {
+        return [first, last];
+    }
 }
+
+// ── Chaikin's corner-cutting subdivision ──
+// Smooths sharp angles into gentle curves. Each pass doubles the point count.
+function chaikinSmooth(points, passes) {
+    if (points.length < 3) return points.slice();
+    let result = points.slice();
+    for (let p = 0; p < (passes || 1); p++) {
+        let smoothed = [result[0]]; // Keep first point
+        for (let i = 0; i < result.length - 1; i++) {
+            let p1 = result[i], p2 = result[i + 1];
+            smoothed.push({
+                x: p1.x * 0.75 + p2.x * 0.25,
+                y: p1.y * 0.75 + p2.y * 0.25
+            });
+            smoothed.push({
+                x: p1.x * 0.25 + p2.x * 0.75,
+                y: p1.y * 0.25 + p2.y * 0.75
+            });
+        }
+        smoothed.push(result[result.length - 1]); // Keep last point
+        // Re-simplify to avoid too many points after subdivision
+        result = simplifyRDP(smoothed, 3.0);
+    }
+    return result;
+}
+
+function pointToLineDist(p, a, b) {
+    let dx = b.x - a.x, dy = b.y - a.y;
+    let lenSq = dx * dx + dy * dy;
+    if (lenSq < 0.001) return Math.hypot(p.x - a.x, p.y - a.y);
+    let t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / lenSq));
+    let projX = a.x + t * dx, projY = a.y + t * dy;
+    return Math.hypot(p.x - projX, p.y - projY);
+}
+
+// ── Catmull-Rom spline interpolation ──
+// Generates smooth curve through waypoints
+function catmullRomSpline(points, samplesPerSeg) {
+    if (points.length < 2) return points.slice();
+    let result = [];
+    let n = points.length;
+    let sps = samplesPerSeg || 12;
+    
+    for (let i = 0; i < n - 1; i++) {
+        let p0 = points[Math.max(0, i - 1)];
+        let p1 = points[i];
+        let p2 = points[Math.min(n - 1, i + 1)];
+        let p3 = points[Math.min(n - 1, i + 2)];
+        
+        for (let s = 0; s < sps; s++) {
+            let t = s / sps;
+            let t2 = t * t, t3 = t2 * t;
+            
+            // Catmull-Rom matrix (tension = 0.5)
+            let x = 0.5 * (
+                (2 * p1.x) +
+                (-p0.x + p2.x) * t +
+                (2*p0.x - 5*p1.x + 4*p2.x - p3.x) * t2 +
+                (-p0.x + 3*p1.x - 3*p2.x + p3.x) * t3
+            );
+            let y = 0.5 * (
+                (2 * p1.y) +
+                (-p0.y + p2.y) * t +
+                (2*p0.y - 5*p1.y + 4*p2.y - p3.y) * t2 +
+                (-p0.y + 3*p1.y - 3*p2.y + p3.y) * t3
+            );
+            result.push({ x, y });
+        }
+    }
+    // Add final point
+    result.push({ x: points[n-1].x, y: points[n-1].y });
+    return result;
+}
+
+// ── Curvature calculation ──
+// Returns curvature at each spline point (0 = straight, higher = tighter)
+function computeCurvature(splinePoints) {
+    let curvatures = [0]; // First point
+    for (let i = 1; i < splinePoints.length - 1; i++) {
+        let prev = splinePoints[i - 1];
+        let curr = splinePoints[i];
+        let next = splinePoints[i + 1];
+        
+        // Direction change = curvature approximation
+        let dx1 = curr.x - prev.x, dy1 = curr.y - prev.y;
+        let dx2 = next.x - curr.x, dy2 = next.y - curr.y;
+        let cross = dx1 * dy2 - dy1 * dx2;
+        let dot = dx1 * dx2 + dy1 * dy2;
+        let len1 = Math.sqrt(dx1*dx1 + dy1*dy1);
+        let len2 = Math.sqrt(dx2*dx2 + dy2*dy2);
+        
+        if (len1 < 0.001 || len2 < 0.001) {
+            curvatures.push(0);
+        } else {
+            let angle = Math.abs(Math.atan2(cross, dot));
+            curvatures.push(angle);
+        }
+    }
+    curvatures.push(0); // Last point
+    return curvatures;
+}
+
+// ── Curvature → neon color mapping ──
+// Gentle = cyan/aqua, Medium = magenta, Tight = hot pink/red
+function curvatureColor(k) {
+    // k is angle in radians (0 = straight, ~0.5+ = very tight)
+    let t = Math.min(1.0, k / 0.35); // Normalize: 0.35 rad ≈ 20° = "very tight"
+    
+    if (t < 0.4) {
+        // Cyan → electric blue
+        let r = Math.round(0 + t * 2.5 * 80);
+        let g = Math.round(255 - t * 2.5 * 50);
+        let b = 255;
+        return `rgb(${r},${g},${b})`;
+    } else if (t < 0.7) {
+        // Electric blue → magenta
+        let u = (t - 0.4) / 0.3;
+        let r = Math.round(80 + u * 175);
+        let g = Math.round(193 - u * 193);
+        let b = Math.round(255 - u * 30);
+        return `rgb(${r},${g},${b})`;
+    } else {
+        // Magenta → hot pink/red
+        let u = (t - 0.7) / 0.3;
+        let r = 255;
+        let g = Math.round(0 + u * 50);
+        let b = Math.round(225 - u * 125);
+        return `rgb(${r},${g},${b})`;
+    }
+}
+
+// ── Render all road splines with neon glow ──
+function redrawAllSplines() {
+    let dpr = Math.min(window.devicePixelRatio || 1, 2);
+    splineCtx.save();
+    splineCtx.setTransform(1, 0, 0, 1, 0, 0);
+    splineCtx.clearRect(0, 0, splineCanvas.width, splineCanvas.height);
+    splineCtx.restore();
+    
+    let isMobile = window.innerWidth < 600;
+    
+    // Render mountain contours FIRST (under road splines)
+    renderMountainContours();
+    renderWaterContours();
+    
+    for (let road of structuredRoads) {
+        let splinePoints = catmullRomSpline(road.simplified, 10);
+        if (splinePoints.length < 2) continue;
+        
+        let roadW = isMobile ? 10 : 14; // Road width in px
+        
+        // Layer 1: Road edge (slightly wider, darker)
+        splineCtx.save();
+        splineCtx.lineWidth = roadW + 3;
+        splineCtx.lineCap = 'round';
+        splineCtx.lineJoin = 'round';
+        splineCtx.strokeStyle = '#2a2a2a';
+        splineCtx.globalAlpha = 0.85;
+        splineCtx.beginPath();
+        splineCtx.moveTo(splinePoints[0].x, splinePoints[0].y);
+        for (let i = 1; i < splinePoints.length; i++) {
+            splineCtx.lineTo(splinePoints[i].x, splinePoints[i].y);
+        }
+        splineCtx.stroke();
+        splineCtx.restore();
+        
+        // Layer 2: Road surface (dark gray asphalt)
+        splineCtx.save();
+        splineCtx.lineWidth = roadW;
+        splineCtx.lineCap = 'round';
+        splineCtx.lineJoin = 'round';
+        splineCtx.strokeStyle = '#4a4a4a';
+        splineCtx.globalAlpha = 0.9;
+        splineCtx.beginPath();
+        splineCtx.moveTo(splinePoints[0].x, splinePoints[0].y);
+        for (let i = 1; i < splinePoints.length; i++) {
+            splineCtx.lineTo(splinePoints[i].x, splinePoints[i].y);
+        }
+        splineCtx.stroke();
+        splineCtx.restore();
+        
+        // Layer 3: White dashed center line
+        splineCtx.save();
+        splineCtx.lineWidth = isMobile ? 1 : 1.5;
+        splineCtx.lineCap = 'butt';
+        splineCtx.lineJoin = 'round';
+        splineCtx.strokeStyle = '#ffffff';
+        splineCtx.globalAlpha = 0.8;
+        splineCtx.setLineDash([isMobile ? 5 : 8, isMobile ? 6 : 10]);
+        splineCtx.beginPath();
+        splineCtx.moveTo(splinePoints[0].x, splinePoints[0].y);
+        for (let i = 1; i < splinePoints.length; i++) {
+            splineCtx.lineTo(splinePoints[i].x, splinePoints[i].y);
+        }
+        splineCtx.stroke();
+        splineCtx.restore();
+        
+        // Start/end markers hidden — auto-detected by build pipeline
+    }
+    
+    // ── Road features: auto-jumps, checkpoints, arrows ──
+    let features = detectRoadFeatures();
+    renderRoadFeatures(features);
+    // Only show toast when feature counts actually CHANGE (prevent spam)
+    let featureKey = features.jumps.length + ':' + features.checkpoints.length;
+    if (featureKey !== window._lastFeatureKey && features.jumps.length > 0) {
+        window._lastFeatureKey = featureKey;
+        showFeatureToast(features);
+    }
+}
+
+// ── Auto-join all road segments that are close enough ──
+function autoJoinAllRoads() {
+    let JOIN_DIST = 60; // px — generous threshold
+    let changed = true;
+    let passes = 0;
+    
+    while (changed && passes < 20) {
+        changed = false;
+        passes++;
+        
+        for (let a = 0; a < structuredRoads.length; a++) {
+            for (let b = a + 1; b < structuredRoads.length; b++) {
+                let roadA = structuredRoads[a].simplified;
+                let roadB = structuredRoads[b].simplified;
+                let ptsA = structuredRoads[a].points;
+                let ptsB = structuredRoads[b].points;
+                
+                let aStart = roadA[0], aEnd = roadA[roadA.length - 1];
+                let bStart = roadB[0], bEnd = roadB[roadB.length - 1];
+                
+                let dAEndBStart = Math.hypot(aEnd.x - bStart.x, aEnd.y - bStart.y);
+                let dAEndBEnd = Math.hypot(aEnd.x - bEnd.x, aEnd.y - bEnd.y);
+                let dAStartBStart = Math.hypot(aStart.x - bStart.x, aStart.y - bStart.y);
+                let dAStartBEnd = Math.hypot(aStart.x - bEnd.x, aStart.y - bEnd.y);
+                
+                let best = Math.min(dAEndBStart, dAEndBEnd, dAStartBStart, dAStartBEnd);
+                
+                if (best < JOIN_DIST) {
+                    if (best === dAEndBStart) {
+                        // A end → B start: append B to A
+                        structuredRoads[a].simplified = roadA.concat(roadB.slice(1));
+                        structuredRoads[a].points = ptsA.concat(ptsB.slice(1));
+                    } else if (best === dAStartBEnd) {
+                        // B end → A start: prepend B to A
+                        structuredRoads[a].simplified = roadB.slice(0, -1).concat(roadA);
+                        structuredRoads[a].points = ptsB.slice(0, -1).concat(ptsA);
+                    } else if (best === dAEndBEnd) {
+                        // Both end same → reverse B, append
+                        roadB.reverse();
+                        structuredRoads[a].simplified = roadA.concat(roadB.slice(1));
+                        let revPts = ptsB.slice().reverse();
+                        structuredRoads[a].points = ptsA.concat(revPts.slice(1));
+                    } else {
+                        // Both start same → reverse B, prepend
+                        roadB.reverse();
+                        structuredRoads[a].simplified = roadB.slice(0, -1).concat(roadA);
+                        let revPts = ptsB.slice().reverse();
+                        structuredRoads[a].points = revPts.slice(0, -1).concat(ptsA);
+                    }
+                    
+                    // Remove road B
+                    structuredRoads.splice(b, 1);
+                    changed = true;
+                    break; // restart inner loop
+                }
+            }
+            if (changed) break; // restart outer loop
+        }
+    }
+    
+    if (passes > 0) redrawAllSplines();
+}
+
+// ── Auto-close loops: snap start↔end of same segment ──
+function autoCloseLoops() {
+    let CLOSE_DIST = 80; // px — generous magnet
+    let closed = false;
+    
+    for (let road of structuredRoads) {
+        if (road.isClosed) continue; // Already closed
+        
+        let pts = road.simplified;
+        if (pts.length < 6) continue; // Too short to be a loop
+        
+        let first = pts[0];
+        let last = pts[pts.length - 1];
+        let dx = first.x - last.x;
+        let dy = first.y - last.y;
+        let dist = Math.sqrt(dx * dx + dy * dy);
+        
+        if (dist < CLOSE_DIST) {
+            // Snap last point exactly to first point for perfect closure
+            road.simplified[road.simplified.length - 1] = { x: first.x, y: first.y };
+            if (road.points.length > 0) {
+                road.points[road.points.length - 1] = { x: first.x, y: first.y };
+            }
+            // Add overlap points past start for smooth catmull-rom tangent continuity
+            let overlapCount = Math.min(5, Math.floor(pts.length * 0.12));
+            for (let i = 1; i <= overlapCount; i++) {
+                road.simplified.push({ x: pts[i].x, y: pts[i].y });
+                road.points.push({ x: pts[i].x, y: pts[i].y });
+            }
+            road.isClosed = true;
+            closed = true;
+        }
+    }
+    
+    if (closed) redrawAllSplines();
+}
+
+// ══════════════════════════════════════════════════════════════
+// ── ROAD FEATURES ENGINE ──
+// Crossings → Jumps! Curves → Checkpoints! Everything is fun!
+// ══════════════════════════════════════════════════════════════
+
+let detectedJumps = [];       // Jump locations for build pipeline
+let detectedCheckpoints = []; // Auto checkpoint locations
+
+function detectRoadFeatures() {
+    let features = { jumps: [], checkpoints: [], arrows: [] };
+    
+    let allSplines = structuredRoads.map(function(road) {
+        return catmullRomSpline(road.simplified, 10);
+    });
+    
+    // 1. CROSSINGS → JUMPS 🚀
+    // Between different roads
+    for (let a = 0; a < allSplines.length; a++) {
+        for (let b = a + 1; b < allSplines.length; b++) {
+            let hits = findSplineCrossings(allSplines[a], allSplines[b]);
+            for (let h of hits) features.jumps.push(h);
+        }
+    }
+    // Self-crossings (only REAL ones — gap of 20+ segments to avoid hairpin false positives)
+    for (let a = 0; a < allSplines.length; a++) {
+        let sp = allSplines[a];
+        if (sp.length < 30) continue; // Need enough length for a real self-crossing
+        let isClosedRoad = structuredRoads[a] && structuredRoads[a].isClosed;
+        let closureZone = Math.floor(sp.length * 0.25); // 25% at each end — generous to prevent false jumps at join
+        
+        for (let i = 0; i < sp.length - 20; i++) {
+            for (let j = i + 20; j < sp.length - 1; j++) {
+                // Skip crossings at loop closure (start↔end overlap zone)
+                if (isClosedRoad) {
+                    let iNearStart = i < closureZone;
+                    let iNearEnd = i > sp.length - closureZone;
+                    let jNearStart = j < closureZone;
+                    let jNearEnd = j > sp.length - closureZone;
+                    if ((iNearStart && jNearEnd) || (iNearEnd && jNearStart)) continue;
+                    // Also skip if both segments are in the overlap tail
+                    if (iNearEnd && jNearEnd) continue;
+                    if (iNearStart && jNearStart) continue;
+                }
+                
+                let hit = segmentIntersect(
+                    sp[i].x, sp[i].y, sp[i+1].x, sp[i+1].y,
+                    sp[j].x, sp[j].y, sp[j+1].x, sp[j+1].y
+                );
+                if (hit) {
+                    // Dedup
+                    let isDup = false;
+                    for (let h of features.jumps) {
+                        let dx = h.x - hit.x, dy = h.y - hit.y;
+                        if (dx*dx + dy*dy < 100) { isDup = true; break; }
+                    }
+                    if (!isDup) features.jumps.push(hit);
+                }
+            }
+        }
+    }
+    
+    // 2. AUTO-CHECKPOINTS — evenly distributed, snapped to curves 🏁
+    for (let a = 0; a < allSplines.length; a++) {
+        let sp = allSplines[a];
+        if (sp.length < 10) continue;
+        
+        // Compute cumulative arc length
+        let arcLen = [0];
+        for (let i = 1; i < sp.length; i++) {
+            let dx = sp[i].x - sp[i-1].x, dy = sp[i].y - sp[i-1].y;
+            arcLen.push(arcLen[i-1] + Math.sqrt(dx*dx + dy*dy));
+        }
+        let totalLen = arcLen[sp.length - 1];
+        
+        // How many checkpoints? ~1 per 80px, min 3, max 15
+        let cpCount = Math.max(3, Math.min(15, Math.round(totalLen / 80)));
+        let spacing = totalLen / (cpCount + 1); // +1 so first/last aren't at endpoints
+        
+        // Compute curvature for snapping
+        let curvatures = computeCurvature(sp);
+        let smoothK = [];
+        for (let i = 0; i < curvatures.length; i++) {
+            let sum = 0, cnt = 0;
+            for (let j = Math.max(0, i-4); j <= Math.min(curvatures.length-1, i+4); j++) {
+                sum += curvatures[j]; cnt++;
+            }
+            smoothK.push(sum / cnt);
+        }
+        
+        // Place checkpoints at even intervals, snap to nearby curve peaks
+        for (let c = 1; c <= cpCount; c++) {
+            let targetDist = c * spacing;
+            
+            // Find spline index closest to this arc distance
+            let baseIdx = 0;
+            for (let i = 1; i < sp.length; i++) {
+                if (arcLen[i] >= targetDist) { baseIdx = i; break; }
+            }
+            
+            // Look for a curvature peak within ±15 samples to snap to
+            let bestIdx = baseIdx;
+            let bestK = smoothK[baseIdx] || 0;
+            let snapRange = 15;
+            for (let i = Math.max(1, baseIdx - snapRange); i < Math.min(sp.length - 1, baseIdx + snapRange); i++) {
+                if (smoothK[i] > bestK && smoothK[i] >= smoothK[Math.max(0,i-1)] && smoothK[i] >= smoothK[Math.min(sp.length-1,i+1)]) {
+                    bestK = smoothK[i];
+                    bestIdx = i;
+                }
+            }
+            
+            features.checkpoints.push({ x: sp[bestIdx].x, y: sp[bestIdx].y });
+        }
+    }
+    
+    // 3. DIRECTION ARROWS along the road ➤
+    for (let a = 0; a < allSplines.length; a++) {
+        let sp = allSplines[a];
+        if (sp.length < 4) continue;
+        // Place an arrow every ~40 spline samples
+        for (let i = 10; i < sp.length - 2; i += 40) {
+            let dx = sp[i+1].x - sp[i].x;
+            let dy = sp[i+1].y - sp[i].y;
+            let angle = Math.atan2(dy, dx);
+            features.arrows.push({ x: sp[i].x, y: sp[i].y, angle: angle });
+        }
+    }
+    
+    // Store for build pipeline
+    detectedJumps = features.jumps.slice();
+    detectedCheckpoints = features.checkpoints.slice();
+    
+    return features;
+}
+
+function segmentIntersect(x1, y1, x2, y2, x3, y3, x4, y4) {
+    let dx1 = x2 - x1, dy1 = y2 - y1;
+    let dx2 = x4 - x3, dy2 = y4 - y3;
+    let denom = dx1 * dy2 - dy1 * dx2;
+    if (Math.abs(denom) < 0.0001) return null;
+    let t = ((x3 - x1) * dy2 - (y3 - y1) * dx2) / denom;
+    let u = ((x3 - x1) * dy1 - (y3 - y1) * dx1) / denom;
+    if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
+        return { x: x1 + t * dx1, y: y1 + t * dy1 };
+    }
+    return null;
+}
+
+function findSplineCrossings(spA, spB) {
+    let hits = [];
+    for (let i = 0; i < spA.length - 1; i++) {
+        for (let j = 0; j < spB.length - 1; j++) {
+            let hit = segmentIntersect(
+                spA[i].x, spA[i].y, spA[i+1].x, spA[i+1].y,
+                spB[j].x, spB[j].y, spB[j+1].x, spB[j+1].y
+            );
+            if (hit) {
+                let isDup = false;
+                for (let h of hits) {
+                    let dx = h.x - hit.x, dy = h.y - hit.y;
+                    if (dx*dx + dy*dy < 100) { isDup = true; break; }
+                }
+                if (!isDup) hits.push(hit);
+            }
+        }
+    }
+    return hits;
+}
+
+// ── Render features on the overlay ──
+function renderRoadFeatures(features) {
+    let isMobile = window.innerWidth < 600;
+    
+    // Direction arrows (subtle, semi-transparent)
+    for (let arr of features.arrows) {
+        splineCtx.save();
+        splineCtx.translate(arr.x, arr.y);
+        splineCtx.rotate(arr.angle);
+        splineCtx.fillStyle = 'rgba(100, 220, 255, 0.5)';
+        splineCtx.shadowColor = '#00ccff';
+        splineCtx.shadowBlur = 4;
+        splineCtx.font = (isMobile ? 10 : 13) + 'px sans-serif';
+        splineCtx.textAlign = 'center';
+        splineCtx.textBaseline = 'middle';
+        splineCtx.fillText('▸', 0, 0);
+        splineCtx.restore();
+    }
+    
+    // Checkpoints hidden — auto-placed by build pipeline as a surprise!
+    
+    // Jump ramps! 🚀 (green/cyan glow — exciting!)
+    // Pre-compute all splines for direction lookup
+    let allJumpSplines = structuredRoads.map(r => catmullRomSpline(r.simplified, 10));
+    
+    for (let j of features.jumps) {
+        let sz = isMobile ? 10 : 14;
+        
+        // Find road direction at this jump position
+        let jumpAngle = 0;
+        let bestDist = Infinity;
+        for (let sp of allJumpSplines) {
+            for (let k = 0; k < sp.length - 1; k++) {
+                let dx = j.x - sp[k].x, dy = j.y - sp[k].y;
+                let d = dx * dx + dy * dy;
+                if (d < bestDist) {
+                    bestDist = d;
+                    jumpAngle = Math.atan2(sp[k+1].y - sp[k].y, sp[k+1].x - sp[k].x);
+                }
+            }
+        }
+        
+        splineCtx.save();
+        splineCtx.translate(j.x, j.y);
+        splineCtx.rotate(jumpAngle);
+        
+        // Glow circle (no rotation needed but translated)
+        splineCtx.beginPath();
+        splineCtx.arc(0, 0, sz + 4, 0, Math.PI * 2);
+        splineCtx.fillStyle = 'rgba(0, 255, 150, 0.15)';
+        splineCtx.shadowColor = '#00ff88';
+        splineCtx.shadowBlur = 16;
+        splineCtx.fill();
+        
+        // Ramp triangle (points right = forward direction)
+        splineCtx.beginPath();
+        splineCtx.moveTo(-sz * 0.7, sz * 0.5);
+        splineCtx.lineTo(sz * 0.7, 0);
+        splineCtx.lineTo(-sz * 0.7, -sz * 0.5);
+        splineCtx.closePath();
+        splineCtx.fillStyle = '#4ade80';
+        splineCtx.globalAlpha = 0.7;
+        splineCtx.shadowColor = '#22c55e';
+        splineCtx.shadowBlur = 10;
+        splineCtx.fill();
+        splineCtx.strokeStyle = '#86efac';
+        splineCtx.lineWidth = 1.5;
+        splineCtx.globalAlpha = 0.9;
+        splineCtx.stroke();
+        
+        // Rocket emoji (rotated with the ramp)
+        splineCtx.shadowBlur = 0;
+        splineCtx.globalAlpha = 1.0;
+        splineCtx.font = (isMobile ? 14 : 18) + 'px serif';
+        splineCtx.textAlign = 'center';
+        splineCtx.textBaseline = 'middle';
+        splineCtx.fillText('🚀', 0, -1);
+        splineCtx.restore();
+    }
+}
+
+// ── Positive toast for features ──
+let _featureToastTimeout = null;
+function showFeatureToast(features) {
+    let existing = document.getElementById('feature-toast');
+    if (existing) existing.remove();
+    if (_featureToastTimeout) clearTimeout(_featureToastTimeout);
+    
+    let jumpCount = features.jumps.length;
+    let cpCount = features.checkpoints.length;
+    
+    let msg = '🚀 ' + jumpCount + ' jump' + (jumpCount > 1 ? 's' : '') + ' added!';
+    if (cpCount > 0) {
+        msg += ' ⭕ ' + cpCount + ' checkpoint' + (cpCount > 1 ? 's' : '');
+    }
+    
+    let toast = document.createElement('div');
+    toast.id = 'feature-toast';
+    toast.textContent = msg;
+    toast.style.cssText = 'position:fixed; bottom:80px; left:50%; transform:translateX(-50%); ' +
+        'background:rgba(16,185,129,0.92); color:#fff; padding:10px 20px; border-radius:12px; ' +
+        'font-family:Inter,sans-serif; font-size:13px; font-weight:700; z-index:500; ' +
+        'backdrop-filter:blur(8px); box-shadow:0 4px 20px rgba(16,185,129,0.4); ' +
+        'animation:slideUp 0.3s ease-out; pointer-events:none;';
+    document.body.appendChild(toast);
+    
+    if (!document.getElementById('toast-anim-style')) {
+        let style = document.createElement('style');
+        style.id = 'toast-anim-style';
+        style.textContent = '@keyframes slideUp { from { opacity:0; transform:translateX(-50%) translateY(20px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }';
+        document.head.appendChild(style);
+    }
+    
+    _featureToastTimeout = setTimeout(function() {
+        if (toast.parentNode) {
+            toast.style.transition = 'opacity 0.4s';
+            toast.style.opacity = '0';
+            setTimeout(function() { if (toast.parentNode) toast.remove(); }, 400);
+        }
+    }, 3000);
+}
+
+// ── Encouragement toast for unconnected segments ──
+let _encourageToastTimeout = null;
+function showEncouragementToast() {
+    // Don't spam — skip if feature toast is showing
+    if (document.getElementById('feature-toast')) return;
+    
+    let existing = document.getElementById('encourage-toast');
+    if (existing) existing.remove();
+    if (_encourageToastTimeout) clearTimeout(_encourageToastTimeout);
+    
+    let messages = [
+        '✏️ Nice! Keep drawing to connect your road!',
+        '🔗 Almost there! Draw to connect the ends!',
+        '🏎️ Great track! Link the gaps to finish it!',
+        '✨ Looking awesome! Connect the pieces!',
+        '💪 Keep going! Join the road together!'
+    ];
+    let msg = messages[Math.floor(Math.random() * messages.length)];
+    
+    // Count gaps
+    let gapCount = structuredRoads.length - 1;
+    if (gapCount > 0) {
+        msg += ' (' + gapCount + ' gap' + (gapCount > 1 ? 's' : '') + ')';
+    }
+    
+    let toast = document.createElement('div');
+    toast.id = 'encourage-toast';
+    toast.textContent = msg;
+    toast.style.cssText = 'position:fixed; bottom:80px; left:50%; transform:translateX(-50%); ' +
+        'background:rgba(59,130,246,0.92); color:#fff; padding:10px 20px; border-radius:12px; ' +
+        'font-family:Inter,sans-serif; font-size:13px; font-weight:700; z-index:500; ' +
+        'backdrop-filter:blur(8px); box-shadow:0 4px 20px rgba(59,130,246,0.4); ' +
+        'animation:slideUp 0.3s ease-out; pointer-events:none;';
+    document.body.appendChild(toast);
+    
+    if (!document.getElementById('toast-anim-style')) {
+        let style = document.createElement('style');
+        style.id = 'toast-anim-style';
+        style.textContent = '@keyframes slideUp { from { opacity:0; transform:translateX(-50%) translateY(20px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }';
+        document.head.appendChild(style);
+    }
+    
+    _encourageToastTimeout = setTimeout(function() {
+        if (toast.parentNode) {
+            toast.style.transition = 'opacity 0.4s';
+            toast.style.opacity = '0';
+            setTimeout(function() { if (toast.parentNode) toast.remove(); }, 400);
+        }
+    }, 3000);
+}
+
+// ══════════════════════════════════════════════════════════════
+// ── LIVE PREVIEW ENGINE ──
+// Ghost rendering while drawing for real-time feedback
+// ══════════════════════════════════════════════════════════════
+
+let _previewFrame = 0;
+function clearPreview() {
+    let dpr = Math.min(window.devicePixelRatio || 1, 2);
+    previewCtx.save();
+    previewCtx.setTransform(1, 0, 0, 1, 0, 0);
+    previewCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+    previewCtx.restore();
+}
+
+function renderLivePreview() {
+    // Throttle to ~30fps
+    let now = performance.now();
+    if (now - _previewFrame < 33) return;
+    _previewFrame = now;
+    
+    clearPreview();
+    let isMobile = window.innerWidth < 600;
+    
+    if (currentTool === 'pen' && currentRoadPoints.length >= 2) {
+        renderRoadPreview(isMobile);
+    } else if (currentTool === 'mountain' && currentMountainPoints.length >= 1) {
+        renderMountainPreview(isMobile);
+    } else if (currentTool === 'water' && currentWaterPoints.length >= 1) {
+        renderWaterPreview(isMobile);
+    }
+}
+
+function renderRoadPreview(isMobile) {
+    let pts = currentRoadPoints;
+    let roadW = isMobile ? 10 : 14;
+    
+    // Ghost road surface
+    previewCtx.save();
+    previewCtx.lineWidth = roadW;
+    previewCtx.lineCap = 'round';
+    previewCtx.lineJoin = 'round';
+    previewCtx.strokeStyle = '#555555';
+    previewCtx.globalAlpha = 0.35;
+    previewCtx.beginPath();
+    previewCtx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) {
+        previewCtx.lineTo(pts[i].x, pts[i].y);
+    }
+    previewCtx.stroke();
+    previewCtx.restore();
+    
+    // Ghost dashed center
+    previewCtx.save();
+    previewCtx.lineWidth = isMobile ? 0.8 : 1;
+    previewCtx.lineCap = 'butt';
+    previewCtx.strokeStyle = '#ffffff';
+    previewCtx.globalAlpha = 0.3;
+    previewCtx.setLineDash([5, 7]);
+    previewCtx.beginPath();
+    previewCtx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) {
+        previewCtx.lineTo(pts[i].x, pts[i].y);
+    }
+    previewCtx.stroke();
+    previewCtx.restore();
+    
+    // Subtle leading dot at the end (pulsing)
+    let endPt = pts[pts.length - 1];
+    let pulse = 0.4 + Math.sin(performance.now() / 200) * 0.2;
+    previewCtx.save();
+    previewCtx.beginPath();
+    previewCtx.arc(endPt.x, endPt.y, isMobile ? 4 : 5, 0, Math.PI * 2);
+    previewCtx.fillStyle = '#4ade80';
+    previewCtx.globalAlpha = pulse;
+    previewCtx.shadowColor = '#4ade80';
+    previewCtx.shadowBlur = 8;
+    previewCtx.fill();
+    previewCtx.restore();
+}
+
+function renderMountainPreview(isMobile) {
+    let pts = currentMountainPoints;
+    let radius = currentMountainRadius;
+    
+    // Generate quick outline
+    let outline;
+    if (pts.length === 1) {
+        outline = generateCircleOutline(pts[0].x, pts[0].y, radius, 16);
+    } else {
+        // Simple offset curve (no heavy smoothing)
+        let centerline = pts.length > 3 ? simplifyRDP(pts, 8.0) : pts;
+        if (centerline.length >= 2) {
+            outline = generateStrokeOutline(centerline, radius);
+        } else {
+            outline = generateCircleOutline(pts[0].x, pts[0].y, radius, 16);
+        }
+    }
+    
+    if (!outline || outline.length < 3) return;
+    
+    // Compute centroid
+    let cx = 0, cy = 0;
+    for (let p of outline) { cx += p.x; cy += p.y; }
+    cx /= outline.length; cy /= outline.length;
+    
+    // Draw 3 ghost contour rings
+    let ghostFills = [
+        'rgba(144, 190, 109, 0.15)',
+        'rgba(200, 195, 100, 0.18)',
+        'rgba(190, 150, 80, 0.22)',
+    ];
+    let ghostStrokes = [
+        'rgba(120, 160, 90, 0.3)',
+        'rgba(170, 165, 75, 0.35)',
+        'rgba(165, 125, 65, 0.4)',
+    ];
+    
+    for (let r = 0; r < 3; r++) {
+        let scale = 1.0 - (r / 3) * 0.6;
+        
+        previewCtx.save();
+        previewCtx.beginPath();
+        for (let i = 0; i < outline.length; i++) {
+            let px = cx + (outline[i].x - cx) * scale;
+            let py = cy + (outline[i].y - cy) * scale;
+            if (i === 0) previewCtx.moveTo(px, py);
+            else previewCtx.lineTo(px, py);
+        }
+        previewCtx.closePath();
+        previewCtx.fillStyle = ghostFills[r];
+        previewCtx.fill();
+        previewCtx.strokeStyle = ghostStrokes[r];
+        previewCtx.lineWidth = 1;
+        previewCtx.setLineDash([3, 3]);
+        previewCtx.stroke();
+        previewCtx.restore();
+    }
+    
+    // Pulsing mountain emoji
+    let pulse = 0.3 + Math.sin(performance.now() / 250) * 0.15;
+    previewCtx.save();
+    previewCtx.font = (isMobile ? 12 : 16) + 'px serif';
+    previewCtx.textAlign = 'center';
+    previewCtx.textBaseline = 'middle';
+    previewCtx.globalAlpha = pulse;
+    previewCtx.fillText('🏔️', cx, cy);
+    previewCtx.restore();
+}
+
+function renderWaterPreview(isMobile) {
+    let pts = currentWaterPoints;
+    let radius = currentWaterRadius;
+    
+    let outline;
+    if (pts.length === 1) {
+        outline = generateCircleOutline(pts[0].x, pts[0].y, radius, 16);
+    } else {
+        let centerline = pts.length > 3 ? simplifyRDP(pts, 8.0) : pts;
+        if (centerline.length >= 2) {
+            outline = generateStrokeOutline(centerline, radius);
+        } else {
+            outline = generateCircleOutline(pts[0].x, pts[0].y, radius, 16);
+        }
+    }
+    
+    if (!outline || outline.length < 3) return;
+    
+    let cx = 0, cy = 0;
+    for (let p of outline) { cx += p.x; cy += p.y; }
+    cx /= outline.length; cy /= outline.length;
+    
+    let ghostFills = [
+        'rgba(125, 211, 252, 0.12)',
+        'rgba(56, 189, 248, 0.15)',
+        'rgba(14, 165, 233, 0.18)',
+    ];
+    let ghostStrokes = [
+        'rgba(125, 211, 252, 0.25)',
+        'rgba(56, 189, 248, 0.3)',
+        'rgba(14, 165, 233, 0.35)',
+    ];
+    
+    for (let r = 0; r < 3; r++) {
+        let scale = 1.0 - (r / 3) * 0.6;
+        
+        previewCtx.save();
+        previewCtx.beginPath();
+        for (let i = 0; i < outline.length; i++) {
+            let px = cx + (outline[i].x - cx) * scale;
+            let py = cy + (outline[i].y - cy) * scale;
+            if (i === 0) previewCtx.moveTo(px, py);
+            else previewCtx.lineTo(px, py);
+        }
+        previewCtx.closePath();
+        previewCtx.fillStyle = ghostFills[r];
+        previewCtx.fill();
+        previewCtx.strokeStyle = ghostStrokes[r];
+        previewCtx.lineWidth = 1;
+        previewCtx.setLineDash([3, 3]);
+        previewCtx.stroke();
+        previewCtx.restore();
+    }
+    
+    let pulse = 0.3 + Math.sin(performance.now() / 250) * 0.15;
+    previewCtx.save();
+    previewCtx.font = (isMobile ? 12 : 16) + 'px serif';
+    previewCtx.textAlign = 'center';
+    previewCtx.textBaseline = 'middle';
+    previewCtx.globalAlpha = pulse;
+    previewCtx.fillText('🌊', cx, cy);
+    previewCtx.restore();
+}
+
+// ══════════════════════════════════════════════════════════════
+// ── MOUNTAIN CONTOUR SYSTEM ──
+// Converts brush strokes into mountain outlines with topo contours
+// ══════════════════════════════════════════════════════════════
+
+function processMountainStroke(points, radius) {
+    // For a single tap (1 point): create a circular mountain
+    if (points.length === 1) {
+        let circle = generateCircleOutline(points[0].x, points[0].y, radius);
+        tryMergeMountain(circle, points, radius);
+        return;
+    }
+    
+    // Simplify the stroke centerline
+    let centerline = simplifyRDP(points, 6.0);
+    if (centerline.length < 2) {
+        let circle = generateCircleOutline(points[0].x, points[0].y, radius);
+        tryMergeMountain(circle, points, radius);
+        return;
+    }
+    centerline = chaikinSmooth(centerline, 2);
+    
+    // Generate the outline (offset curve on both sides + round caps)
+    let outline = generateStrokeOutline(centerline, radius);
+    // Extra smoothing on the outline for rounder mountains
+    outline = chaikinSmooth(outline, 2);
+    tryMergeMountain(outline, centerline, radius);
+}
+
+function tryMergeMountain(newOutline, ridgeLine, radius) {
+    // Each stroke = separate mountain (no merge — keeps creative control)
+    structuredMountains.push({
+        outline: newOutline,
+        ridgeLine: Array.isArray(ridgeLine) ? ridgeLine : [ridgeLine],
+        radius: radius
+    });
+    redrawAllSplines();
+}
+
+function isPointNearOutline(point, outline, dist) {
+    for (let op of outline) {
+        let dx = point.x - op.x, dy = point.y - op.y;
+        if (dx*dx + dy*dy < dist*dist) return true;
+    }
+    return false;
+}
+
+function generateCircleOutline(cx, cy, radius, segments) {
+    segments = segments || 24;
+    let pts = [];
+    for (let i = 0; i < segments; i++) {
+        let angle = (i / segments) * Math.PI * 2;
+        pts.push({ x: cx + Math.cos(angle) * radius, y: cy + Math.sin(angle) * radius });
+    }
+    return pts;
+}
+
+function generateStrokeOutline(centerline, radius) {
+    if (centerline.length < 2) return generateCircleOutline(centerline[0].x, centerline[0].y, radius);
+    
+    let leftSide = [];
+    let rightSide = [];
+    
+    for (let i = 0; i < centerline.length; i++) {
+        let dx, dy;
+        if (i === 0) {
+            dx = centerline[1].x - centerline[0].x;
+            dy = centerline[1].y - centerline[0].y;
+        } else if (i === centerline.length - 1) {
+            dx = centerline[i].x - centerline[i-1].x;
+            dy = centerline[i].y - centerline[i-1].y;
+        } else {
+            dx = centerline[i+1].x - centerline[i-1].x;
+            dy = centerline[i+1].y - centerline[i-1].y;
+        }
+        
+        let len = Math.sqrt(dx*dx + dy*dy) || 1;
+        let nx = -dy / len; // Normal (perpendicular)
+        let ny = dx / len;
+        
+        leftSide.push({ x: centerline[i].x + nx * radius, y: centerline[i].y + ny * radius });
+        rightSide.push({ x: centerline[i].x - nx * radius, y: centerline[i].y - ny * radius });
+    }
+    
+    // Add round caps at start and end
+    let startCap = generateArcCap(centerline[0], centerline[1], radius, 'start');
+    let endCap = generateArcCap(centerline[centerline.length-1], centerline[centerline.length-2], radius, 'end');
+    
+    // Combine: left side → end cap → right side reversed → start cap
+    rightSide.reverse();
+    let outline = leftSide.concat(endCap, rightSide, startCap);
+    
+    return outline;
+}
+
+function generateArcCap(tip, prev, radius, type) {
+    // tip→prev direction = outward from the centerline end
+    let dx = tip.x - prev.x, dy = tip.y - prev.y;
+    let outAngle = Math.atan2(dy, dx);
+    
+    // Semicircle bulging OUTWARD: sweep clockwise from +90° to -90° of outward
+    let pts = [];
+    let segments = 10;
+    for (let i = 0; i <= segments; i++) {
+        let t = i / segments;
+        let a = outAngle + Math.PI/2 - t * Math.PI; // clockwise sweep
+        pts.push({
+            x: tip.x + Math.cos(a) * radius,
+            y: tip.y + Math.sin(a) * radius
+        });
+    }
+    return pts;
+}
+
+function computeConvexHull(points) {
+    // Graham scan
+    if (points.length < 3) return points.slice();
+    
+    // Find bottom-most point (leftmost tie-breaker)
+    let pivot = points[0];
+    for (let p of points) {
+        if (p.y > pivot.y || (p.y === pivot.y && p.x < pivot.x)) pivot = p;
+    }
+    
+    // Sort by polar angle relative to pivot
+    let sorted = points.slice().sort(function(a, b) {
+        let angleA = Math.atan2(a.y - pivot.y, a.x - pivot.x);
+        let angleB = Math.atan2(b.y - pivot.y, b.x - pivot.x);
+        if (Math.abs(angleA - angleB) < 0.0001) {
+            let dA = (a.x - pivot.x)**2 + (a.y - pivot.y)**2;
+            let dB = (b.x - pivot.x)**2 + (b.y - pivot.y)**2;
+            return dA - dB;
+        }
+        return angleA - angleB;
+    });
+    
+    let hull = [sorted[0], sorted[1]];
+    for (let i = 2; i < sorted.length; i++) {
+        while (hull.length > 1) {
+            let a = hull[hull.length - 2];
+            let b = hull[hull.length - 1];
+            let c = sorted[i];
+            let cross = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+            if (cross <= 0) hull.pop();
+            else break;
+        }
+        hull.push(sorted[i]);
+    }
+    
+    return hull;
+}
+
+// ── Render mountain contours on overlay ──
+function renderMountainContours() {
+    let isMobile = window.innerWidth < 600;
+    
+    // Hypsometric color palette (base → peak)
+    let hypsoFills = [
+        'rgba(144, 190, 109, 0.25)',  // Low — soft green
+        'rgba(186, 202, 95, 0.30)',   // Low-mid — yellow-green
+        'rgba(218, 201, 110, 0.35)',  // Mid — sandy gold
+        'rgba(210, 160, 90, 0.40)',   // Mid-high — warm tan
+        'rgba(185, 130, 80, 0.45)',   // High — earthy brown
+    ];
+    let hypsoStrokes = [
+        'rgba(120, 160, 90, 0.5)',
+        'rgba(160, 170, 75, 0.55)',
+        'rgba(190, 170, 85, 0.6)',
+        'rgba(180, 135, 70, 0.65)',
+        'rgba(155, 110, 65, 0.7)',
+    ];
+    
+    for (let mtn of structuredMountains) {
+        let outline = mtn.outline;
+        if (outline.length < 3) continue;
+        
+        // Compute centroid
+        let cx = 0, cy = 0;
+        for (let p of outline) { cx += p.x; cy += p.y; }
+        cx /= outline.length; cy /= outline.length;
+        
+        // Compute max radius from centroid
+        let maxR = 0;
+        for (let p of outline) {
+            let d = Math.hypot(p.x - cx, p.y - cy);
+            if (d > maxR) maxR = d;
+        }
+        
+        let ringCount = hypsoFills.length;
+        
+        // Draw rings from OUTSIDE IN (so inner colors layer on top)
+        for (let r = 0; r < ringCount; r++) {
+            let scale = 1.0 - (r / ringCount) * 0.75; // 100% → 25%
+            
+            splineCtx.save();
+            splineCtx.beginPath();
+            for (let i = 0; i < outline.length; i++) {
+                let px = cx + (outline[i].x - cx) * scale;
+                let py = cy + (outline[i].y - cy) * scale;
+                if (i === 0) splineCtx.moveTo(px, py);
+                else splineCtx.lineTo(px, py);
+            }
+            splineCtx.closePath();
+            
+            // Fill with hypsometric color
+            splineCtx.fillStyle = hypsoFills[r];
+            splineCtx.fill();
+            
+            // Contour line
+            splineCtx.strokeStyle = hypsoStrokes[r];
+            splineCtx.lineWidth = r === 0 ? 1.5 : 1;
+            splineCtx.setLineDash(r > 0 ? [3, 3] : []);
+            if (r === 0) {
+                splineCtx.shadowColor = 'rgba(100, 80, 50, 0.3)';
+                splineCtx.shadowBlur = 5;
+            }
+            splineCtx.stroke();
+            splineCtx.restore();
+        }
+        
+        // 🏔️ at peak
+        splineCtx.save();
+        splineCtx.font = (isMobile ? 14 : 18) + 'px serif';
+        splineCtx.textAlign = 'center';
+        splineCtx.textBaseline = 'middle';
+        splineCtx.globalAlpha = 0.85;
+        splineCtx.fillText('🏔️', cx, cy);
+        splineCtx.restore();
+        
+        // Height label
+        let heightM = Math.round(maxR * 0.4);
+        splineCtx.save();
+        splineCtx.font = 'bold ' + (isMobile ? 8 : 10) + 'px Inter, sans-serif';
+        splineCtx.textAlign = 'center';
+        splineCtx.fillStyle = 'rgba(140,105,65,0.8)';
+        splineCtx.fillText(heightM + 'm', cx, cy + (isMobile ? 13 : 16));
+        splineCtx.restore();
+    }
+}
+
+// ══════════════════════════════════════════════════════════════
+// ── WATER CONTOUR SYSTEM ──
+// Same engine as mountains but with blue bathymetric colors
+// ══════════════════════════════════════════════════════════════
+
+function processWaterStroke(points, radius) {
+    // Same processing pipeline as mountains
+    let centerline = simplifyRDP(points, 8.0);
+    
+    if (centerline.length < 2) {
+        // Single point → circle
+        let circle = generateCircleOutline(points[0].x, points[0].y, radius, 16);
+        structuredWater.push({
+            outline: circle,
+            ridgeLine: points,
+            radius: radius
+        });
+        redrawAllSplines();
+        return;
+    }
+    centerline = chaikinSmooth(centerline, 2);
+    
+    let outline = generateStrokeOutline(centerline, radius);
+    outline = chaikinSmooth(outline, 2);
+    
+    structuredWater.push({
+        outline: outline,
+        ridgeLine: Array.isArray(centerline) ? centerline : [centerline],
+        radius: radius
+    });
+    redrawAllSplines();
+}
+
+function renderWaterContours() {
+    if (structuredWater.length === 0) return;
+    
+    // Offscreen canvas to prevent alpha stacking
+    let offCanvas = document.createElement('canvas');
+    offCanvas.width = splineCanvas.width;
+    offCanvas.height = splineCanvas.height;
+    let offCtx = offCanvas.getContext('2d');
+    let dpr = Math.min(window.devicePixelRatio || 1, 2);
+    offCtx.scale(dpr, dpr);
+    
+    for (let wtr of structuredWater) {
+        let outline = wtr.outline;
+        if (outline.length < 3) continue;
+        
+        // Bounding box for waves
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (let p of outline) {
+            if (p.x < minX) minX = p.x;
+            if (p.y < minY) minY = p.y;
+            if (p.x > maxX) maxX = p.x;
+            if (p.y > maxY) maxY = p.y;
+        }
+        
+        // Fill shape (full opacity on offscreen)
+        offCtx.save();
+        offCtx.beginPath();
+        for (let i = 0; i < outline.length; i++) {
+            if (i === 0) offCtx.moveTo(outline[i].x, outline[i].y);
+            else offCtx.lineTo(outline[i].x, outline[i].y);
+        }
+        offCtx.closePath();
+        offCtx.fillStyle = 'rgba(56, 189, 248, 1.0)';
+        offCtx.fill();
+        offCtx.restore();
+    }
+    
+    // Composite ONCE at target opacity → no stacking!
+    splineCtx.save();
+    splineCtx.setTransform(1, 0, 0, 1, 0, 0); // Reset to physical pixels
+    splineCtx.globalAlpha = 0.75;
+    splineCtx.drawImage(offCanvas, 0, 0);
+    splineCtx.restore();
+}
+
+
 
 // ── Build World ──
 function buildWorld() {
-    // Check for road crossings first
-    if (currentMode === 'rally') {
-        let crossings = detectRoadCrossings();
-        if (crossings.length > 0) {
-            showCrossingWarning(crossings);
-            return;
-        }
-    }
-    let imageData = canvas.toDataURL('image/png');
-    sessionStorage.setItem('scan_canvas_image', imageData);
-    sendToAI(imageData);
+    // Crossings are fine — they become jumps in the 3D world!
+    // "Nothing a child draws should be wrong. Everything becomes something fun."
+    buildWorldLocal();
 }
 
 function buildWorldForce() {
-    // Skip crossing check — build anyway
-    let imageData = canvas.toDataURL('image/png');
-    sessionStorage.setItem('scan_canvas_image', imageData);
-    sendToAI(imageData);
+    buildWorldLocal();
+}
+
+// ── LOCAL PLAN BUILDER ──
+// Converts in-memory structured data directly to a ScanBuilder plan.
+// Uses the active engine's buildConfig to control terrain/road/water style.
+function buildWorldLocal() {
+    let dpr = Math.min(window.devicePixelRatio || 1, 2);
+    let cw = canvas.width / dpr;
+    let ch = canvas.height / dpr;
+    let terrainSize = 900; // World terrain size in meters
+    
+    // ── Get engine build config ──
+    let engineKey = selectedEngine || sessionStorage.getItem('scan_engine_key') || 'rally';
+    let engine = (window.ENGINE_REGISTRY && window.ENGINE_REGISTRY[engineKey]) || null;
+    let bc = (engine && engine.buildConfig) || window.DEFAULT_BUILD_CONFIG || {
+        mountainFalloff: 'smooth', mountainMaxHeight: 80, mountainHeightScale: 0.8,
+        mountainNoise: 0, mountainRidgeSpacing: 6, roadWidth: 10, roadMaterial: 'gravel',
+        roadBarrierL: 'STAKES', roadBarrierR: 'STAKES', roadFoundation: false,
+        roadBanking: 0, waterDepth: 3, waterAsRoad: false, terrainNoise: 0,
+        checkpointSpacing: 80, checkpointMax: 5
+    };
+    
+    console.log('🏗️ Build config for ' + engineKey + ':', JSON.stringify(bc));
+    
+    // Store config for ScanBuilder to use
+    sessionStorage.setItem('scan_build_config', JSON.stringify(bc));
+    
+    // Canvas coord → world coord mapping
+    function canvasToWorld(cx, cy) {
+        return {
+            x: (cx / cw - 0.5) * terrainSize,
+            z: (cy / ch - 0.5) * terrainSize
+        };
+    }
+
+    
+    // ── Build roads from structuredRoads ──
+    let roads = [];
+    for (let i = 0; i < structuredRoads.length; i++) {
+        let road = structuredRoads[i];
+        let spline = road.simplified || road.points;
+        if (!spline || spline.length < 2) continue;
+        
+        let nodes = [];
+        // Subsample for reasonable node count
+        let step = Math.max(1, Math.floor(spline.length / 80));
+        for (let j = 0; j < spline.length; j += step) {
+            let pt = spline[j];
+            let w = canvasToWorld(pt.x, pt.y);
+            nodes.push({ x: w.x, z: w.z });
+        }
+        // Always include last point
+        let last = spline[spline.length - 1];
+        let wLast = canvasToWorld(last.x, last.y);
+        if (nodes.length > 0) {
+            let lastNode = nodes[nodes.length - 1];
+            if (Math.abs(lastNode.x - wLast.x) > 1 || Math.abs(lastNode.z - wLast.z) > 1) {
+                nodes.push({ x: wLast.x, z: wLast.z });
+            }
+        }
+        
+        if (nodes.length >= 2) {
+            roads.push({
+                nodes: nodes,
+                width: bc.roadWidth,
+                material: bc.roadMaterial,
+                barrierL: bc.roadBarrierL,
+                barrierR: bc.roadBarrierR,
+                foundation: bc.roadFoundation,
+                banking: bc.roadBanking,
+                closed: road.isClosed || false
+            });
+        }
+    }
+    
+    // ── Build trees from placedStamps ──
+    let trees = [];
+    for (let i = 0; i < placedStamps.length; i++) {
+        let stamp = placedStamps[i];
+        if (stamp.type === 'tree' || stamp.emoji === '🌳' || stamp.emoji === '🌲' || stamp.emoji === '🌴' || stamp.emoji === '🌵') {
+            let w = canvasToWorld(stamp.x, stamp.y);
+            let treeType = 'oak';
+            if (stamp.emoji === '🌲') treeType = 'pine';
+            else if (stamp.emoji === '🌴') treeType = 'palm';
+            else if (stamp.emoji === '🌵') treeType = 'cactus';
+            trees.push({ x: w.x, z: w.z, type: treeType, scale: 0.8 + Math.random() * 0.4 });
+        }
+    }
+    
+    // ── Build water from structuredWater ──
+    let water = [];
+    for (let i = 0; i < structuredWater.length; i++) {
+        let w = structuredWater[i];
+        let ridge = w.ridgeLine || w.outline;
+        if (!ridge || ridge.length === 0) continue;
+        // Compute center and radius from outline
+        let cx = 0, cy = 0;
+        for (let j = 0; j < ridge.length; j++) { cx += ridge[j].x; cy += ridge[j].y; }
+        cx /= ridge.length; cy /= ridge.length;
+        let maxR = 0;
+        for (let j = 0; j < ridge.length; j++) {
+            let dx = ridge[j].x - cx, dy = ridge[j].y - cy;
+            let r = Math.sqrt(dx * dx + dy * dy);
+            if (r > maxR) maxR = r;
+        }
+        let wc = canvasToWorld(cx, cy);
+        let worldR = (maxR / cw) * terrainSize;
+        water.push({ x: wc.x, z: wc.z, radius: Math.max(5, worldR), depth: bc.waterDepth, label: 'water' });
+    }
+    
+    // ── Build race setup from first road ──
+    let race = null;
+    if (roads.length > 0 && currentMode === 'rally') {
+        let mainRoad = roads[0];
+        let startNode = mainRoad.nodes[0];
+        let endNode = mainRoad.nodes[mainRoad.nodes.length - 1];
+        
+        // Auto-generate checkpoints along the road (spacing from config)
+        let checkpoints = [];
+        let totalNodes = mainRoad.nodes.length;
+        let cpCount = Math.min(bc.checkpointMax, Math.max(2, Math.floor(totalNodes / 10)));
+        for (let c = 1; c <= cpCount; c++) {
+            let idx = Math.floor(c / (cpCount + 1) * totalNodes);
+            if (idx > 0 && idx < totalNodes - 1) {
+                checkpoints.push({
+                    x: mainRoad.nodes[idx].x,
+                    z: mainRoad.nodes[idx].z,
+                    radius: 12
+                });
+            }
+        }
+        
+        race = {
+            start: { x: startNode.x, z: startNode.z, heading: 0 },
+            finish: mainRoad.closed ?
+                { x: startNode.x, z: startNode.z, heading: 0 } :
+                { x: endNode.x, z: endNode.z, heading: 0 },
+            checkpoints: checkpoints,
+            laps: mainRoad.closed ? 3 : 1
+        };
+    }
+    
+    // ── Build mountains from structuredMountains (using engine config) ──
+    let sculpts = [];
+    for (let i = 0; i < structuredMountains.length; i++) {
+        let mtn = structuredMountains[i];
+        let outline = mtn.outline;
+        if (!outline || outline.length < 3) continue;
+        
+        // Compute centroid
+        let cx = 0, cy = 0;
+        for (let j = 0; j < outline.length; j++) { cx += outline[j].x; cy += outline[j].y; }
+        cx /= outline.length; cy /= outline.length;
+        
+        // Compute max radius from centroid
+        let maxR = 0;
+        for (let j = 0; j < outline.length; j++) {
+            let dx = outline[j].x - cx, dy = outline[j].y - cy;
+            let r = Math.sqrt(dx * dx + dy * dy);
+            if (r > maxR) maxR = r;
+        }
+        
+        let wc = canvasToWorld(cx, cy);
+        let worldR = (maxR / cw) * terrainSize;
+        // Height from engine config: proportional to size, capped by engine max
+        let height = Math.min(bc.mountainMaxHeight, worldR * bc.mountainHeightScale);
+        
+        // Add noise for jagged/spiky mountains (helicopter, drone)
+        let noiseAmt = bc.mountainNoise || 0;
+        
+        // For elongated mountain ridges, add multiple sculpts along the ridge
+        let ridge = mtn.ridgeLine;
+        if (ridge && ridge.length >= 3) {
+            let ridgeStep = Math.max(1, Math.floor(ridge.length / bc.mountainRidgeSpacing));
+            for (let j = 0; j < ridge.length; j += ridgeStep) {
+                let rw = canvasToWorld(ridge[j].x, ridge[j].y);
+                let h = height * (0.7 + Math.random() * 0.3);
+                // Apply noise
+                if (noiseAmt > 0) h += (Math.random() - 0.3) * h * noiseAmt;
+                sculpts.push({
+                    x: rw.x, z: rw.z,
+                    radius: worldR * 0.7,
+                    height: Math.max(2, h),
+                    falloff: bc.mountainFalloff,
+                    label: 'mountain'
+                });
+            }
+        } else {
+            let h = height;
+            if (noiseAmt > 0) h += (Math.random() - 0.3) * h * noiseAmt;
+            sculpts.push({
+                x: wc.x, z: wc.z,
+                radius: worldR,
+                height: Math.max(2, h),
+                falloff: bc.mountainFalloff,
+                label: 'mountain'
+            });
+        }
+    }
+    
+    // ── Add terrain noise for rough terrain (helicopter, drone) ──
+    if (bc.terrainNoise > 0 && sculpts.length > 0) {
+        // Scatter small noise bumps across the terrain
+        let noiseCount = Math.floor(bc.terrainNoise * 60);
+        for (let n = 0; n < noiseCount; n++) {
+            let nx = (Math.random() - 0.5) * terrainSize * 0.8;
+            let nz = (Math.random() - 0.5) * terrainSize * 0.8;
+            sculpts.push({
+                x: nx, z: nz,
+                radius: 15 + Math.random() * 30,
+                height: (Math.random() - 0.3) * bc.mountainMaxHeight * 0.15,
+                falloff: 'smooth',
+                label: 'terrain_noise'
+            });
+        }
+    }
+    
+    // ── Assemble the plan ──
+    let plan = {
+        roads: roads,
+        sculpts: sculpts,
+        trees: trees,
+        water: water,
+        race: race,
+        holes: []
+    };
+    
+    // ── Build summary ──
+    let summary = {
+        roads: roads.length,
+        sculpts: structuredMountains.length,
+        trees: trees.length,
+        water: water.length,
+        checkpoints: race ? race.checkpoints.length : 0,
+        holes: 0
+    };
+    
+    lastBuildPlan = plan;
+    showResult(summary, plan);
 }
 
 // ── Road Crossing Detection ──
@@ -1166,56 +3018,7 @@ function hideCrossingModal() {
     document.getElementById('crossing-modal').classList.remove('visible');
 }
 
-async function sendToAI(imageBase64) {
-    let style = document.getElementById('style-select').value;
-    
-    document.getElementById('processing').classList.add('visible');
-    document.getElementById('process-text').textContent = 'AI is reading your drawing...';
-    document.getElementById('process-sub').textContent = 'This takes 3-5 seconds. The AI interprets every element you drew.';
-    
-    // Capture road-only canvas for cleaner road detection
-    let roadImageBase64 = roadCanvas.toDataURL('image/png');
-    
-    try {
-        let controller = new AbortController();
-        let timeoutId = setTimeout(() => controller.abort(), 120000); // 120s timeout
-        
-        let response = await fetch('/api/scan', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            signal: controller.signal,
-            body: JSON.stringify({
-                image_base64: imageBase64,
-                road_image_base64: roadImageBase64,
-                mode: currentMode,
-                style: style,
-                aspectRatio: canvas.getBoundingClientRect().width / canvas.getBoundingClientRect().height
-            })
-        });
-        clearTimeout(timeoutId);
-        
-        if (!response.ok) {
-            let errText = await response.text();
-            let errMsg = 'Server error';
-            try { errMsg = JSON.parse(errText).error || errMsg; } catch(e) {}
-            throw new Error(errMsg);
-        }
-        
-        let data = await response.json();
-        lastBuildPlan = data.plan;
-        
-        document.getElementById('processing').classList.remove('visible');
-        showResult(data.summary, data.plan);
-        
-    } catch (err) {
-        document.getElementById('processing').classList.remove('visible');
-        if (err.name === 'AbortError') {
-            alert('AI request timed out after 120 seconds. Please try again.');
-        } else {
-            alert('Error: ' + err.message);
-        }
-    }
-}
+
 
 function showResult(summary, plan) {
     document.getElementById('result').classList.add('visible');
@@ -1250,6 +3053,9 @@ function playNow() {
         sessionStorage.setItem('scan_build_plan', JSON.stringify(lastBuildPlan));
         sessionStorage.setItem('scan_build_mode', currentMode);
         sessionStorage.setItem('scan_auto_play', 'true');
+        // Pass engine + theme config to build pipeline
+        if (window.ACTIVE_ENGINE_KEY) sessionStorage.setItem('scan_engine_key', window.ACTIVE_ENGINE_KEY);
+        if (window.ACTIVE_THEME_KEY) sessionStorage.setItem('scan_theme_key', window.ACTIVE_THEME_KEY);
         if (selectedTemplateId) {
             sessionStorage.setItem('scan_template_id', selectedTemplateId);
         } else {
@@ -1265,6 +3071,9 @@ function openInBuilder() {
         sessionStorage.setItem('scan_build_plan', JSON.stringify(lastBuildPlan));
         sessionStorage.setItem('scan_build_mode', currentMode);
         sessionStorage.removeItem('scan_auto_play');
+        // Pass engine + theme config to builder
+        if (window.ACTIVE_ENGINE_KEY) sessionStorage.setItem('scan_engine_key', window.ACTIVE_ENGINE_KEY);
+        if (window.ACTIVE_THEME_KEY) sessionStorage.setItem('scan_theme_key', window.ACTIVE_THEME_KEY);
         if (selectedTemplateId) {
             sessionStorage.setItem('scan_template_id', selectedTemplateId);
         } else {
@@ -1274,68 +3083,173 @@ function openInBuilder() {
     }
 }
 
-// ── Template Picker ──
-async function loadTemplatePicker() {
-    try {
-        let resp = await fetch('/api/templates');
-        let templates = await resp.json();
-        let grid = document.getElementById('picker-grid');
-        
-        if (!templates || templates.length === 0) {
-            selectTemplate(null);
-            return;
-        }
-        
-        // Group by category
-        let categories = {};
-        let categoryConfig = {
-            desert:  { emoji: '🏜️', hint: 'Sandy dunes & canyons' },
-            grass:   { emoji: '🌿', hint: 'Rolling green hills' },
-            snow:    { emoji: '❄️',  hint: 'Frozen peaks & ice' },
-            island:  { emoji: '🏖️', hint: 'Tropical shores & reefs' },
-            pirate:  { emoji: '🏴‍☠️', hint: 'Treasure & danger!' },
-            volcano: { emoji: '🌋', hint: 'Fire & lava flows' },
-            jungle:  { emoji: '🌴', hint: 'Dense & wild' },
-            space:   { emoji: '🚀', hint: 'Zero gravity racing' },
-            city:    { emoji: '🏙️', hint: 'Urban streets & rooftops' }
-        };
-        templates.forEach(t => {
-            let cat = t.category || 'grass';
-            if (!categories[cat]) categories[cat] = [];
-            categories[cat].push(t);
-        });
-        
-        grid.innerHTML = '';
-        for (let [cat, tmpls] of Object.entries(categories)) {
-            if (tmpls.length === 0) continue;
-            let conf = categoryConfig[cat] || { emoji: '🌍', hint: 'Explore!' };
-            let section = document.createElement('div');
-            section.className = 'picker-section';
-            section.innerHTML = '<h3>' + conf.emoji + ' ' + cat.toUpperCase() + '</h3>';
-            let cards = document.createElement('div');
-            cards.className = 'picker-cards';
-            tmpls.forEach(t => {
-                let card = document.createElement('div');
-                card.className = 'picker-card';
-                card.onclick = () => selectTemplate(t.id);
-                card.innerHTML = '<div class="card-emoji">' + conf.emoji + '</div>' +
-                    '<div class="card-name">' + t.name + '</div>' +
-                    '<div class="card-hint">' + conf.hint + '</div>';
-                cards.appendChild(card);
-            });
-            section.appendChild(cards);
-            grid.appendChild(section);
-        }
-    } catch (err) {
-        console.error('Failed to load templates:', err);
-        // Fallback: skip picker
-        selectTemplate(null);
+// ── Setup Wizard ──
+let selectedEngine = null;
+let selectedTheme = null;
+
+function initSetupWizard() {
+    let engineGrid = document.getElementById('engine-cards');
+    let themeGrid = document.getElementById('theme-cards');
+    
+    if (!window.ENGINE_REGISTRY || !window.THEME_REGISTRY) {
+        // Registries not loaded — fallback: skip wizard
+        document.getElementById('setup-wizard').style.display = 'none';
+        return;
     }
+    
+    // Build engine cards
+    let engines = ENGINE_REGISTRY._keys();
+    engines.forEach(function(key) {
+        let eng = ENGINE_REGISTRY[key];
+        let card = document.createElement('div');
+        card.className = 'picker-card';
+        card.innerHTML = '<div class="card-emoji">' + eng.icon + '</div>' +
+                         '<div class="card-name">' + eng.label + '</div>' +
+                         '<div class="card-desc">' + eng.description + '</div>';
+        card.onclick = function() { selectEngine(key); };
+        card.id = 'engine-card-' + key;
+        engineGrid.appendChild(card);
+    });
+    
+    // Build theme cards
+    let themes = THEME_REGISTRY._keys();
+    themes.forEach(function(key) {
+        let thm = THEME_REGISTRY[key];
+        let card = document.createElement('div');
+        card.className = 'picker-card';
+        card.innerHTML = '<div class="card-emoji">' + thm.icon + '</div>' +
+                         '<div class="card-name">' + thm.label + '</div>' +
+                         '<div class="card-desc">' + thm.description + '</div>';
+        card.onclick = function() { selectTheme(key); };
+        card.id = 'theme-card-' + key;
+        themeGrid.appendChild(card);
+    });
+}
+
+function selectEngine(key) {
+    selectedEngine = key;
+    // Update card selection visuals
+    document.querySelectorAll('#engine-cards .picker-card').forEach(function(c) {
+        c.classList.remove('selected');
+    });
+    document.getElementById('engine-card-' + key).classList.add('selected');
+    
+    // Unlock theme step
+    let themeStep = document.getElementById('theme-step');
+    themeStep.style.opacity = '1';
+    themeStep.style.pointerEvents = 'auto';
+    
+    // If theme already selected, keep start enabled. Otherwise check.
+    updateStartButton();
+}
+
+function selectTheme(key) {
+    selectedTheme = key;
+    document.querySelectorAll('#theme-cards .picker-card').forEach(function(c) {
+        c.classList.remove('selected');
+    });
+    document.getElementById('theme-card-' + key).classList.add('selected');
+    updateStartButton();
+}
+
+function updateStartButton() {
+    let btn = document.getElementById('start-draw-btn');
+    if (selectedEngine && selectedTheme) {
+        btn.style.opacity = '1';
+        btn.style.pointerEvents = 'auto';
+    } else {
+        btn.style.opacity = '0.4';
+        btn.style.pointerEvents = 'none';
+    }
+}
+
+function backToWizard() {
+    // Reset selections and show wizard again
+    selectedEngine = null;
+    selectedTheme = null;
+    document.querySelectorAll('#engine-cards .picker-card').forEach(function(c) { c.classList.remove('selected'); });
+    document.querySelectorAll('#theme-cards .picker-card').forEach(function(c) { c.classList.remove('selected'); });
+    document.getElementById('theme-step').style.opacity = '0.4';
+    document.getElementById('theme-step').style.pointerEvents = 'none';
+    document.getElementById('start-draw-btn').style.opacity = '0.4';
+    document.getElementById('start-draw-btn').style.pointerEvents = 'none';
+    document.getElementById('setup-wizard').style.display = '';
+}
+
+function startDrawing() {
+    if (!selectedEngine || !selectedTheme) return;
+    
+    // Apply engine + theme config
+    applyEngineConfig(selectedEngine, selectedTheme);
+    
+    // Hide wizard
+    document.getElementById('setup-wizard').style.display = 'none';
+}
+
+function applyEngineConfig(engineKey, themeKey) {
+    let engine = ENGINE_REGISTRY[engineKey];
+    let theme = THEME_REGISTRY[themeKey || 'none'];
+    
+    // 1. Show/hide tools based on engine + theme
+    let allToolIds = ['tool-pen','tool-line','tool-mountain','tool-tree',
+                      'tool-water','tool-jump','tool-eraser',
+                      'tool-start','tool-checkpoint','tool-house'];
+    let activeTools = engine.tools.concat(theme.extraTools || []);
+    
+    // Map tool names to button IDs
+    let toolIdMap = {
+        'road': 'tool-pen',
+        'mountain': 'tool-mountain',
+        'tree': 'tool-tree',
+        'water': 'tool-water',
+        'jump': 'tool-jump',
+        'eraser': 'tool-eraser'
+    };
+    
+    allToolIds.forEach(function(id) {
+        let el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+    });
+    
+    activeTools.forEach(function(tool) {
+        let id = toolIdMap[tool];
+        if (id) {
+            let el = document.getElementById(id);
+            if (el) el.style.display = '';
+        }
+    });
+    
+    // 2. Set mountain height cap
+    window.MOUNTAIN_MAX_HEIGHT = engine.terrain.mountainMaxHeight;
+    
+    // 3. Override stamp emojis from theme
+    window.ACTIVE_STAMPS = {};
+    let s;
+    for (s in engine.stamps) { window.ACTIVE_STAMPS[s] = engine.stamps[s]; }
+    if (theme.stamps) {
+        for (s in theme.stamps) { window.ACTIVE_STAMPS[s] = theme.stamps[s]; }
+    }
+    if (theme.extraStamps) {
+        for (s in theme.extraStamps) { window.ACTIVE_STAMPS[s] = theme.extraStamps[s]; }
+    }
+    
+    // 4. Store active config globally
+    window.ACTIVE_ENGINE = engine;
+    window.ACTIVE_ENGINE_KEY = engineKey;
+    window.ACTIVE_THEME = theme;
+    window.ACTIVE_THEME_KEY = themeKey;
+    
+    console.log('🎮 Engine: ' + engine.label + ' | Theme: ' + theme.label);
 }
 
 async function selectTemplate(id) {
     selectedTemplateId = id;
-    document.getElementById('template-picker').style.display = 'none';
+    document.getElementById('setup-wizard').style.display = 'none';
+    
+    // Apply engine config if not already applied
+    if (!window.ACTIVE_ENGINE && window.ENGINE_REGISTRY) {
+        applyEngineConfig(selectedEngine || Object.keys(ENGINE_REGISTRY)[0], selectedTheme || 'none');
+    }
     
     if (id) {
         // NO thumbnail preview — it's a SURPRISE!
@@ -1403,8 +3317,8 @@ function canDrawAt(x, y) {
     return templateMaskData.data[idx + 1] > 128; // Green channel > 128 = allowed
 }
 
-// Load picker on startup
-loadTemplatePicker();
+// Initialize wizard on load
+initSetupWizard();
 
 // ── Keyboard shortcuts ──
 document.addEventListener('keydown', function(e) {

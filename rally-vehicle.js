@@ -11,7 +11,7 @@ let touchControlsEl = null;
 
 const CFG = {
     MASS: 1100, 
-    ENGINE_FORCE: 55000, 
+    ENGINE_POWER: 55000,  // Arcade power unit (not Nm or N — scales with gear/turbo/falloff)
     MAX_SPEED: 80, // m/s (ca 288 km/h i absolut max teoretisk topfart)
     BRAKE_FORCE: 65000, 
     REVERSE_MAX: 15,
@@ -41,7 +41,8 @@ const CFG = {
     // FAS2-H2: Gearbox & engine
     GEAR_RATIOS: [0, 3.5, 2.2, 1.6, 1.2, 0.95],  // [neutral, 1st..5th]
     FINAL_DRIVE: 4.1,          // Final drive ratio
-    WHEEL_CIRCUMFERENCE: 2.0,  // m (2π × 0.318)
+    WHEEL_CIRCUMFERENCE: 2.0,  // m (2π × 0.318) — legacy, use WHEEL_RADIUS instead
+    TRACTION_MULT: 2.5,        // arcade traction multiplier (>1 = more grip than physics)
     MAX_RPM: 7500,
     IDLE_RPM: 1200,
     SHIFT_UP_RPM: 6800,
@@ -70,7 +71,7 @@ const CFG = {
     TYRE_OVERHEAT_TEMP: 110,   // °C — above this, grip drops
     TYRE_OPTIMAL_TEMP: 85,     // °C — peak grip temperature
     TYRE_COLD_TEMP: 40,        // °C — below this, grip reduced
-    TYRE_COOLING_RATE: 2.0,    // °C/s cooling towards ambient
+    TYRE_COOLING_RATE: 0.02,   // 1/s Newton cooling coefficient (M2 fix: was 2.0 × 0.01)
     TYRE_HEATING_RATE: 0.4     // °C/s per unit of slip intensity
 };
 const DMG_VOLT_THRESH = 25; // m/s barrier impact to trigger volt
@@ -123,9 +124,9 @@ const CAR_PROFILE_COLORS = {
 function createCarMesh() {
     let g = new THREE.Group(); g.name = 'RallyCar';
 
-    // car.position.y = groundY + CAR_HEIGHT (0.7m above terrain)
+    // car.position.y = groundY + CAR_HEIGHT (0.35m above terrain)
     // All geometry must be offset DOWN by CAR_HEIGHT so wheels touch ground
-    let yOff = -CFG.CAR_HEIGHT; // -0.7
+    let yOff = -CFG.CAR_HEIGHT; // -0.35
 
     // Determine body color from active profile
     let profileKey = (window.rallyCarProfiles && window.rallyCarProfiles.getCurrentProfile()) || 'GROUP_A';
@@ -479,12 +480,15 @@ function updateTyres(dt, forwardVel, lateralVel, slipAngle, onGround, surfaceGri
     }
 
     // Slip intensity = combined lateral + longitudinal slip
-    let slipIntensity = Math.abs(slipAngle) * 2.0 + Math.abs(forwardVel) * 0.01;
+    // M3 fix: slipAngle now in degrees (consistent with car.slipAngleDeg)
+    let slipAngleRad = Math.abs(slipAngle) * Math.PI / 180;
+    let slipIntensity = slipAngleRad * 2.0 + Math.abs(forwardVel) * 0.01;
 
     // Temperature: heats from slip, cools towards ambient
     let ambientTemp = 22;  // °C base (weather could modify this)
     car.tyreTemp += slipIntensity * CFG.TYRE_HEATING_RATE * dt;
-    car.tyreTemp -= (car.tyreTemp - ambientTemp) * CFG.TYRE_COOLING_RATE * 0.01 * dt;
+    // M2 fix: removed erroneous ×0.01 that made cooling 100× too slow
+    car.tyreTemp -= (car.tyreTemp - ambientTemp) * CFG.TYRE_COOLING_RATE * dt;
     car.tyreTemp = clamp(car.tyreTemp, ambientTemp, 160);
 
     // Wear: proportional to speed² × slip × compound rate
@@ -532,7 +536,7 @@ function readInput() {
     
     let gps=navigator.getGamepads?navigator.getGamepads():[];
     for(let gp of gps){ if(!gp||!gp.connected)continue;
-        let sx=gp.axes[0]||0; if(Math.abs(sx)<0.12)sx=0;
+        let sx=gp.axes[0]||0; if(Math.abs(sx)<0.18)sx=0;
         let gt=gp.buttons[7]?gp.buttons[7].value:0, gb=gp.buttons[6]?gp.buttons[6].value:0;
         if(gt>0.05||gb>0.05||Math.abs(sx)>0.12){
             input.throttle=gt; input.brake=gb; input.steer=sx;
@@ -564,16 +568,30 @@ function updateVehicle(dt) {
     let dmgMod = window.rallyDamage ? window.rallyDamage.getModifiers() : {steerMult:1,accelMult:1,maxSpeedMult:1};
 
     // === FAS1-H1: PER-WHEEL SUSPENSION ===
-    // Sample terrain height at each wheel position (4× localGetTerrainAt)
+    // Pre-calculate slope pitch/roll for physical alignment on terrain
+    let slopePitch = 0;
+    let slopeRoll = 0;
+    if (car.onGround) {
+        let nx = terrain.normal[0]||0, nz = terrain.normal[1]||0;
+        slopePitch = (nx*Math.sin(car.heading) + nz*Math.cos(car.heading)) * 0.95;
+        slopeRoll = (-nx*Math.cos(car.heading) + nz*Math.sin(car.heading)) * 0.95;
+    }
+
+    let euler = new THREE.Euler(slopePitch, car.heading, slopeRoll, 'YXZ');
     let wheelOffsets = [CFG.WHEEL_FL, CFG.WHEEL_FR, CFG.WHEEL_RL, CFG.WHEEL_RR];
-    let cosH = Math.cos(car.heading), sinH = Math.sin(car.heading);
     let avgGroundY = 0;
     let allWheelsGround = true;
+    let baseLoad = CFG.MASS * CFG.GRAVITY / 4;  // static load per wheel
+
     for (let i = 0; i < 4; i++) {
-        // Transform wheel local position to world position
+        // Transform wheel local position to world position, accounting for pitch & roll
         let lx = wheelOffsets[i][0], lz = wheelOffsets[i][2];
-        let wx = car.position.x + lx * cosH + lz * sinH;
-        let wz = car.position.z - lx * sinH + lz * cosH;
+        let ly = CFG.WHEEL_RADIUS - CFG.CAR_HEIGHT; // Actual local rest height of the wheel relative to car center
+        let localPos = new THREE.Vector3(lx, ly, lz);
+        localPos.applyEuler(euler);
+
+        let wx = car.position.x + localPos.x;
+        let wz = car.position.z + localPos.z;
         if (typeof window.localGetTerrainAt === 'function') {
             let wt = window.localGetTerrainAt(wx, -wz);
             car.wheelGroundY[i] = wt.z;
@@ -583,57 +601,50 @@ function updateVehicle(dt) {
         avgGroundY += car.wheelGroundY[i];
 
         // Spring-damper integration
-        let wheelWorldY = car.position.y + car.suspPos[i];
         let groundTarget = car.wheelGroundY[i] + CFG.WHEEL_RADIUS;
         // FIX-M2: depthVariance — per-surface micro-noise in wheel load
-        // Creates physically felt texture: gravel=bumpy, mud=sinking, asphalt=smooth
         if (surface.depthVariance > 0 && car.onGround) {
             let speedFactor = clamp(Math.abs(car.speed) / 40, 0, 1);
             let phase = performance.now() * 0.013 + i * 2.3 + car.position.x * 0.7;
             let noise = (Math.sin(phase) * 0.6 + Math.sin(phase * 2.7) * 0.4);
-            // Multiplier increased from 0.15 to 0.80 to restore physical bumping on offroad surfaces
-            // now that pixel-staircasing is resolved by bilinear interpolation.
             groundTarget += noise * surface.depthVariance * speedFactor * 0.80;
         }
-        let error = groundTarget - (car.position.y - CFG.CAR_HEIGHT);
+        
+        // Error is the compression displacement from the design ride height
+        let error = groundTarget - (car.position.y + localPos.y);
 
-        // Spring force + damping
-        car.suspVel[i] += (error * CFG.SPRING_RATE / CFG.MASS * 4 - car.suspVel[i] * CFG.DAMPER / CFG.MASS * 4) * dt;
+        // Spring force + damping (per-wheel mass = total/4)
+        let massPerWheel = CFG.MASS / 4;
+        car.suspVel[i] += (error * CFG.SPRING_RATE / massPerWheel - car.suspVel[i] * CFG.DAMPER / massPerWheel) * dt;
         car.suspPos[i] += car.suspVel[i] * dt;
         car.suspPos[i] = clamp(car.suspPos[i], -CFG.SUSPENSION_TRAVEL * 0.3, CFG.SUSPENSION_TRAVEL);
 
-        // Contact force: positive when wheel pushes on ground
-        car.normalForce[i] = Math.max(0, error * CFG.SPRING_RATE);
+        // Contact force: spring force around static load equilibrium
+        car.normalForce[i] = Math.max(0, baseLoad + error * CFG.SPRING_RATE);
         if (car.normalForce[i] < 1) allWheelsGround = false;
     }
     avgGroundY /= 4;
 
     // === FAS2-H5: ANTI-ROLL BARS ===
-    // Transfer load between left/right wheels per axel to resist body roll
-    {
-        // Front ARB: compares FL vs FR suspension compression
-        let frontDiff = car.suspPos[0] - car.suspPos[1];  // positive = left more compressed
-        let frontArbForce = frontDiff * CFG.ARB_FRONT;
-        // Clamp ARB force to prevent exceeding normalForce (avoids negative load)
-        let maxArbFront = Math.min(car.normalForce[0], car.normalForce[1]) * 0.4;
-        frontArbForce = clamp(frontArbForce, -maxArbFront, maxArbFront);
-        car.normalForce[0] -= frontArbForce;  // left: less if more compressed
-        car.normalForce[1] += frontArbForce;  // right: more if less compressed
-
-        // Rear ARB: compares RL vs RR
-        let rearDiff = car.suspPos[2] - car.suspPos[3];
-        let rearArbForce = rearDiff * CFG.ARB_REAR;
-        let maxArbRear = Math.min(car.normalForce[2], car.normalForce[3]) * 0.4;
-        rearArbForce = clamp(rearArbForce, -maxArbRear, maxArbRear);
-        car.normalForce[2] -= rearArbForce;
-        car.normalForce[3] += rearArbForce;
-    }
+    // ARB resists body roll by transferring load between left/right wheels.
+    // NOTE: Applied AFTER weight transfer so ARB modifies the final wheelLoad.
+    // (Previously applied to normalForce which was partially overwritten by weight transfer.)
 
     // === FAS1-K1: WEIGHT TRANSFER ===
     // Calculate per-wheel vertical loads based on longitudinal + lateral acceleration
-    let baseLoad = CFG.MASS * CFG.GRAVITY / 4;  // static load per wheel
+    baseLoad = CFG.MASS * CFG.GRAVITY / 4;  // static load per wheel
     let fwdAccelK1 = (car.speed - car.prevForwardVel) / Math.max(dt, 0.001);
-    let latAccelK1 = input.steer * Math.abs(car.speed) * 0.5;  // simplified lateral accel estimate
+    // Lateral acceleration: v²/R from actual steering geometry
+    let latAccelK1 = 0;
+    if (car.onGround && Math.abs(input.steer) > 0.01 && Math.abs(forwardVel) > 1) {
+        let speedT = clamp(Math.abs(forwardVel) / CFG.MAX_SPEED, 0, 1);
+        let steerDegK1 = lerp(CFG.MAX_STEER, CFG.MIN_STEER, speedT);
+        let steerRadK1 = steerDegK1 * Math.PI / 180 * Math.abs(input.steer);
+        let turnRadiusK1 = CFG.WHEELBASE / Math.tan(steerRadK1 + 0.001);
+        latAccelK1 = (forwardVel * forwardVel) / turnRadiusK1 * Math.sign(input.steer);
+        // Clamp to realistic lateral g-forces (max ~2g for arcade)
+        latAccelK1 = clamp(latAccelK1, -20, 20);
+    }
 
     // Longitudinal transfer: accel → rear load+, front load−
     let longTransfer = CFG.MASS * fwdAccelK1 * CFG.CGH / CFG.WHEELBASE;
@@ -655,6 +666,25 @@ function updateVehicle(dt) {
         }
     }
 
+    // Anti-roll bars: applied to final wheelLoad (after weight transfer)
+    {
+        // Front ARB: compares FL vs FR suspension compression
+        let frontDiff = car.suspPos[0] - car.suspPos[1];  // positive = left more compressed
+        let frontArbForce = frontDiff * CFG.ARB_FRONT;
+        let maxArbFront = Math.min(car.wheelLoad[0], car.wheelLoad[1]) * 0.4;
+        frontArbForce = clamp(frontArbForce, -maxArbFront, maxArbFront);
+        car.wheelLoad[0] -= frontArbForce;
+        car.wheelLoad[1] += frontArbForce;
+
+        // Rear ARB: compares RL vs RR
+        let rearDiff = car.suspPos[2] - car.suspPos[3];
+        let rearArbForce = rearDiff * CFG.ARB_REAR;
+        let maxArbRear = Math.min(car.wheelLoad[2], car.wheelLoad[3]) * 0.4;
+        rearArbForce = clamp(rearArbForce, -maxArbRear, maxArbRear);
+        car.wheelLoad[2] -= rearArbForce;
+        car.wheelLoad[3] += rearArbForce;
+    }
+
     // Total grip: sum of per-wheel grip forces, normalized to baseline
     let totalLoad = car.wheelLoad[0] + car.wheelLoad[1] + car.wheelLoad[2] + car.wheelLoad[3];
     let baselineLoad = CFG.MASS * CFG.GRAVITY;
@@ -672,13 +702,19 @@ function updateVehicle(dt) {
         // Weather also modifies drag
         let weatherDrag = window.rallyWeather.getDragMult();
         if (weatherDrag > 1.0) {
-            car.velocity.multiplyScalar(Math.pow(1.0 / weatherDrag, dt));
+            // Weather drag: scale with 60*dt for framerate-independence
+            // getDragMult() returns values like 1.02-1.06, converting:
+            // 1/1.06 = 0.943 → pow(0.943, 60*0.0167) = pow(0.943, 1) = 0.943 per 60fps-frame
+            // This is intentionally strong — rain should slow you noticeably.
+            // Previous: pow(1/drag, dt) gave ~0.1% per frame — barely noticeable.
+            car.velocity.multiplyScalar(Math.pow(1.0 / weatherDrag, 60 * dt));
         }
     }
 
     // === FAS3-H4: TYRE SIMULATION ===
     // Must run before grip factor is used (modifies car.tyreGripMult)
-    updateTyres(dt, car.speed, car.velocity.dot ? car.velocity.dot(new THREE.Vector3(Math.cos(car.heading), 0, -Math.sin(car.heading))) : 0, car.slipAngleDeg * Math.PI / 180, car.onGround, surface.grip);
+    // M3 fix: pass slipAngle in degrees (consistent with car.slipAngleDeg) and actual lateralVel
+    updateTyres(dt, car.speed, lateralVel, car.slipAngleDeg, car.onGround, surface.grip);
 
     // Apply tyre + weather to totalGrip
     car.totalGrip *= car.tyreGripMult * weatherGripMult;
@@ -709,8 +745,7 @@ function updateVehicle(dt) {
     let forwardVel = car.velocity.dot(fwd);
     let lateralVel = car.velocity.dot(right);
     car.speed = forwardVel;
-    car.prevForwardVel = forwardVel;  // FAS1-K1: save for weight transfer next frame
-    // displaySpeed beräknas korrekt efter speed cap nedan (BUG-16: denna rad var redundant)
+    // prevForwardVel is saved AFTER speed cap below (C4 fix: avoids false acceleration spikes at cap)
 
     // Slip angle
     let slipAngle = 0;
@@ -762,6 +797,10 @@ function updateVehicle(dt) {
         if (wheelSpeed < 1.0) {
             car.rpm = CFG.IDLE_RPM + input.throttle * (CFG.MAX_RPM * 0.6 - CFG.IDLE_RPM);
         }
+        // H4 fix: reverse = idle RPM only (no power through drivetrain)
+        if (forwardVel < -0.5) {
+            car.rpm = CFG.IDLE_RPM;
+        }
 
         // Auto-shift
         let newGear = autoShift(car.rpm, car.gear, input.throttle);
@@ -771,8 +810,9 @@ function updateVehicle(dt) {
         }
         if (car.shiftTimer > 0) car.shiftTimer -= dt;
 
-        // Turbo pressure: builds with throttle, decays without
-        let turboTarget = input.throttle > 0.5 ? 1.0 : 0.0;
+        // Turbo pressure: builds with throttle + sufficient RPM, decays without
+        // M1 fix: turbo requires RPM > 3000 (no boost from idle revving)
+        let turboTarget = (input.throttle > 0.5 && car.rpm > 3000) ? 1.0 : 0.0;
         let turboRate = turboTarget > car.turboPressure
             ? (1.0 / CFG.TURBO_LAG)     // spool up
             : (1.0 / (CFG.TURBO_LAG * 0.5));  // spool down faster
@@ -780,20 +820,20 @@ function updateVehicle(dt) {
     }
 
     // === ACCELERATION (with H2 engine model) ===
-    let thrustForce = 0;
+    let longiForce = 0;  // L3: renamed from thrustForce — longitudinal force on car
     if(input.throttle>0 && forwardVel>=0) {
         // H2: Torque from engine curve × gear ratio × turbo
         let rpmNorm = clamp((car.rpm - CFG.IDLE_RPM) / (CFG.MAX_RPM - CFG.IDLE_RPM), 0, 1);
         let torqueFraction = sampleTorqueCurve(rpmNorm);
         let turboMult = 1.0 + (CFG.TURBO_BOOST - 1.0) * car.turboPressure;
-        let engineTorque = CFG.ENGINE_FORCE * torqueFraction * turboMult;
+        let engineTorque = CFG.ENGINE_POWER * torqueFraction * turboMult;
 
         // Power cut during gear shift
         if (car.shiftTimer > 0) engineTorque *= 0.05;
 
         // Gear multiplication
         let gearRatio = CFG.GEAR_RATIOS[car.gear] || CFG.GEAR_RATIOS[1];
-        let wheelForce = engineTorque * gearRatio * CFG.FINAL_DRIVE / (CFG.WHEEL_CIRCUMFERENCE / (2 * Math.PI));
+        let wheelForce = engineTorque * gearRatio * CFG.FINAL_DRIVE / CFG.WHEEL_RADIUS;
 
         // Speed-based power falloff (prevents infinite acceleration)
         let speedRatio = clamp(forwardVel/CFG.MAX_SPEED, 0, 1);
@@ -827,8 +867,9 @@ function updateVehicle(dt) {
             let openDiffLoss = 1.0 - (1.0 - loadRatio) * 0.5;  // open diff loses up to 50%
             // LSD recovers that loss
             let diffEfficiency = lerp(openDiffLoss, 1.0, car.diffLockState);
-            // Preload adds minimum lock
-            diffEfficiency = Math.max(diffEfficiency, CFG.DIFF_PRELOAD / Math.max(wheelForce, CFG.DIFF_PRELOAD));
+            // Preload: minimum lock at low torque (clamped to max 0.3 = 30% lock)
+            let preloadLock = clamp(CFG.DIFF_PRELOAD / Math.max(Math.abs(wheelForce), 1), 0, 0.3);
+            diffEfficiency = Math.max(diffEfficiency, preloadLock);
 
             wheelForce *= diffEfficiency;
         }
@@ -843,11 +884,12 @@ function updateVehicle(dt) {
         let rearAxleLoad = car.wheelLoad[2] + car.wheelLoad[3];
         let drivenAxleLoad = frontAxleLoad * frontBias + rearAxleLoad * rearBias;
         let normalY = car.onGround ? ((terrain.normal && terrain.normal[2] !== undefined) ? terrain.normal[2] : 1.0) : 0.0;
-        let maxTractionForce = drivenAxleLoad * surface.grip * normalY * 4.0;
+        // M5 fix: use longGrip for traction (longitudinal grip vs lateral grip)
+        let maxTractionForce = drivenAxleLoad * (surface.longGrip || surface.grip) * normalY * CFG.TRACTION_MULT;
         wheelForce = Math.min(wheelForce, maxTractionForce);
 
         let accel = wheelForce / CFG.MASS;
-        thrustForce = wheelForce;
+        longiForce = wheelForce;
         car.velocity.addScaledVector(fwd, accel*dt);
     } else if(input.throttle>0 && forwardVel<0) {
         // Throttle while reversing = brake
@@ -855,7 +897,7 @@ function updateVehicle(dt) {
     }
     // Reverse — aktiveras när bilen är nästan stillastående (forwardVel ≤0.1 m/s)
     if(input.brake>0 && forwardVel<=0.1) {
-        let accel = (CFG.ENGINE_FORCE/CFG.MASS)*0.4*input.brake*surface.accel;
+        let accel = (CFG.ENGINE_POWER/CFG.MASS)*0.4*input.brake*surface.accel;
         
         // FIX-M3: TORQUE_BIAS for reverse traction
         let normalY = car.onGround ? ((terrain.normal && terrain.normal[2] !== undefined) ? terrain.normal[2] : 1.0) : 0.0;
@@ -863,7 +905,7 @@ function updateVehicle(dt) {
         let frontAxleRev = car.wheelLoad[0] + car.wheelLoad[1];
         let rearAxleRev = car.wheelLoad[2] + car.wheelLoad[3];
         let drivenLoadRev = frontAxleRev * (1.0 - rearBiasRev) + rearAxleRev * rearBiasRev;
-        let maxTractionAccel = drivenLoadRev / CFG.MASS * surface.grip * normalY * 4.0;
+        let maxTractionAccel = drivenLoadRev / CFG.MASS * surface.grip * normalY * CFG.TRACTION_MULT;
         accel = Math.min(accel, maxTractionAccel);
         
         car.velocity.addScaledVector(fwd, -accel*dt);
@@ -872,7 +914,8 @@ function updateVehicle(dt) {
     // Split braking force front/rear. More rear bias = easier oversteer under braking.
     // Handbrake locks rear wheels only.
     if(input.brake>0 && forwardVel>0.1) {
-        let totalBrakeForce = CFG.BRAKE_FORCE * input.brake * surface.brake;
+        // M5 fix: braking uses longGrip for longitudinal grip
+        let totalBrakeForce = CFG.BRAKE_FORCE * input.brake * surface.brake * (surface.longGrip || surface.grip);
         let frontBrake = totalBrakeForce * CFG.BRAKE_BIAS;
         let rearBrake = totalBrakeForce * (1 - CFG.BRAKE_BIAS);
         // H3: Handbrake adds massive rear brake (locks rear wheels)
@@ -886,13 +929,13 @@ function updateVehicle(dt) {
         let newFwd = forwardVel - effectiveBrakeAccel * dt;
         if(newFwd<0) newFwd=0;
         car.velocity.addScaledVector(fwd, (newFwd-forwardVel));
-        thrustForce = Math.max(thrustForce, effectiveBrakeAccel * CFG.MASS);
+        longiForce = Math.max(longiForce, effectiveBrakeAccel * CFG.MASS);
     }
 
     // K2: Apply friction circle — if combined lat+long exceeds budget, scale both down
     {
         let latForce = Math.abs(lateralVel) * surface.grip * totalLoad;
-        let longForce = Math.abs(thrustForce);
+        let longForce = Math.abs(longiForce);
         let combined = Math.sqrt(latForce * latForce + longForce * longForce);
         if (combined > frictionBudget && combined > 0) {
             car.frictionScale = frictionBudget / combined;
@@ -902,8 +945,10 @@ function updateVehicle(dt) {
     }
 
     // === SLOPE GRAVITY (mountain physics) ===
-    // terrain.normal = [nx, nz, ny] where ny≈1 for flat ground
-    // When surface tilts, nx/nz indicate slope direction
+    // terrain.normal = [slope_x, slope_z, vertical] where vertical≈1 for flat ground
+    // Format from localGetTerrainAt(): [-ndx/len, -ndz/len, 1/len] (central difference)
+    // M6: This is a first-order approximation: g_slope ≈ g × sin(θ) ≈ g × nx/nz
+    //     Exact would be: g × (N × (N × G)) / |N|² but the error is <2% for slopes <30°
     // Gravity component along slope surface pushes car downhill
     if (car.onGround) {
         let nx = terrain.normal[0] || 0;
@@ -927,9 +972,15 @@ function updateVehicle(dt) {
 
     // === LATERAL CORRECTION (THE DRIFT MAGIC) ===
     // K2: frictionScale reduces lateral grip when longitudinal force is high
-    // H6: camber improves lateral grip, rear toe-out reduces rear grip
-    let avgCamberGrip = (camberGripFront + camberGripRear) * 0.5;
-    let effectiveGripFactor = car.gripFactor * car.frictionScale * avgCamberGrip * rearToeGrip;
+    // H6: camber improves lateral grip — applied per-axle for asymmetric setups
+    // H9 fix: use per-axle camber instead of average for more accurate grip distribution
+    let frontCamberGrip = camberGripFront;
+    let rearCamberGrip = camberGripRear * rearToeGrip;
+    // Weighted by axle load ratio for net effect on lateral correction
+    let frontLoadFrac = (car.wheelLoad[0] + car.wheelLoad[1]) / Math.max(totalLoad, 1);
+    let rearLoadFrac = 1.0 - frontLoadFrac;
+    let weightedCamberGrip = frontCamberGrip * frontLoadFrac + rearCamberGrip * rearLoadFrac;
+    let effectiveGripFactor = car.gripFactor * car.frictionScale * weightedCamberGrip;
     // FIX-M3: TORQUE_BIAS lateral effect — driven axle loses lateral grip under power
     // RWD + throttle = rear loses lateral grip = oversteer tendency
     // FWD + throttle = front loses lateral grip = understeer tendency
@@ -941,12 +992,16 @@ function updateVehicle(dt) {
         let frontLoss = powerSaturation * (1.0 - CFG.TORQUE_BIAS); // max at FWD (0.0→1.0)
         // Rear loss reduces lateral grip directly (oversteer)
         effectiveGripFactor *= (1.0 - rearLoss);
+        // C6 fix: FWD understeer — frontLoss saved for steering reduction below
+        car._frontLossThisFrame = frontLoss;
+    } else {
+        car._frontLossThisFrame = 0;
     }
     let lateralRetain = Math.pow(1-effectiveGripFactor, 60*dt);
     car.velocity.addScaledVector(right, lateralVel*(lateralRetain-1));
 
     // Handbrake extra drag
-    let dragMult = CFG.DRAG - surface.dragAdd;
+    let dragMult = CFG.DRAG * (1.0 - surface.dragAdd);
     if(input.handbrake) dragMult = Math.min(dragMult, CFG.HANDBRAKE_DRAG);
     car.velocity.multiplyScalar(Math.pow(dragMult, 60*dt));
 
@@ -964,6 +1019,8 @@ function updateVehicle(dt) {
     if(hSpd>maxSpd) { let s=maxSpd/hSpd; car.velocity.x*=s; car.velocity.z*=s; }
     // displaySpeed from POST-cap velocity (HUD and respawn read correct value)
     car.displaySpeed = Math.sqrt(car.velocity.x*car.velocity.x + car.velocity.z*car.velocity.z);
+    // C4 fix: save post-cap forward velocity for weight transfer (next frame)
+    car.prevForwardVel = car.velocity.dot(fwd);
     // Reverse cap
     let fv2 = car.velocity.dot(fwd);
     if(fv2 < -CFG.REVERSE_MAX) {
@@ -1015,6 +1072,10 @@ function updateVehicle(dt) {
         let steerDeg = lerp(CFG.MAX_STEER, CFG.MIN_STEER, speedT);
         steerDeg *= dmgMod.steerMult;
         if(car.isDrifting) steerDeg *= CFG.DRIFT_STEER_BONUS;
+        // C6 fix: FWD understeer — driven front axle loses steering under power
+        if (car._frontLossThisFrame > 0.01) {
+            steerDeg *= (1.0 - car._frontLossThisFrame * 0.8);
+        }
         // H6: Toe-out increases initial steer response, stability penalty at high speed
         steerDeg *= toeSteerMult * toeStabilityPenalty;
         let steerRad = steerDeg * Math.PI/180 * Math.abs(input.steer);
@@ -1024,15 +1085,33 @@ function updateVehicle(dt) {
         car.heading += yaw;
     }
 
+    // === VISUAL STEERING INTERPOLATION ===
+    {
+        let targetVisualSteer = 0;
+        if (Math.abs(input.steer) > 0.01) {
+            let speedT = clamp(Math.abs(car.speed) / CFG.MAX_SPEED, 0, 1);
+            let steerDeg = lerp(CFG.MAX_STEER, CFG.MIN_STEER, speedT);
+            steerDeg *= dmgMod.steerMult;
+            if (car.isDrifting) steerDeg *= CFG.DRIFT_STEER_BONUS;
+            steerDeg *= toeSteerMult * toeStabilityPenalty;
+            targetVisualSteer = input.steer * (steerDeg * Math.PI / 180);
+        }
+        if (car.visualSteer === undefined) car.visualSteer = 0;
+        car.visualSteer = lerp(car.visualSteer, targetVisualSteer, 15 * dt);
+    }
+
     // === POSITION UPDATE ===
     car.position.x += car.velocity.x * dt;
     car.position.z += car.velocity.z * dt;
 
     // === TERRAIN FOLLOWING ===
     let groundY = terrain.z;
-    if(car.position.y > groundY + CFG.CAR_HEIGHT + 0.3) {
+    // H7 fix: reduced airborne deadzone from 0.3m to 0.05m
+    // 0.3m caused the car to 'fly' over small bumps without going airborne
+    if(car.position.y > groundY + CFG.CAR_HEIGHT + 0.05) {
         car.onGround = false;
         car.velocity.y -= CFG.GRAVITY * CFG.GRAVITY_AIR_MULT * dt;
+        car.velocity.y = Math.max(car.velocity.y, -50); // terminal velocity cap
         car.position.y += car.velocity.y * dt;
         // Air control
         if(Math.abs(input.steer)>0.1)
@@ -1093,6 +1172,8 @@ function updateVehicle(dt) {
     }
 
     // === VISUAL SUSPENSION (time-normalized lerps) ===
+    // L5: prevLateralVel is used ONLY here for visual roll — saved immediately after use.
+    // The frame-to-frame delta gives lateral jerk for body roll animation.
     let latAccel = (lateralVel - car.prevLateralVel) / Math.max(dt,0.001);
     car.prevLateralVel = lateralVel;
     // SPELKÄNSLA: Öka roll/krängning markant vid styrning så bilen lutar utåt i svängen (centrifugalkraft)
@@ -1126,16 +1207,7 @@ function updateVehicle(dt) {
     let pitchRate = 1 - Math.pow(1 - 0.2, dt * 60);
     car.visualPitch = lerp(car.visualPitch, tgtPitch, pitchRate);
 
-    // Terrain slope
-    let slopePitch = 0;
-    let slopeRoll = 0;
-    if (car.onGround) {
-        let nx = terrain.normal[0]||0, nz = terrain.normal[1]||0;
-        // Pitch: nose up/down to match slope. 0.95 multiplier for realistic alignment.
-        slopePitch = (nx*Math.sin(car.heading) + nz*Math.cos(car.heading)) * 0.95;
-        // Roll: tilt left/right. Inverted sign so car tilts with the hill side instead of into it.
-        slopeRoll = (-nx*Math.cos(car.heading) + nz*Math.sin(car.heading)) * 0.95;
-    }
+    // Terrain slope (already computed at the top for suspension physics)
 
     // === VISUAL POSITION WITH SUSPENSION COMPRESSION ===
     let visualPos = car.position.clone();
@@ -1183,7 +1255,7 @@ function updateVehicle(dt) {
         w.spin.rotation.x += wheelRotSpeed * dt;
         // w.steer hanterar hjulens svängning runt Y-axeln
         w.steer.rotation.y = 0; // reset
-        if(i<2) w.steer.rotation.y = input.steer * 0.45;
+        if(i<2) w.steer.rotation.y = car.visualSteer || 0;
         // H1: Move each wheel mesh vertically based on its suspension compression
         w.steer.position.y = car.suspPos[i];
     });
@@ -1835,6 +1907,7 @@ window.rallyVehicle = {
                     p.life -= dt;
                     if (p.life <= 0) {
                         p.active = false;
+                        activeCount = Math.max(0, activeCount - 1);
                         posAttr[idx] = posAttr[idx+1] = posAttr[idx+2] = 99999; // Move offscreen
                         dirty = true;
                     } else {

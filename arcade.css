@@ -435,3 +435,35 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
   }
   #btn-actions { transition: background 0.15s; }
   #btn-actions:hover { background: #475569 !important; }
+
+  /* SCULPT & OBJECTS SUB-TOOL STRIPS (Right panel selector buttons) */
+  .subtool-btn {
+      background: #1e293b;
+      color: #94a3b8;
+      border: 1px solid #334155;
+      padding: 6px 10px;
+      border-radius: 8px;
+      font-size: 10px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      white-space: nowrap;
+      pointer-events: auto;
+  }
+  .subtool-btn:hover {
+      background: #334155;
+      color: #e2e8f0;
+      border-color: #64748b;
+  }
+  .subtool-btn.active {
+      background: #38bdf8;
+      color: #0f172a;
+      border-color: #38bdf8;
+  }
+
+  /* Hide Pro sub-tools when the strip is not in Pro Mode */
+  #sculpt-subtool-strip:not(.pro-mode) .pro-sub { display: none !important; }
+  #objects-subtool-strip:not(.pro-mode) .pro-sub { display: none !important; }

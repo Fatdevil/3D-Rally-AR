@@ -93,7 +93,8 @@ function update(camera, physDt, realDt) {
 
     // Distance and height
     let behindDist = CAM.BEHIND + Math.abs(car.speed) * 0.04;
-    let heightBoost = (Math.abs(car.speed) / 52) * 1.5; // 52 = MAX_SPEED
+    let maxSpd = (window.rallyVehicle && window.rallyVehicle.CFG) ? window.rallyVehicle.CFG.MAX_SPEED : 80;
+    let heightBoost = (Math.abs(car.speed) / maxSpd) * 1.5;
 
     // Volt camera: wider view during volts/flips
     let isVolt = window.rallyDamage && (window.rallyDamage.isVolting() || window.rallyDamage.isFlipped());
@@ -146,7 +147,7 @@ function update(camera, physDt, realDt) {
     }
 
     // FOV boost (time-based lerp)
-    let speedRatio = clamp(Math.abs(car.speed) / 52, 0, 1);
+    let speedRatio = clamp(Math.abs(car.speed) / maxSpd, 0, 1);
     let targetFov = CAM.FOV_BASE + speedRatio * CAM.FOV_BOOST;
     let fovLerp = 1 - Math.pow(1 - 0.05, physDt * 60);
     camera.fov = lerp(camera.fov, targetFov, fovLerp);

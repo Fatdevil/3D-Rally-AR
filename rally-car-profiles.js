@@ -14,7 +14,7 @@ const CAR_PROFILES = {
         icon: '🏎️',
         overrides: {
             MASS: 1100,
-            ENGINE_FORCE: 55000,
+            ENGINE_POWER: 55000,
             MAX_SPEED: 80,
             BRAKE_FORCE: 65000,
             TORQUE_BIAS: 0.5,        // 50/50 4WD
@@ -44,7 +44,7 @@ const CAR_PROFILES = {
         icon: '🏁',
         overrides: {
             MASS: 1190,
-            ENGINE_FORCE: 72000,
+            ENGINE_POWER: 72000,
             MAX_SPEED: 85,
             BRAKE_FORCE: 78000,
             TORQUE_BIAS: 0.45,       // slight front bias
@@ -74,7 +74,7 @@ const CAR_PROFILES = {
         icon: '💨',
         overrides: {
             MASS: 1050,
-            ENGINE_FORCE: 48000,
+            ENGINE_POWER: 48000,
             MAX_SPEED: 75,
             BRAKE_FORCE: 55000,
             TORQUE_BIAS: 1.0,        // 100% rear wheel drive
@@ -106,7 +106,7 @@ const CAR_PROFILES = {
         icon: '🚗',
         overrides: {
             MASS: 950,
-            ENGINE_FORCE: 38000,
+            ENGINE_POWER: 38000,
             MAX_SPEED: 65,
             BRAKE_FORCE: 48000,
             TORQUE_BIAS: 0.0,        // 100% front wheel drive
@@ -138,7 +138,7 @@ const CAR_PROFILES = {
         icon: '🛻',
         overrides: {
             MASS: 1800,
-            ENGINE_FORCE: 85000,
+            ENGINE_POWER: 85000,
             MAX_SPEED: 70,
             BRAKE_FORCE: 90000,
             TORQUE_BIAS: 0.5,

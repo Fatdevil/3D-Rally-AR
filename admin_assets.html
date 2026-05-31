@@ -47,6 +47,7 @@
         <div style="display:flex; gap:10px; margin-bottom:10px;">
             <button id="tab-btn-assets" onclick="switchLibTab('ASSETS')" style="flex:1; margin:0; padding:8px; background:#38bdf8; color:#0f172a; font-size:12px;">📦 Assets</button>
             <button id="tab-btn-themes" onclick="switchLibTab('THEMES')" style="flex:1; margin:0; padding:8px; background:#334155; color:#94a3b8; font-size:12px;">🎨 Themes</button>
+            <button id="tab-btn-engines" onclick="switchLibTab('ENGINES')" style="flex:1; margin:0; padding:8px; background:#334155; color:#94a3b8; font-size:12px;">🏗️ Engines</button>
         </div>
 
         <!-- ASSET TAB -->
@@ -174,6 +175,177 @@
                 <button onclick="loadSelectedThemeUI()" style="background:#475569; color:#f8fafc; flex:1;" title="Discard unsaved changes">↩️ Revert</button>
             </div>
             <div id="theme-log" style="font-size:11px; color:#4ade80; display:none; text-align:center;">Theme saved successfully!</div>
+        </div>
+
+        <!-- ENGINES TAB -->
+        <div id="tab-content-engines" style="display:none; flex-direction:column; gap:8px; overflow-y:auto; padding-right:5px;">
+            <div class="form-group">
+                <label>Engine to Edit</label>
+                <select id="engine-selector" onchange="loadEngineConfig()" style="font-size:14px;">
+                </select>
+            </div>
+            
+            <!-- MOUNTAINS -->
+            <div style="border-top:1px solid #334155; padding-top:8px; margin-top:4px;">
+                <label style="color:#f8fafc; font-size:12px; font-weight:bold;">⛰️ MOUNTAINS</label>
+            </div>
+            <div style="display:flex; gap:10px;">
+                <div class="form-group" style="flex:1;">
+                    <label>Max Height <span id="eng-val-mtn-height">80</span>m</label>
+                    <input type="range" id="eng-mtn-height" min="2" max="300" step="1" value="80">
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label>Scale <span id="eng-val-mtn-scale">0.8</span></label>
+                    <input type="range" id="eng-mtn-scale" min="0.05" max="2.0" step="0.05" value="0.8">
+                </div>
+            </div>
+            <div style="display:flex; gap:10px;">
+                <div class="form-group" style="flex:1;">
+                    <label>Style</label>
+                    <select id="eng-mtn-falloff">
+                        <option value="smooth">Smooth (Rally)</option>
+                        <option value="sharp">Sharp (Heli)</option>
+                        <option value="plateau">Plateau (Drone)</option>
+                    </select>
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label>Noise <span id="eng-val-mtn-noise">0</span></label>
+                    <input type="range" id="eng-mtn-noise" min="0" max="0.5" step="0.05" value="0">
+                </div>
+            </div>
+            
+            <!-- ROADS -->
+            <div style="border-top:1px solid #334155; padding-top:8px; margin-top:4px;">
+                <label style="color:#f8fafc; font-size:12px; font-weight:bold;">🛣️ ROADS</label>
+            </div>
+            <div style="display:flex; gap:10px;">
+                <div class="form-group" style="flex:1;">
+                    <label>Width <span id="eng-val-road-width">10</span>m</label>
+                    <input type="range" id="eng-road-width" min="4" max="20" step="1" value="10">
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label>Material</label>
+                    <select id="eng-road-material">
+                        <option value="gravel">Gravel</option>
+                        <option value="asphalt">Asphalt</option>
+                    </select>
+                </div>
+            </div>
+            <div style="display:flex; gap:10px;">
+                <div class="form-group" style="flex:1;">
+                    <label>Barrier L</label>
+                    <select id="eng-road-barrierL">
+                        <option value="NONE">None</option>
+                        <option value="STAKES">Stakes</option>
+                        <option value="CONCRETE">Concrete</option>
+                    </select>
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label>Barrier R</label>
+                    <select id="eng-road-barrierR">
+                        <option value="NONE">None</option>
+                        <option value="STAKES">Stakes</option>
+                        <option value="CONCRETE">Concrete</option>
+                    </select>
+                </div>
+            </div>
+            
+            <!-- WATER -->
+            <div style="border-top:1px solid #334155; padding-top:8px; margin-top:4px;">
+                <label style="color:#f8fafc; font-size:12px; font-weight:bold;">💧 WATER</label>
+            </div>
+            <div style="display:flex; gap:10px;">
+                <div class="form-group" style="flex:1;">
+                    <label>Depth <span id="eng-val-water-depth">3</span>m</label>
+                    <input type="range" id="eng-water-depth" min="0.5" max="10" step="0.5" value="3">
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label>Table <span id="eng-val-water-table">-0.5</span>m</label>
+                    <input type="range" id="eng-water-table" min="-10" max="2" step="0.5" value="-0.5">
+                </div>
+            </div>
+            <div style="display:flex; gap:10px;">
+                <div class="form-group" style="flex:1;">
+                    <label>Type</label>
+                    <select id="eng-water-type">
+                        <option value="LAKE">Lake</option>
+                        <option value="OCEAN">Ocean</option>
+                    </select>
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label>Color</label>
+                    <input type="color" id="eng-water-color" value="#38bdf8" style="width:100%; height:30px; cursor:pointer;">
+                </div>
+            </div>
+            
+            <!-- GRASS -->
+            <div style="border-top:1px solid #334155; padding-top:8px; margin-top:4px;">
+                <label style="color:#f8fafc; font-size:12px; font-weight:bold;">🌾 3D GRASS</label>
+            </div>
+            <div style="display:flex; gap:10px;">
+                <div class="form-group" style="flex:1;">
+                    <label>Quality</label>
+                    <select id="eng-grass-quality">
+                        <option value="OFF">OFF</option>
+                        <option value="LOW">LOW</option>
+                        <option value="MED">MED</option>
+                        <option value="HIGH">HIGH</option>
+                    </select>
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label>Rough H <span id="eng-val-grass-rough">30</span>cm</label>
+                    <input type="range" id="eng-grass-rough" min="5" max="80" step="5" value="30">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Deep H <span id="eng-val-grass-deep">60</span>cm</label>
+                <input type="range" id="eng-grass-deep" min="10" max="120" step="5" value="60">
+            </div>
+            
+            <!-- ENVIRONMENT -->
+            <div style="border-top:1px solid #334155; padding-top:8px; margin-top:4px;">
+                <label style="color:#f8fafc; font-size:12px; font-weight:bold;">🌤️ ENVIRONMENT</label>
+            </div>
+            <div style="display:flex; gap:10px;">
+                <div class="form-group" style="flex:1;">
+                    <label>Sky</label>
+                    <input type="color" id="eng-sky-color" value="#87ceeb" style="width:100%; height:30px; cursor:pointer;">
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label>Fog <span id="eng-val-fog">1.0</span></label>
+                    <input type="range" id="eng-fog" min="0.1" max="3.0" step="0.1" value="1.0">
+                </div>
+            </div>
+            <div style="display:flex; gap:10px;">
+                <div class="form-group" style="flex:1;">
+                    <label>Time <span id="eng-val-time">12</span>h</label>
+                    <input type="range" id="eng-time" min="6" max="20" step="1" value="12">
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label>Biome</label>
+                    <select id="eng-biome">
+                        <option value="GLOBAL">Global</option>
+                        <option value="AUTUMN">Autumn</option>
+                        <option value="WINTER">Winter</option>
+                    </select>
+                </div>
+            </div>
+            
+            <!-- TERRAIN -->
+            <div style="border-top:1px solid #334155; padding-top:8px; margin-top:4px;">
+                <label style="color:#f8fafc; font-size:12px; font-weight:bold;">⛰️ TERRAIN</label>
+            </div>
+            <div class="form-group">
+                <label>Terrain Noise <span id="eng-val-terrain-noise">0</span></label>
+                <input type="range" id="eng-terrain-noise" min="0" max="0.3" step="0.01" value="0">
+            </div>
+            
+            <!-- SAVE -->
+            <div style="border-top:1px solid #334155; padding-top:10px; margin-top:8px;">
+                <button onclick="saveEngineConfig()" style="background:#10b981; color:#fff; width:100%;">💾 Save to engine-registry.js</button>
+                <button onclick="exportAllEngineConfigs()" style="background:#6366f1; color:#fff; width:100%; margin-top:5px;">📋 Copy All Configs (JSON)</button>
+            </div>
+            <div id="engine-log" style="font-size:11px; color:#4ade80; display:none; text-align:center;">Config saved!</div>
         </div>
     </div>
 
@@ -543,24 +715,214 @@
     function switchLibTab(tab) {
         let btnAssets = document.getElementById('tab-btn-assets');
         let btnThemes = document.getElementById('tab-btn-themes');
+        let btnEngines = document.getElementById('tab-btn-engines');
         let contentAssets = document.getElementById('tab-content-assets');
         let contentThemes = document.getElementById('tab-content-themes');
+        let contentEngines = document.getElementById('tab-content-engines');
+        
+        // Reset all
+        [btnAssets, btnThemes, btnEngines].forEach(b => { b.style.background = '#334155'; b.style.color = '#94a3b8'; });
+        contentAssets.style.display = 'none';
+        contentThemes.style.display = 'none';
+        contentEngines.style.display = 'none';
         
         if (tab === 'ASSETS') {
             btnAssets.style.background = '#38bdf8'; btnAssets.style.color = '#0f172a';
-            btnThemes.style.background = '#334155'; btnThemes.style.color = '#94a3b8';
             contentAssets.style.display = 'flex';
-            contentThemes.style.display = 'none';
             logMsg("Switched to Asset Library.");
-        } else {
+        } else if (tab === 'THEMES') {
             btnThemes.style.background = '#38bdf8'; btnThemes.style.color = '#0f172a';
-            btnAssets.style.background = '#334155'; btnAssets.style.color = '#94a3b8';
             contentThemes.style.display = 'flex';
-            contentAssets.style.display = 'none';
             loadSelectedThemeUI();
             logMsg("Switched to Theme Settings.");
+        } else if (tab === 'ENGINES') {
+            btnEngines.style.background = '#38bdf8'; btnEngines.style.color = '#0f172a';
+            contentEngines.style.display = 'flex';
+            initEngineTab();
+            logMsg("Switched to Engine Build Config.");
         }
     }
+
+    // ── ENGINE BUILD CONFIG ──
+    let engineConfigs = {}; // Local cache of modified configs
+
+    function initEngineTab() {
+        let sel = document.getElementById('engine-selector');
+        if (sel.options.length > 0) return; // Already initialized
+        
+        // Load engine-registry.js dynamically
+        if (!window.ENGINE_REGISTRY) {
+            let script = document.createElement('script');
+            script.src = 'engine-registry.js';
+            script.onload = () => { populateEngineSelector(); loadEngineConfig(); };
+            document.head.appendChild(script);
+        } else {
+            populateEngineSelector();
+            loadEngineConfig();
+        }
+    }
+
+    function populateEngineSelector() {
+        let sel = document.getElementById('engine-selector');
+        sel.innerHTML = '';
+        if (!window.ENGINE_REGISTRY) return;
+        let keys = window.ENGINE_REGISTRY._keys();
+        keys.forEach(key => {
+            let eng = window.ENGINE_REGISTRY[key];
+            let opt = document.createElement('option');
+            opt.value = key;
+            opt.textContent = eng.icon + ' ' + eng.label;
+            sel.appendChild(opt);
+        });
+    }
+
+    function loadEngineConfig() {
+        let key = document.getElementById('engine-selector').value;
+        if (!key || !window.ENGINE_REGISTRY || !window.ENGINE_REGISTRY[key]) return;
+        
+        let bc = engineConfigs[key] || window.ENGINE_REGISTRY[key].buildConfig || {};
+        let def = window.DEFAULT_BUILD_CONFIG || {};
+        
+        // Mountains
+        setVal('eng-mtn-height', bc.mountainMaxHeight ?? def.mountainMaxHeight ?? 80);
+        setVal('eng-mtn-scale', bc.mountainHeightScale ?? def.mountainHeightScale ?? 0.8);
+        setVal('eng-mtn-noise', bc.mountainNoise ?? def.mountainNoise ?? 0);
+        document.getElementById('eng-mtn-falloff').value = bc.mountainFalloff || def.mountainFalloff || 'smooth';
+        
+        // Roads
+        setVal('eng-road-width', bc.roadWidth ?? def.roadWidth ?? 10);
+        document.getElementById('eng-road-material').value = bc.roadMaterial || def.roadMaterial || 'gravel';
+        document.getElementById('eng-road-barrierL').value = bc.roadBarrierL || def.roadBarrierL || 'STAKES';
+        document.getElementById('eng-road-barrierR').value = bc.roadBarrierR || def.roadBarrierR || 'STAKES';
+        
+        // Water
+        setVal('eng-water-depth', bc.waterDepth ?? def.waterDepth ?? 3);
+        setVal('eng-water-table', bc.waterTableLevel ?? def.waterTableLevel ?? -0.5);
+        document.getElementById('eng-water-type').value = bc.waterType || def.waterType || 'LAKE';
+        document.getElementById('eng-water-color').value = bc.waterColor || def.waterColor || '#38bdf8';
+        
+        // Grass
+        document.getElementById('eng-grass-quality').value = bc.grassQuality || def.grassQuality || 'MED';
+        setVal('eng-grass-rough', bc.grassRoughHeight ?? def.grassRoughHeight ?? 30);
+        setVal('eng-grass-deep', bc.grassDeepHeight ?? def.grassDeepHeight ?? 60);
+        
+        // Environment
+        document.getElementById('eng-sky-color').value = bc.skyColor || def.skyColor || '#87ceeb';
+        setVal('eng-fog', bc.fogDensity ?? def.fogDensity ?? 1.0);
+        setVal('eng-time', bc.timeOfDay ?? def.timeOfDay ?? 12);
+        document.getElementById('eng-biome').value = bc.biome || def.biome || 'GLOBAL';
+        
+        // Terrain
+        setVal('eng-terrain-noise', bc.terrainNoise ?? def.terrainNoise ?? 0);
+    }
+
+    function setVal(id, value) {
+        let el = document.getElementById(id);
+        if (el) el.value = value;
+        // Update display span
+        let spanId = 'eng-val-' + id.replace('eng-', '').replace(/-/g, '-');
+        let span = document.getElementById(spanId);
+        if (span) span.textContent = value;
+    }
+
+    function gatherEngineConfig() {
+        return {
+            mountainMaxHeight: parseFloat(document.getElementById('eng-mtn-height').value),
+            mountainHeightScale: parseFloat(document.getElementById('eng-mtn-scale').value),
+            mountainFalloff: document.getElementById('eng-mtn-falloff').value,
+            mountainNoise: parseFloat(document.getElementById('eng-mtn-noise').value),
+            mountainRidgeSpacing: 6,
+            roadWidth: parseFloat(document.getElementById('eng-road-width').value),
+            roadMaterial: document.getElementById('eng-road-material').value,
+            roadBarrierL: document.getElementById('eng-road-barrierL').value,
+            roadBarrierR: document.getElementById('eng-road-barrierR').value,
+            roadFoundation: document.getElementById('eng-road-material').value === 'asphalt',
+            roadBanking: 0,
+            waterDepth: parseFloat(document.getElementById('eng-water-depth').value),
+            waterTableLevel: parseFloat(document.getElementById('eng-water-table').value),
+            waterType: document.getElementById('eng-water-type').value,
+            waterColor: document.getElementById('eng-water-color').value,
+            waterAsRoad: false,
+            grassQuality: document.getElementById('eng-grass-quality').value,
+            grassRoughHeight: parseFloat(document.getElementById('eng-grass-rough').value),
+            grassDeepHeight: parseFloat(document.getElementById('eng-grass-deep').value),
+            skyColor: document.getElementById('eng-sky-color').value,
+            fogDensity: parseFloat(document.getElementById('eng-fog').value),
+            timeOfDay: parseInt(document.getElementById('eng-time').value),
+            ambientIntensity: 0.4,
+            sunIntensity: 0.8,
+            biome: document.getElementById('eng-biome').value,
+            terrainNoise: parseFloat(document.getElementById('eng-terrain-noise').value),
+            checkpointSpacing: 80,
+            checkpointMax: 5
+        };
+    }
+
+    function saveEngineConfig() {
+        let key = document.getElementById('engine-selector').value;
+        let config = gatherEngineConfig();
+        engineConfigs[key] = config;
+        
+        // Update the live ENGINE_REGISTRY
+        if (window.ENGINE_REGISTRY && window.ENGINE_REGISTRY[key]) {
+            window.ENGINE_REGISTRY[key].buildConfig = config;
+        }
+        
+        // Store in localStorage as override
+        let allOverrides = {};
+        try { allOverrides = JSON.parse(localStorage.getItem('engine_config_overrides') || '{}'); } catch(e) {}
+        allOverrides[key] = config;
+        localStorage.setItem('engine_config_overrides', JSON.stringify(allOverrides));
+        
+        let msg = document.getElementById('engine-log');
+        msg.textContent = '✅ Saved ' + key + ' config (localStorage + live registry)';
+        msg.style.display = 'block';
+        setTimeout(() => { msg.style.display = 'none'; }, 3000);
+        logMsg('Saved engine config: ' + key);
+    }
+
+    function exportAllEngineConfigs() {
+        let output = {};
+        if (window.ENGINE_REGISTRY) {
+            let keys = window.ENGINE_REGISTRY._keys();
+            keys.forEach(key => {
+                output[key] = engineConfigs[key] || window.ENGINE_REGISTRY[key].buildConfig || {};
+            });
+        }
+        let json = JSON.stringify(output, null, 2);
+        navigator.clipboard.writeText(json).then(() => {
+            logMsg('📋 All engine configs copied to clipboard!');
+        }).catch(() => {
+            // Fallback: show in prompt
+            prompt('Copy this JSON:', json);
+        });
+    }
+
+    // Bind slider value displays
+    ['eng-mtn-height', 'eng-mtn-scale', 'eng-mtn-noise', 'eng-road-width',
+     'eng-water-depth', 'eng-water-table', 'eng-grass-rough', 'eng-grass-deep',
+     'eng-fog', 'eng-time', 'eng-terrain-noise'].forEach(id => {
+        let el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('input', () => {
+                let spanMap = {
+                    'eng-mtn-height': 'eng-val-mtn-height',
+                    'eng-mtn-scale': 'eng-val-mtn-scale',
+                    'eng-mtn-noise': 'eng-val-mtn-noise',
+                    'eng-road-width': 'eng-val-road-width',
+                    'eng-water-depth': 'eng-val-water-depth',
+                    'eng-water-table': 'eng-val-water-table',
+                    'eng-grass-rough': 'eng-val-grass-rough',
+                    'eng-grass-deep': 'eng-val-grass-deep',
+                    'eng-fog': 'eng-val-fog',
+                    'eng-time': 'eng-val-time',
+                    'eng-terrain-noise': 'eng-val-terrain-noise'
+                };
+                let span = document.getElementById(spanMap[id]);
+                if (span) span.textContent = el.value;
+            });
+        }
+    });
 
     async function fetchThemes() {
         try {

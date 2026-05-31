@@ -3699,8 +3699,8 @@ window.executeSmartRoad = function() {
                     imTip.setMatrixAt(i, dummy.matrix);
                 }
                 
-                imStake.userData = { isBarrier: true, barrierType: 'STAKES', breakable: true, solid: false };
-                imTip.userData = { isBarrier: true, barrierType: 'STAKES', breakable: true, solid: false };
+                imStake.userData = { isBarrier: true, barrierType: 'STAKES', isTip: false, breakable: true, solid: false };
+                imTip.userData = { isBarrier: true, barrierType: 'STAKES', isTip: true, breakable: true, solid: false };
                 fenceGroup.add(imStake);
                 fenceGroup.add(imTip);
                 return;
