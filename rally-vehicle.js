@@ -577,15 +577,22 @@ function updateVehicle(dt) {
 
     // === FAS1-H1: PER-WHEEL SUSPENSION ===
     // Pre-calculate slope pitch/roll for physical alignment on terrain
-    let slopePitch = 0;
-    let slopeRoll = 0;
+    if (car.slopePitch === undefined) car.slopePitch = 0;
+    if (car.slopeRoll === undefined) car.slopeRoll = 0;
     if (car.onGround) {
         let nx = terrain.normal[0]||0, nz = terrain.normal[1]||0;
-        slopePitch = (nx*Math.sin(car.heading) + nz*Math.cos(car.heading)) * 0.95;
-        slopeRoll = (-nx*Math.cos(car.heading) + nz*Math.sin(car.heading)) * 0.95;
+        let targetSlopePitch = (nx*Math.sin(car.heading) + nz*Math.cos(car.heading)) * 0.95;
+        let targetSlopeRoll = (-nx*Math.cos(car.heading) + nz*Math.sin(car.heading)) * 0.95;
+        // Smoothly follow terrain slope when on ground
+        car.slopePitch = lerp(car.slopePitch, targetSlopePitch, 15 * dt);
+        car.slopeRoll = lerp(car.slopeRoll, targetSlopeRoll, 15 * dt);
+    } else {
+        // Airborne: slowly decay slope pitch and roll towards 0 (gravity alignment)
+        car.slopePitch = lerp(car.slopePitch, 0, 2.0 * dt);
+        car.slopeRoll = lerp(car.slopeRoll, 0, 2.0 * dt);
     }
 
-    let euler = new THREE.Euler(slopePitch, car.heading, slopeRoll, 'YXZ');
+    let euler = new THREE.Euler(car.slopePitch, car.heading, car.slopeRoll, 'YXZ');
     let wheelOffsets = [CFG.WHEEL_FL, CFG.WHEEL_FR, CFG.WHEEL_RL, CFG.WHEEL_RR];
     let avgGroundY = 0;
     let allWheelsGround = true;
@@ -1112,8 +1119,10 @@ function updateVehicle(dt) {
     // === TERRAIN FOLLOWING ===
     let groundY = terrain.z;
     // H7 fix: reduced airborne deadzone from 0.3m to 0.05m
-    // 0.3m caused the car to 'fly' over small bumps without going airborne
-    if(car.position.y > groundY + CFG.CAR_HEIGHT + 0.05) {
+    // Dynamic deadzone: scales with speed to prevent going airborne on steep downhills
+    let speedT = Math.abs(car.speed);
+    let airborneThresh = 0.05 + clamp(speedT * 0.005, 0, 0.20);
+    if(car.position.y > groundY + CFG.CAR_HEIGHT + airborneThresh) {
         car.onGround = false;
         car.velocity.y -= CFG.GRAVITY * CFG.GRAVITY_AIR_MULT * dt;
         car.velocity.y = Math.max(car.velocity.y, -50); // terminal velocity cap
@@ -1243,8 +1252,8 @@ function updateVehicle(dt) {
         car.mesh.position.copy(visualPos);
         car.mesh.rotation.order = "YXZ";
         car.mesh.rotation.y = car.heading;
-        car.mesh.rotation.x = slopePitch;
-        car.mesh.rotation.z = slopeRoll;
+        car.mesh.rotation.x = car.slopePitch;
+        car.mesh.rotation.z = car.slopeRoll;
         
         // Visual tilt is isolated to bodyGroup so wheels stay on the ground
         if (car.mesh.userData.bodyGroup) {
@@ -1598,6 +1607,7 @@ window.rallyVehicle = {
         car.speed=0; car.heading=0; car.active=true;
         car.isDrifting=false; car.gripFactor=0.9;
         car.visualRoll=0; car.visualPitch=0;
+        car.slopeRoll=0; car.slopePitch=0;
         car.prevLateralVel=0; car.prevForwardVel=0;
         car.displaySpeed=0; car.terrainType='ROUGH';
         car.surfaceKey='DIRT'; car.surfaceName='DIRT';
