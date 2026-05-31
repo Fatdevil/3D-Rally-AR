@@ -579,23 +579,12 @@ function updateVehicle(dt) {
     // Pre-calculate slope pitch/roll for physical alignment on terrain
     if (car.slopePitch === undefined) car.slopePitch = 0;
     if (car.slopeRoll === undefined) car.slopeRoll = 0;
-    if (car.onGround) {
-        let nx = terrain.normal[0]||0, nz = terrain.normal[1]||0;
-        // Negate pitch and roll to correct the orientation sign (so nose points down when going downhill)
-        let targetSlopePitch = -(nx*Math.sin(car.heading) + nz*Math.cos(car.heading)) * 0.95;
-        let targetSlopeRoll = -(-nx*Math.cos(car.heading) + nz*Math.sin(car.heading)) * 0.95;
-        // Smoothly follow terrain slope when on ground
-        car.slopePitch = lerp(car.slopePitch, targetSlopePitch, 15 * dt);
-        car.slopeRoll = lerp(car.slopeRoll, targetSlopeRoll, 15 * dt);
-    } else {
-        // Airborne: pitch nose toward the velocity trajectory (descend = nose down)
-        // hSpeed = horizontal speed, velocity.y < 0 when falling
-        // atan2(vy, hSpeed) is negative when falling → negate to get nose-down pitch.
-        // Lerp factor 2.5 matches the decay-to-zero speed so orientation is smooth.
+    // PITCH/ROLL ON GROUND: calculated AFTER the suspension loop (needs car.wheelGroundY).
+    // PITCH/ROLL IN AIR: stay here since only velocity vector is needed.
+    if (!car.onGround) {
+        // Airborne: pitch nose toward velocity trajectory (descend = nose down)
         let hSpeedAir = Math.sqrt(car.velocity.x*car.velocity.x + car.velocity.z*car.velocity.z);
-        let trajPitch = Math.atan2(car.velocity.y, Math.max(hSpeedAir, 0.5)); // radians, <0 when falling
-        // Negate: negative trajPitch (falling) should give negative slopePitch = nose down
-        // (matches ground formula sign convention where downhill = negative slopePitch)
+        let trajPitch = Math.atan2(car.velocity.y, Math.max(hSpeedAir, 0.5));
         car.slopePitch = lerp(car.slopePitch, -trajPitch * 0.95, 2.5 * dt);
         car.slopeRoll  = lerp(car.slopeRoll, 0, 2.0 * dt);
     }
@@ -647,6 +636,30 @@ function updateVehicle(dt) {
         if (car.normalForce[i] < 1) allWheelsGround = false;
     }
     avgGroundY /= 4;
+
+    // === WHEEL-CONTACT BODY ORIENTATION ===
+    // Replaces terrain.normal-based pitch which under-rotated on steep slopes
+    // (normal is a scaled projection, not the actual angle) and used only the
+    // centre point — so a 4.2m car had its nose buried on uphills.
+    // atan2 from actual front/rear wheel ground heights gives the true body angle.
+    if (car.onGround) {
+        let frontGroundY = (car.wheelGroundY[0] + car.wheelGroundY[1]) * 0.5; // FL + FR
+        let rearGroundY  = (car.wheelGroundY[2] + car.wheelGroundY[3]) * 0.5; // RL + RR
+        let leftGroundY  = (car.wheelGroundY[0] + car.wheelGroundY[2]) * 0.5; // FL + RL
+        let rightGroundY = (car.wheelGroundY[1] + car.wheelGroundY[3]) * 0.5; // FR + RR
+
+        // FL[2]=+1.3, RL[2]=-1.3 → wheelbaseZ=2.6 m; FR[0]-FL[0]=2.0 m
+        let wheelbaseZ = CFG.WHEEL_FL[2] - CFG.WHEEL_RL[2];
+        let trackX     = CFG.WHEEL_FR[0] - CFG.WHEEL_FL[0];
+
+        // Positive when front is higher (uphill): negate so uphill = nose up (rotation.x < 0 in YXZ)
+        let targetSlopePitch = -Math.atan2(frontGroundY - rearGroundY, wheelbaseZ);
+        // Positive when right side is higher: lean right
+        let targetSlopeRoll  =  Math.atan2(rightGroundY - leftGroundY, trackX);
+
+        car.slopePitch = lerp(car.slopePitch, targetSlopePitch, 15 * dt);
+        car.slopeRoll  = lerp(car.slopeRoll,  targetSlopeRoll,  15 * dt);
+    }
 
     // === FAS2-H5: ANTI-ROLL BARS ===
     // ARB resists body roll by transferring load between left/right wheels.
@@ -1142,10 +1155,10 @@ function updateVehicle(dt) {
     // terrain.z was sampled at the OLD position at the top of this function.
     // On uphills the car moves forward → ground is HIGHER at new pos → using old
     // groundY would snap the car DOWN into the mountain. Re-sample fixes this.
-    let groundTerrain = (typeof window.localGetTerrainAt === 'function')
-        ? window.localGetTerrainAt(car.position.x, -car.position.z)
-        : terrain;
-    let groundY = groundTerrain.z;
+    // Use avgGroundY (average of four wheel contact points) instead of a single centre sample.
+    // Gives correct height at crests (lifts slightly) and dips (settles in).
+    // Falls back to terrain.z if suspension loop hasn't populated it yet (first frame).
+    let groundY = (avgGroundY !== 0) ? avgGroundY : terrain.z;
     if (!car._landingGrace) car._landingGrace = 0;
     if (car._landingGrace > 0) car._landingGrace -= dt;
 
