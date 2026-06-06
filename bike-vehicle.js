@@ -31,7 +31,7 @@ const CFG = {
     suspC:          19,
     contactGrace:   0.35,
 
-    enginePower:    35,
+    enginePower:    50,
     brakePower:     30,
     drag:           0.02,
     lateralFriction:     0.92,
@@ -598,7 +598,7 @@ function updatePhysics(dt) {
 
         // Max speed limiter
         let surfMaxSpeed = surface.maxSpeed !== undefined ? surface.maxSpeed : 1;
-        let maxKmh = 130 * surfMaxSpeed;
+        let maxKmh = 170 * surfMaxSpeed;
         let maxMs = maxKmh / 3.6;
         if (_speed > maxMs) {
             let scale = maxMs / _speed;
@@ -760,9 +760,9 @@ function emitSpray(count, pos, forward, right, speed, steerAmt, surfaceType) {
         let p = _sprayParticles[i];
         if (p.life > 0) continue;
 
-        // Spawn at rear wheel
+        // Spawn at rear wheel ground contact
         let spawnPos = pos.clone().addScaledVector(forward, -1.1); // rear wheel offset
-        spawnPos.y += 0.1;
+        spawnPos.y -= _wheelRadius * 0.85; // bottom of tire, not hub
 
         // Spray direction: backwards + sideways + up
         let sideSign = (Math.random() > 0.5 ? 1 : -1);
