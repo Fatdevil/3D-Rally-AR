@@ -474,6 +474,67 @@
                 sunIntensity: 0.85,
                 biome: 'GLOBAL'
             }
+        },
+
+        // ═══════════════════════════════════════
+        // 🏍️ MOTOCROSS — Dirt bike, jumps, wheelies
+        // ═══════════════════════════════════════
+        motocross: {
+            label: 'Motocross',
+            icon: '🏍️',
+            description: 'Dirt bike with jumps, wheelies and crashes',
+            tools: ['road', 'mountain', 'tree', 'water', 'jump', 'eraser'],
+            stamps: { tree: '🌳' },
+            terrain: {
+                mountainMaxHeight: 30,
+                mountainTexture: 'rock',
+                groundType: 'dirt',
+                waterMode: 'bunker',
+                roadType: 'dirt_track'
+            },
+            physics: {
+                profileKey: 'MOTOCROSS'
+            },
+            powerClasses: [
+                { label: '125cc', emoji: '🐢', desc: 'Rookie',  multiplier: 0.6 },
+                { label: '250cc', emoji: '🏍️', desc: 'Sport',   multiplier: 1.0 },
+                { label: '450cc', emoji: '🔥', desc: 'FACTORY!', multiplier: 1.6 }
+            ],
+            roadConfig: {
+                hasBarriers: false,
+                hasCenterLine: false,
+                width: 'narrow'
+            },
+            buildConfig: {
+                mountainFalloff: 'smooth',
+                mountainMaxHeight: 35,
+                mountainHeightScale: 0.6,
+                mountainNoise: 0.05,
+                mountainRidgeSpacing: 5,
+                roadWidth: 7,
+                roadMaterial: 'dirt',
+                roadBarrierL: 'NONE',
+                roadBarrierR: 'NONE',
+                roadFoundation: false,
+                roadBanking: 2,
+                waterDepth: 2,
+                waterAsRoad: false,
+                terrainNoise: 0.06,
+                checkpointSpacing: 60,
+                checkpointMax: 6,
+                grassQuality: 'MED',
+                grassRoughHeight: 40,
+                grassDeepHeight: 70,
+                waterTableLevel: -0.5,
+                waterType: 'LAKE',
+                waterColor: '#38bdf8',
+                skyColor: '#87ceeb',
+                fogDensity: 0.8,
+                timeOfDay: 14,
+                ambientIntensity: 0.45,
+                sunIntensity: 0.85,
+                biome: 'GLOBAL'
+            }
         }
     };
 
