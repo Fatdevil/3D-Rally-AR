@@ -159,6 +159,10 @@
                 await sleep(50);
             }
 
+            // Sync terrain chunks and refresh grass shells
+            if (window._terrainChunks) window._terrainChunks.syncAll();
+            if (window._terrainShells) window._terrainShells.refresh();
+
             pcb(total, total, '✅ World built!');
             console.log('🎨 ScanBuilder: Build complete!');
 
@@ -282,6 +286,7 @@
     function updateTerrainGeometry() {
         let geo = window._arcadePlaneGeo || (window.G && window.G.planeGeo);
         if (!geo) return;
+        if (window.clampTerrainBorders) window.clampTerrainBorders(geo);
         geo.attributes.position.needsUpdate = true;
         geo.computeVertexNormals();
         geo.computeBoundingBox();

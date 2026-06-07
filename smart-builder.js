@@ -884,11 +884,14 @@ window.executeSmartBunker = function() {
     }
 
 
+    if (window.clampTerrainBorders) window.clampTerrainBorders(window._arcadePlaneGeo);
     window._arcadePlaneGeo.attributes.position.needsUpdate = true;
     window._arcadePlaneGeo.computeVertexNormals();
     window._arcadePlaneGeo.computeBoundingBox();
     window._arcadePlaneGeo.computeBoundingSphere();
     window.snapObjectsToGround();
+    if (window._terrainChunks) window._terrainChunks.syncAll();
+    if (window._terrainShells) window._terrainShells.refresh();
 
     if(window.slopeOverlayActive) window.updateSlopeOverlay();
     if(window.contourLinesActive) window.updateContourLines();
@@ -1100,11 +1103,14 @@ window.executeSmartFairway = function() {
     }
     } // end if(difficulty !== 'FLAT')
 
+    if (window.clampTerrainBorders) window.clampTerrainBorders(window._arcadePlaneGeo);
     window._arcadePlaneGeo.attributes.position.needsUpdate = true;
     window._arcadePlaneGeo.computeVertexNormals();
     window._arcadePlaneGeo.computeBoundingBox();
     window._arcadePlaneGeo.computeBoundingSphere();
     window.snapObjectsToGround();
+    if (window._terrainChunks) window._terrainChunks.syncAll();
+    if (window._terrainShells) window._terrainShells.refresh();
 
     if(window.slopeOverlayActive) window.updateSlopeOverlay();
     if(window.contourLinesActive) window.updateContourLines();
@@ -1239,11 +1245,14 @@ window.executeSmartTee = function() {
         }
     }
 
+    if (window.clampTerrainBorders) window.clampTerrainBorders(window._arcadePlaneGeo);
     window._arcadePlaneGeo.attributes.position.needsUpdate = true;
     window._arcadePlaneGeo.computeVertexNormals();
     window._arcadePlaneGeo.computeBoundingBox();
     window._arcadePlaneGeo.computeBoundingSphere();
     window.snapObjectsToGround();
+    if (window._terrainChunks) window._terrainChunks.syncAll();
+    if (window._terrainShells) window._terrainShells.refresh();
 
     // === 3. AUTO-PLACE TEE MARKERS ===
     // Determine which tees to place
@@ -2287,11 +2296,14 @@ window.executeSplineSmartGreen = function() {
         }
     }
 
+    if (window.clampTerrainBorders) window.clampTerrainBorders(window._arcadePlaneGeo);
     window._arcadePlaneGeo.attributes.position.needsUpdate = true;
     window._arcadePlaneGeo.computeVertexNormals();
     window._arcadePlaneGeo.computeBoundingBox();
     window._arcadePlaneGeo.computeBoundingSphere();
     window.snapObjectsToGround();
+    if (window._terrainChunks) window._terrainChunks.syncAll();
+    if (window._terrainShells) window._terrainShells.refresh();
 
     // Refresh overlays
     if(window.slopeOverlayActive) window.updateSlopeOverlay();
@@ -2944,11 +2956,14 @@ window.executeSplineSmartGreen = function() {
         }
 
         // Update terrain
+        if (window.clampTerrainBorders) window.clampTerrainBorders(window._arcadePlaneGeo);
         window._arcadePlaneGeo.attributes.position.needsUpdate = true;
         window._arcadePlaneGeo.computeVertexNormals();
         window._arcadePlaneGeo.computeBoundingBox();
         window._arcadePlaneGeo.computeBoundingSphere();
         if (window.snapObjectsToGround) window.snapObjectsToGround();
+        if (window._terrainChunks) window._terrainChunks.syncAll();
+        if (window._terrainShells) window._terrainShells.refresh();
         if (window.slopeOverlayActive) window.updateSlopeOverlay();
         if (window.contourLinesActive) window.updateContourLines();
         if (window.elevationHeatmapActive) window.updateElevationHeatmap();
@@ -3438,6 +3453,7 @@ window.executeSmartRoad = function() {
     }
 
     // Update geometry
+    if (window.clampTerrainBorders) window.clampTerrainBorders(window._arcadePlaneGeo);
     window._arcadePlaneGeo.attributes.position.needsUpdate = true;
     window._arcadePlaneGeo.computeVertexNormals();
     window._arcadePlaneGeo.computeBoundingBox();
@@ -3557,6 +3573,7 @@ window.executeSmartRoad = function() {
             }
         }
         if (hasBumps) {
+            if (window.clampTerrainBorders) window.clampTerrainBorders(window._arcadePlaneGeo);
             window._arcadePlaneGeo.attributes.position.needsUpdate = true;
             window._arcadePlaneGeo.computeVertexNormals();
         }
@@ -3850,6 +3867,8 @@ window.executeSmartRoad = function() {
         let lastPt = smartGreenPoints[smartGreenPoints.length - 1];
         window._lastRoadEndPoint = { x: lastPt.x, y: lastPt.y, z: lastPt.z };
     }
+    if (window._terrainChunks) window._terrainChunks.syncAll();
+    if (window._terrainShells) window._terrainShells.refresh();
     clearSmartGreen();
 };
 
@@ -3919,9 +3938,12 @@ window.executeRidgeMountain = function() {
     }
     
     if (modified) {
+        if (window.clampTerrainBorders) window.clampTerrainBorders(window.terrainGeometry);
         window.terrainGeometry.attributes.position.needsUpdate = true;
         window.terrainGeometry.computeVertexNormals();
         if(window.updateTerrainCollider) window.updateTerrainCollider();
+        if (window._terrainChunks) window._terrainChunks.syncAll();
+        if (window._terrainShells) window._terrainShells.refresh();
     }
     
     clearSmartGreen();
@@ -4053,6 +4075,7 @@ window.executeSplineMountain = function() {
     });
 
     // Uppdatera geometri
+    if (window.clampTerrainBorders) window.clampTerrainBorders(window._arcadePlaneGeo);
     window._arcadePlaneGeo.attributes.position.needsUpdate = true;
     window._arcadePlaneGeo.computeVertexNormals();
     window._arcadePlaneGeo.computeBoundingBox();
@@ -4061,6 +4084,10 @@ window.executeSplineMountain = function() {
     // Uppdatera skuggor/snäppning/vatten
     if (typeof window.snapObjectsToGround === 'function') window.snapObjectsToGround();
     if (typeof window.rebuildWaterMask === 'function') window.rebuildWaterMask(true);
+
+    // Uppdatera chunks/shells
+    if (window._terrainChunks) window._terrainChunks.syncAll();
+    if (window._terrainShells) window._terrainShells.refresh();
 
     // Rensa spline-punkter
     if (typeof window.clearSpline === 'function') {

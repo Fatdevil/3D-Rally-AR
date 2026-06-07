@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head><title>Car GLB Inspector</title></head>
+<body style="background:#111;color:#0f0;font-family:monospace;padding:20px">
+<h2>GLB Model Inspector — cartoon_car.glb</h2>
+<pre id="log">Loading...</pre>
+<div id="viewport" style="width:800px;height:600px;border:1px solid #333"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+var log = document.getElementById('log');
+function addLog(msg) { log.textContent += '\n' + msg; }
+
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0x222222);
+var camera = new THREE.PerspectiveCamera(45, 800/600, 0.01, 100);
+camera.position.set(3, 2, 3);
+var renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(800, 600);
+document.getElementById('viewport').appendChild(renderer.domElement);
+var controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+var dl = new THREE.DirectionalLight(0xffffff, 1);
+dl.position.set(5, 10, 5);
+scene.add(dl);
+scene.add(new THREE.GridHelper(10, 10));
+
+var loader = new THREE.GLTFLoader();
+loader.load('cartoon_car.glb', function(gltf) {
+    var model = gltf.scene;
+    addLog('=== GLB LOADED ===');
+
+    var box = new THREE.Box3().setFromObject(model);
+    var size = new THREE.Vector3();
+    box.getSize(size);
+    addLog('Size: ' + size.x.toFixed(3) + ' x ' + size.y.toFixed(3) + ' x ' + size.z.toFixed(3));
+    addLog('Min: ' + box.min.x.toFixed(3) + ', ' + box.min.y.toFixed(3) + ', ' + box.min.z.toFixed(3));
+    addLog('Max: ' + box.max.x.toFixed(3) + ', ' + box.max.y.toFixed(3) + ', ' + box.max.z.toFixed(3));
+
+    addLog('\n=== HIERARCHY ===');
+    model.traverse(function(child) {
+        var depth = 0; var p = child.parent;
+        while (p) { depth++; p = p.parent; }
+        var indent = ''; for (var i = 0; i < depth; i++) indent += '  ';
+        var info = indent + (child.name || '(unnamed)') + ' [' + child.type + ']';
+        if (child.isMesh) info += ' (' + child.geometry.attributes.position.count + ' verts)';
+        if (child.material) {
+            var mat = child.material;
+            if (mat.map) info += ' [has texture]';
+            if (mat.color) info += ' [color: #' + mat.color.getHexString() + ']';
+        }
+        addLog(info);
+    });
+
+    addLog('\n=== ANIMATIONS (' + gltf.animations.length + ') ===');
+    gltf.animations.forEach(function(clip, i) {
+        addLog('  [' + i + '] "' + clip.name + '" dur: ' + clip.duration.toFixed(2) + 's');
+    });
+
+    scene.add(model);
+    var center = new THREE.Vector3();
+    box.getCenter(center);
+    controls.target.copy(center);
+
+    addLog('\n=== DONE ===');
+}, function(xhr) {
+    addLog('Loading: ' + (xhr.loaded / 1024).toFixed(0) + ' KB');
+}, function(err) {
+    addLog('ERROR: ' + err.message);
+});
+
+function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>

@@ -11,11 +11,11 @@ let touchControlsEl = null;
 
 const CFG = {
     MASS: 1100, 
-    ENGINE_POWER: 55000,  // Arcade power unit (not Nm or N — scales with gear/turbo/falloff)
+    ENGINE_POWER: 75000,  // Arcade power unit — boosted for more punch
     MAX_SPEED: 80, // m/s (ca 288 km/h i absolut max teoretisk topfart)
     BRAKE_FORCE: 65000, 
     REVERSE_MAX: 15,
-    DRAG: 0.995, // Minskade luftmotståndet avsevärt för att tillåta högre toppfarter
+    DRAG: 0.997, // Lower air drag for higher top speed
     HANDBRAKE_DRAG: 0.92,
     MAX_STEER: 28, MIN_STEER: 3, WHEELBASE: 2.7,
     DRIFT_STEER_BONUS: 1.5, HANDBRAKE_GRIP: 0.05,
@@ -49,7 +49,7 @@ const CFG = {
     SHIFT_DOWN_RPM: 3200,
     SHIFT_TIME: 0.15,          // seconds — sequential gearbox shift delay
     TURBO_LAG: 0.3,            // seconds to build full boost
-    TURBO_BOOST: 1.35,         // max torque multiplier from turbo
+    TURBO_BOOST: 1.50,         // max torque multiplier from turbo — more boost!
     // Torque curve: [rpm_fraction, torque_fraction] — sampled & interpolated
     TORQUE_CURVE: [[0, 0.45], [0.15, 0.65], [0.3, 0.82], [0.5, 0.95], [0.65, 1.0], [0.8, 0.98], [0.9, 0.90], [1.0, 0.75]],
     // FAS2-K3: Differential (LSD)
@@ -128,258 +128,82 @@ function createCarMesh() {
     // All geometry must be offset DOWN by CAR_HEIGHT so wheels touch ground
     let yOff = -CFG.CAR_HEIGHT; // -0.35
 
-    // Determine body color from active profile
-    let profileKey = (window.rallyCarProfiles && window.rallyCarProfiles.getCurrentProfile()) || 'GROUP_A';
-    let bodyColor = CAR_PROFILE_COLORS[profileKey] || 0xdc2626;
-
-    // === MATERIALS ===
-    let bodyMat = new THREE.MeshLambertMaterial({ color: bodyColor });
-    let darkMat = new THREE.MeshLambertMaterial({ color: 0x1e293b }); // dark trim
-    let accentMat = new THREE.MeshLambertMaterial({ color: 0xe2e8f0 }); // lights, details
-    let glassMat = new THREE.MeshLambertMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.4 });
-    let carbonMat = new THREE.MeshLambertMaterial({ color: 0x334155 }); // carbon/underbody
-
-    // Store materials for runtime color swap
-    g.userData.bodyMat = bodyMat;
-
-    // === BODY SHELL ===
-    // Main body (lower)
-    let bodyLower = new THREE.Mesh(
-        new THREE.BoxGeometry(1.85, 0.45, 4.2),
-        bodyMat
-    );
-    bodyLower.position.set(0, 0.42 + yOff, 0);
-    g.add(bodyLower);
-
-    // Cabin (upper, narrower, set back)
-    let cabin = new THREE.Mesh(
-        new THREE.BoxGeometry(1.65, 0.42, 1.8),
-        bodyMat
-    );
-    cabin.position.set(0, 0.87 + yOff, -0.15);
-    g.add(cabin);
-
-    // === HOOD (front, sloped) ===
-    let hoodGeo = new THREE.BoxGeometry(1.7, 0.12, 1.4);
-    let hood = new THREE.Mesh(hoodGeo, bodyMat);
-    hood.position.set(0, 0.72 + yOff, 1.2);
-    hood.rotation.x = -0.08; // slight downward slope
-    g.add(hood);
-
-    // Hood scoop (rally intake)
-    let scoop = new THREE.Mesh(
-        new THREE.BoxGeometry(0.4, 0.15, 0.5),
-        darkMat
-    );
-    scoop.position.set(0, 0.82 + yOff, 1.0);
-    g.add(scoop);
-
-    // === REAR DECK ===
-    let rearDeck = new THREE.Mesh(
-        new THREE.BoxGeometry(1.7, 0.1, 0.8),
-        bodyMat
-    );
-    rearDeck.position.set(0, 0.72 + yOff, -1.5);
-    rearDeck.rotation.x = 0.06;
-    g.add(rearDeck);
-
-    // === WINDSHIELD (front) ===
-    let windshield = new THREE.Mesh(
-        new THREE.BoxGeometry(1.55, 0.5, 0.06),
-        glassMat
-    );
-    windshield.position.set(0, 0.9 + yOff, 0.75);
-    windshield.rotation.x = 0.35; // angled
-    g.add(windshield);
-
-    // Rear window
-    let rearWindow = new THREE.Mesh(
-        new THREE.BoxGeometry(1.45, 0.4, 0.06),
-        glassMat
-    );
-    rearWindow.position.set(0, 0.88 + yOff, -1.0);
-    rearWindow.rotation.x = -0.3;
-    g.add(rearWindow);
-
-    // Side windows (left + right)
-    for (let side of [-1, 1]) {
-        let sideWin = new THREE.Mesh(
-            new THREE.BoxGeometry(0.04, 0.32, 1.2),
-            glassMat
-        );
-        sideWin.position.set(side * 0.83, 0.9 + yOff, -0.1);
-        g.add(sideWin);
-    }
-
-    // === FRONT BUMPER ===
-    let frontBumper = new THREE.Mesh(
-        new THREE.BoxGeometry(1.9, 0.22, 0.25),
-        darkMat
-    );
-    frontBumper.position.set(0, 0.28 + yOff, 2.05);
-    g.add(frontBumper);
-
-    // Front splitter
-    let splitter = new THREE.Mesh(
-        new THREE.BoxGeometry(1.6, 0.04, 0.15),
-        carbonMat
-    );
-    splitter.position.set(0, 0.25 + yOff, 2.1);
-    g.add(splitter);
-
-    // === REAR BUMPER ===
-    let rearBumper = new THREE.Mesh(
-        new THREE.BoxGeometry(1.9, 0.25, 0.2),
-        darkMat
-    );
-    rearBumper.position.set(0, 0.3 + yOff, -2.05);
-    g.add(rearBumper);
-
-    // Rear diffuser
-    let diffuser = new THREE.Mesh(
-        new THREE.BoxGeometry(1.4, 0.06, 0.2),
-        carbonMat
-    );
-    diffuser.position.set(0, 0.25 + yOff, -2.1);
-    g.add(diffuser);
-
-    // === HEADLIGHTS (2× front) ===
-    let headlightLights = [];
-    let headlightMeshes = [];
-    let lightsActive = (typeof car !== 'undefined' && car && car.headlightsOn);
-    for (let side of [-0.7, 0.7]) {
-        let lightMat = new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: lightsActive ? 0xfffee0 : 0x000000 });
-        let headlight = new THREE.Mesh(
-            new THREE.BoxGeometry(0.35, 0.12, 0.08),
-            lightMat
-        );
-        headlight.position.set(side, 0.55 + yOff, 2.08);
-        g.add(headlight);
-        headlightMeshes.push(headlight);
-
-        // Actual Three.js SpotLight for headlight beam
-        let spotLight = new THREE.SpotLight(0xfffee0, lightsActive ? 15.0 : 0.0, 50, Math.PI / 4, 0.5, 0.8);
-        spotLight.position.set(side, 0.55 + yOff, 2.1);
-        spotLight.castShadow = true;
-        spotLight.shadow.mapSize.width = 512;
-        spotLight.shadow.mapSize.height = 512;
-        spotLight.shadow.camera.near = 0.5;
-        spotLight.shadow.camera.far = 50;
-
-        let target = new THREE.Object3D();
-        target.position.set(side, 0.55 + yOff, 15.0); // 15m in front
-        
-        g.add(spotLight);
-        g.add(target);
-        spotLight.target = target;
-        
-        headlightLights.push(spotLight);
-    }
-    g.userData.headlights = headlightLights;
-    g.userData.headlightMeshes = headlightMeshes;
-
-    // === TAILLIGHTS (2× rear) ===
-    for (let side of [-0.7, 0.7]) {
-        let taillight = new THREE.Mesh(
-            new THREE.BoxGeometry(0.3, 0.1, 0.08),
-            new THREE.MeshLambertMaterial({ color: 0xef4444 })
-        );
-        taillight.position.set(side, 0.55 + yOff, -2.08);
-        g.add(taillight);
-    }
-
-    // === SPOILER (rear wing) ===
-    // Wing stands
-    for (let side of [-0.5, 0.5]) {
-        let stand = new THREE.Mesh(
-            new THREE.BoxGeometry(0.06, 0.25, 0.06),
-            carbonMat
-        );
-        stand.position.set(side, 0.98 + yOff, -1.7);
-        g.add(stand);
-    }
-    // Wing blade
-    let wing = new THREE.Mesh(
-        new THREE.BoxGeometry(1.4, 0.04, 0.3),
-        carbonMat
-    );
-    wing.position.set(0, 1.13 + yOff, -1.7);
-    wing.rotation.x = -0.12;
-    g.add(wing);
-
-    // === SIDE SKIRTS ===
-    for (let side of [-1, 1]) {
-        let skirt = new THREE.Mesh(
-            new THREE.BoxGeometry(0.08, 0.12, 3.8),
-            darkMat
-        );
-        skirt.position.set(side * 0.95, 0.28 + yOff, 0);
-        g.add(skirt);
-    }
-
-    // === WHEEL ARCHES (flared fenders) ===
-    let archGeo = new THREE.BoxGeometry(0.12, 0.2, 0.7);
-    for (let i = 0; i < 4; i++) {
-        let sx = (i % 2 === 0) ? -1 : 1;
-        let sz = (i < 2) ? 1.3 : -1.3;
-        let arch = new THREE.Mesh(archGeo, bodyMat);
-        arch.position.set(sx * 0.96, 0.52 + yOff, sz);
-        g.add(arch);
-    }
-
-    // === ROOF RAIL / LIGHT BAR (rally style) ===
-    let lightBar = new THREE.Mesh(
-        new THREE.BoxGeometry(1.2, 0.06, 0.12),
-        accentMat
-    );
-    lightBar.position.set(0, 1.12 + yOff, 0.6);
-    g.add(lightBar);
-
-    // Rally number plate (front)
-    let plate = new THREE.Mesh(
-        new THREE.BoxGeometry(0.5, 0.3, 0.02),
-        accentMat
-    );
-    plate.position.set(0, 0.45 + yOff, 2.1);
-    g.add(plate);
-
-    // Underbody removed — not visible from chase cam and caused ground clipping
-
-    // === GATHER BODY PARTS INTO SUBGROUP ===
-    // All children added to g so far are body parts. Move them to a separate CarBody group
-    // so we can tilt the body visually without tilting the wheels.
+    // === BODY GROUP (will be filled by GLB or fallback) ===
     let bodyGroup = new THREE.Group();
     bodyGroup.name = 'CarBody';
     bodyGroup.rotation.order = 'YXZ';
-    
-    let children = [...g.children];
-    children.forEach(child => {
-        g.remove(child);
-        bodyGroup.add(child);
-    });
     g.add(bodyGroup);
     g.userData.bodyGroup = bodyGroup;
 
+    // Store a dummy bodyMat for runtime color swap compatibility
+    let bodyMat = new THREE.MeshLambertMaterial({ color: 0xdc2626 });
+    g.userData.bodyMat = bodyMat;
+
+    // Headlight system (kept for compatibility)
+    let headlightLights = [];
+    let headlightMeshes = [];
+    g.userData.headlights = headlightLights;
+    g.userData.headlightMeshes = headlightMeshes;
+
+    // === Load cartoon car GLB async ===
+    if (typeof THREE.GLTFLoader !== 'undefined') {
+        var loader = new THREE.GLTFLoader();
+        loader.load('cartoon_car.glb', function(gltf) {
+            var model = gltf.scene;
+            // GLB is ~1m long, physics car is ~4.2m → scale ~5x
+            model.scale.setScalar(5);
+            // Raise model so bottom sits above wheel axles
+            model.position.set(0, 1.1, 0);
+            // Rotate to align nose with physics forward (+Z) and level roll
+            model.rotation.set(0, -Math.PI / 2 - 0.37, 0.05);
+            // Shadows
+            model.traverse(function(child) {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                }
+            });
+            bodyGroup.add(model);
+            console.log('🏎️ Cartoon car GLB loaded!');
+        }, undefined, function(err) {
+            console.warn('Car GLB load failed, using fallback:', err);
+            // Fallback: simple box body
+            let fallbackBody = new THREE.Mesh(
+                new THREE.BoxGeometry(1.85, 0.45, 4.2),
+                bodyMat
+            );
+            fallbackBody.position.set(0, 0.42 + yOff, 0);
+            bodyGroup.add(fallbackBody);
+            let fallbackCabin = new THREE.Mesh(
+                new THREE.BoxGeometry(1.65, 0.42, 1.8),
+                bodyMat
+            );
+            fallbackCabin.position.set(0, 0.87 + yOff, -0.15);
+            bodyGroup.add(fallbackCabin);
+        });
+    }
+
     // === WHEELS (same API: { steer, spin }) ===
     car.wheels = [];
-    let wheelGeo = new THREE.CylinderGeometry(0.34, 0.34, 0.28, 16);
+    let accentMat = new THREE.MeshLambertMaterial({ color: 0xe2e8f0 });
+    let wheelGeo = new THREE.CylinderGeometry(0.50, 0.50, 0.22, 16);
     wheelGeo.rotateZ(Math.PI / 2);
     let wheelMat = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
 
-    // Rim: 5-spoke star effect using small boxes
-    let rimGeo = new THREE.CylinderGeometry(0.22, 0.22, 0.30, 8);
+    // Rim
+    let rimGeo = new THREE.CylinderGeometry(0.32, 0.32, 0.24, 8);
     rimGeo.rotateZ(Math.PI / 2);
     let rimMat = new THREE.MeshLambertMaterial({ color: 0xd4d4d8 });
 
     // Rim center cap
-    let capGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.32, 8);
+    let capGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.26, 8);
     capGeo.rotateZ(Math.PI / 2);
 
     let wheelPos = [
-        [-1.0, 0.34 + yOff,  1.3],  // FL
-        [ 1.0, 0.34 + yOff,  1.3],  // FR
-        [-1.0, 0.34 + yOff, -1.3],  // RL
-        [ 1.0, 0.34 + yOff, -1.3]   // RR
+        [-1.15, 0.50 + yOff,  1.4],  // FL
+        [ 1.15, 0.50 + yOff,  1.4],  // FR
+        [-1.15, 0.50 + yOff, -1.4],  // RL
+        [ 1.15, 0.50 + yOff, -1.4]   // RR
     ];
 
     for (let i = 0; i < 4; i++) {

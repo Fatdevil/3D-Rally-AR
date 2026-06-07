@@ -94,7 +94,7 @@
         </div>
 
         <!-- CAR PROFILE -->
-        <div style="margin-bottom:18px;">
+        <div id="lobby-car-container" style="margin-bottom:18px;">
             <label style="font-size:11px; font-weight:700; color:#f472b6; text-transform:uppercase; letter-spacing:1px;">🏎️ Car</label>
             <select id="lobby-car" style="width:100%; background:#1e293b; border:1px solid #334155; border-radius:10px; color:#e2e8f0; padding:10px 12px; font-size:13px; font-weight:600; cursor:pointer; margin-top:6px; outline:none;">
                 <option value="GROUP_A">🏎️ Group A (4WD balanced)</option>
@@ -106,7 +106,7 @@
         </div>
 
         <!-- TYRES -->
-        <div style="margin-bottom:24px;">
+        <div id="lobby-tyres-container" style="margin-bottom:24px;">
             <label style="font-size:11px; font-weight:700; color:#ef4444; text-transform:uppercase; letter-spacing:1px;">🔴 Tyres</label>
             <select id="lobby-tyres" style="width:100%; background:#1e293b; border:1px solid #334155; border-radius:10px; color:#e2e8f0; padding:10px 12px; font-size:13px; font-weight:600; cursor:pointer; margin-top:6px; outline:none;">
                 <option value="SOFT">🔴 Soft (Max grip, fast wear)</option>
@@ -137,6 +137,8 @@
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fflate@0.6.9/umd/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/FBXLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
 <script src="arcade-auth.js"></script>
 <script src="arcade-api-service.js"></script>
@@ -149,6 +151,8 @@
 <script src="rally-respawn.js"></script>
 <script src="rally-vehicle.js"></script>
 <script src="helicopter-vehicle.js"></script>  <!-- Helicopter physics -->
+<script src="plane-vehicle.js"></script>            <!-- Stunt plane physics -->
+<script src="bike-vehicle.js"></script>             <!-- Motocross bike physics -->
 <script src="terrain-shader-utils.js"></script>    <!-- PHASE 2 — procedural textures -->
 <script src="terrain-shader-material.js"></script> <!-- PHASE 2 — GLSL + ShaderMaterial -->
 <script src="terrain-shader-geo.js"></script>       <!-- PHASE 2 — splat map, vertex colors -->
@@ -988,19 +992,38 @@
                 document.getElementById('loading').style.opacity = '0';
                 setTimeout(() => document.getElementById('loading').style.display = 'none', 500);
 
+                let levelConfig = ArcadeStorage.loadCustomLevel() || ArcadeStorage.loadCompressedLevel();
+
                 // Show Pre-Race Lobby (skip if ?debug=true auto-starts)
                 let isDebug = new URLSearchParams(window.location.search).get('debug') === 'true';
                 if (!isDebug) {
                     // Pre-select condition based on saved environment
-                    let envLevel = ArcadeStorage.loadCustomLevel() || ArcadeStorage.loadCompressedLevel();
-                    if (envLevel && envLevel.rally && envLevel.rally.environment) {
-                        let biome = (envLevel.rally.environment.biomeId || '').toUpperCase();
-                        let weather = (envLevel.rally.environment.weather || '').toUpperCase();
+                    if (levelConfig && levelConfig.rally && levelConfig.rally.environment) {
+                        let biome = (levelConfig.rally.environment.biomeId || '').toUpperCase();
+                        let weather = (levelConfig.rally.environment.weather || '').toUpperCase();
                         if (biome === 'WINTER') {
                             selectCondition('SNOW');
                         } else if (weather === 'RAIN' || weather === 'STORM' || weather === 'DRIZZLE') {
                             selectCondition('WET');
                         }
+                    }
+                    
+                    // Hide Car and Tyres panels for airplanes/helicopters
+                    let engineKey = 'rally';
+                    if (levelConfig && levelConfig.rally && levelConfig.rally.engineKey) {
+                        engineKey = levelConfig.rally.engineKey;
+                    } else {
+                        let sessionKey = sessionStorage.getItem('prerace_engine_key');
+                        if (sessionKey) engineKey = sessionKey;
+                    }
+                    let carContainer = document.getElementById('lobby-car-container');
+                    let tyresContainer = document.getElementById('lobby-tyres-container');
+                    if (engineKey === 'propeller' || engineKey === 'helicopter') {
+                        if (carContainer) carContainer.style.display = 'none';
+                        if (tyresContainer) tyresContainer.style.display = 'none';
+                    } else {
+                        if (carContainer) carContainer.style.display = 'block';
+                        if (tyresContainer) tyresContainer.style.display = 'block';
                     }
                     // Populate track info
                     let rc = window.raceConfig;
@@ -1015,37 +1038,12 @@
                     return;
                 }
 
-                // Activate rally vehicle
-                controls.enabled = false;
-                window.rallyVehicle.activate(scene, camera, controls);
-
-                // Override spawn to saved start position
-                if (spawnPos && window.rallyVehicle.getCar) {
-                    let car = window.rallyVehicle.getCar();
-                    if (typeof window.localGetTerrainAt === 'function') {
-                        let t = window.localGetTerrainAt(spawnPos.x, -spawnPos.z);
-                        spawnPos.y = t.z + 0.35 + 1.5;
-                    }
-                    car.position.copy(spawnPos);
-                    car._spawnPosition = spawnPos.clone();
-                    car._spawnGroundY  = spawnPos.y - 1.5;
-                    if (car.mesh) car.mesh.position.copy(spawnPos);
-                    let currentLevel = ArcadeStorage.loadCustomLevel() || ArcadeStorage.loadCompressedLevel();
-                    if (currentLevel && currentLevel.rally && currentLevel.rally.start && currentLevel.rally.start.rotation !== undefined) {
-                        car.heading = currentLevel.rally.start.rotation;
-                    } else if (currentLevel && currentLevel.holes && currentLevel.holes[0] && currentLevel.holes[0].tees && currentLevel.holes[0].tees.yellow && currentLevel.holes[0].tees.yellow.rot !== undefined) {
-                        car.heading = currentLevel.holes[0].tees.yellow.rot;
-                    }
-                    if (car.mesh) car.mesh.rotation.y = car.heading;
-                    if (window.rallyCamera) window.rallyCamera.init(car);
-                    if (window.rallyRespawn) window.rallyRespawn.init(car);
-                    console.log('✅ Car spawned at tee:', spawnPos.x.toFixed(1), spawnPos.z.toFixed(1), 'heading:', car.heading.toFixed(2));
-                }
+                // Spawn active vehicle
+                window.spawnActiveVehicle(scene, camera, controls, levelConfig);
 
                 // ── ENVIRONMENT: restore builder atmosphere ──
-                let envLevel = currentLevel || ArcadeStorage.loadCustomLevel() || ArcadeStorage.loadCompressedLevel();
-                if (envLevel && envLevel.rally && envLevel.rally.environment) {
-                    let env = envLevel.rally.environment;
+                if (levelConfig && levelConfig.rally && levelConfig.rally.environment) {
+                    let env = levelConfig.rally.environment;
                     
                     // Sky background color
                     if (env.skyColor) scene.background = new THREE.Color(env.skyColor);
@@ -1330,7 +1328,7 @@
         let h = document.createElement('div');
         h.id = 'race-hud';
         h.innerHTML =
-        '<div style="position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:9999;pointer-events:none;font-family:\'Inter\',\'Segoe UI\',sans-serif">' +
+        '<div style="position:fixed;top:16px;right:16px;z-index:9999;pointer-events:none;font-family:\'Inter\',\'Segoe UI\',sans-serif">' +
         '<div style="background:rgba(15,23,42,0.92);border:1px solid #334155;border-radius:14px;padding:10px 24px;backdrop-filter:blur(12px);text-align:center;min-width:260px">' +
         '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">' +
         '  <div style="font-size:12px;color:#94a3b8;font-weight:bold;text-transform:uppercase">Lap <span id="race-lap" style="color:#fff">1/1</span></div>' +
@@ -1354,8 +1352,19 @@
         if (!rc || !rc.start || !rc.finish) return;
         
         let carPos = null;
+        let activeVehicleType = 'car';
         if (window.rallyVehicle && window.rallyVehicle.isActive() && window.rallyVehicle.getCar) {
             carPos = window.rallyVehicle.getCar().position;
+            activeVehicleType = 'car';
+        } else if (window.rallyHelicopter && window.rallyHelicopter.isActive() && window.rallyHelicopter.getPosition) {
+            carPos = window.rallyHelicopter.getPosition();
+            activeVehicleType = 'helicopter';
+        } else if (window.rallyPlane && window.rallyPlane.isActive() && window.rallyPlane.getPosition) {
+            carPos = window.rallyPlane.getPosition();
+            activeVehicleType = 'plane';
+        } else if (window.rallyBike && window.rallyBike.isActive() && window.rallyBike.getPosition) {
+            carPos = window.rallyBike.getPosition();
+            activeVehicleType = 'bike';
         }
         if (!carPos) return;
         
@@ -1395,8 +1404,18 @@
         
         // --- 3. Start Detection ---
         if (!raceState.started) {
-            let car = window.rallyVehicle.getCar();
-            if (car && car.speed && Math.abs(car.speed) > 0.5) {
+            let speed = 0;
+            if (activeVehicleType === 'car') {
+                let car = window.rallyVehicle.getCar();
+                speed = car ? Math.abs(car.speed) : 0;
+            } else if (activeVehicleType === 'helicopter') {
+                speed = window.rallyHelicopter.getSpeed ? window.rallyHelicopter.getSpeed() : 0;
+            } else if (activeVehicleType === 'plane') {
+                speed = window.rallyPlane.getSpeed ? window.rallyPlane.getSpeed() : 0;
+            } else if (activeVehicleType === 'bike') {
+                speed = window.rallyBike.getSpeed ? window.rallyBike.getSpeed() : 0;
+            }
+            if (speed > 0.5) {
                 raceState.started = true;
                 let msg = document.getElementById('race-start-msg');
                 if (msg) { msg.style.opacity = '0'; setTimeout(function() { msg.remove(); }, 500); }
@@ -1409,7 +1428,9 @@
         // --- 4. Spline-Based Checkpoints ---
         if (rc.checkpoints && raceState.nextCheckpoint < rc.checkpoints.length) {
             let cp = rc.checkpoints[raceState.nextCheckpoint];
-            let validY = Math.abs(carPos.y - cp.y) < 8.0;
+            // Öka höjdtoleransen till 45 meter för helikopter och flygplan
+            let toleranceY = (activeVehicleType === 'plane' || activeVehicleType === 'helicopter') ? 45.0 : 8.0;
+            let validY = Math.abs(carPos.y - cp.y) < toleranceY;
             
             let passedSpline = cp.splineIndex !== undefined && raceState.carSplineIndex >= cp.splineIndex;
             
@@ -1434,13 +1455,40 @@
         if (raceState.finishArmed) {
             let dxF = carPos.x - rc.finish.x, dzF = carPos.z - rc.finish.z;
             let distFinish = Math.sqrt(dxF*dxF + dzF*dzF);
-            let validFinishY = Math.abs(carPos.y - rc.finish.y) < 8.0;
+            let toleranceFinishY = (activeVehicleType === 'plane' || activeVehicleType === 'helicopter') ? 45.0 : 8.0;
+            let validFinishY = Math.abs(carPos.y - rc.finish.y) < toleranceFinishY;
             
             if (distFinish < 15 && validFinishY) {
-                let carHeading = window.rallyVehicle.getCar().heading;
-                let carForward = new THREE.Vector3(Math.sin(carHeading), 0, Math.cos(carHeading));
+                let heading = 0;
+                if (activeVehicleType === 'car') {
+                    heading = window.rallyVehicle.getCar().heading;
+                } else if (activeVehicleType === 'helicopter') {
+                    let heliObj = window.rallyHelicopter.getHeli ? window.rallyHelicopter.getHeli() : null;
+                    heading = heliObj ? heliObj.yaw : 0;
+                } else if (activeVehicleType === 'plane') {
+                    let planeObj = window.rallyPlane.getPlane ? window.rallyPlane.getPlane() : null;
+                    if (planeObj && planeObj.model) {
+                        let euler = new THREE.Euler().setFromQuaternion(planeObj.model.orientation, 'YXZ');
+                        heading = euler.y;
+                    }
+                } else if (activeVehicleType === 'bike') {
+                    let bikeObj = window.rallyBike.getBike ? window.rallyBike.getBike() : null;
+                    heading = bikeObj ? bikeObj.heading : 0;
+                }
+                
+                let carForward = new THREE.Vector3(Math.sin(heading), 0, Math.cos(heading));
                 let finishForward = new THREE.Vector3(Math.sin(rc.finish.rotation || 0), 0, Math.cos(rc.finish.rotation || 0));
                 
+                // Om vi är i flygplanet, använd den faktiska nosriktningen i stället för Euler Y för bättre precision
+                if (activeVehicleType === 'plane') {
+                    let planeObj = window.rallyPlane.getPlane();
+                    if (planeObj && planeObj.model) {
+                        carForward.set(0, 0, -1).applyQuaternion(planeObj.model.orientation);
+                        carForward.y = 0;
+                        carForward.normalize();
+                    }
+                }
+
                 let dot = carForward.x * finishForward.x + carForward.z * finishForward.z;
                 
                 if (dot > 0) { // Must cross forward
@@ -1632,14 +1680,14 @@
         lastAnimTime = now;
         dt = Math.min(dt, 0.05);
 
-        if (window.rallyHelicopter && window.rallyHelicopter.isActive()) {
+        if (window.rallyPlane && window.rallyPlane.isActive()) {
+            window.rallyPlane.update(camera);
+        } else if (window.rallyBike && window.rallyBike.isActive()) {
+            window.rallyBike.update(camera);
+        } else if (window.rallyHelicopter && window.rallyHelicopter.isActive()) {
             window.rallyHelicopter.update(camera);
         } else if (window.rallyVehicle && window.rallyVehicle.isActive()) {
             window.rallyVehicle.update(camera, controls);
-            // Race logic runs alongside car physics
-            if (window.raceConfig && window.raceConfig.start) {
-                updateRaceLogic(dt);
-            }
             
             // Dynamic headlights: calculate world-space positions and direction
             let car = window.rallyVehicle.getCar ? window.rallyVehicle.getCar() : null;
@@ -1654,9 +1702,6 @@
                 let rightPos = new THREE.Vector3(0.7, -0.15, 2.08).applyMatrix4(car.mesh.matrixWorld);
                 
                 // Compute headlight direction directly from car.heading
-                // This avoids pitch/roll from matrixWorld column 2 corrupting the XZ direction.
-                // Headlights should sweep the ground plane, so we use the pure yaw-based
-                // forward vector with a slight downward tilt (-0.12 ≈ 7° down).
                 let fwdDir = new THREE.Vector3(
                     Math.sin(car.heading),
                     -0.12,
@@ -1686,6 +1731,11 @@
             controls.update();
         }
 
+        // Kör tävlingslogik (checkpoints/laps) oavsett aktivt fordon
+        if (window.raceConfig && window.raceConfig.start) {
+            updateRaceLogic(dt);
+        }
+
         // Particle engine update (biome leaves, weather rain/snow)
         if (window.ParticleEngine) window.ParticleEngine.update(dt);
 
@@ -1700,9 +1750,167 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    // ── Vehicle Switch (H key) + ESC to hub ──
+    // ── Vehicle Switch (Cycles Car → Heli → Plane → Car) ──
+    function _getTerrainY(wx, wz) {
+        if (typeof window.localGetTerrainAt === 'function') {
+            let t = window.localGetTerrainAt(wx, -wz);
+            return t ? t.z : 0;
+        }
+        return 0;
+    }
+
+    function spawnActiveVehicle(scene, camera, controls, level) {
+        let engineKey = 'rally';
+        if (level && level.rally && level.rally.engineKey) {
+            engineKey = level.rally.engineKey;
+        } else {
+            let sessionKey = sessionStorage.getItem('prerace_engine_key');
+            if (sessionKey) engineKey = sessionKey;
+        }
+
+        console.log('🚗 Spawning active vehicle for engine:', engineKey);
+
+        let spawnPos = new THREE.Vector3(0, 5, 0);
+        let heading = 0;
+        if (level && level.rally && level.rally.start) {
+            let s = level.rally.start;
+            spawnPos.set(s.x || 0, s.y || 5, s.z || 0);
+            if (s.rotation !== undefined) {
+                heading = s.rotation;
+            }
+        } else if (level && level.holes && level.holes[0] && level.holes[0].tees && level.holes[0].tees.yellow) {
+            let t = level.holes[0].tees.yellow;
+            spawnPos.set(t.x || 0, t.y || 5, t.z || 0);
+            if (t.rot !== undefined) {
+                heading = t.rot;
+            }
+        }
+
+        if (window.rallyVehicle) window.rallyVehicle.deactivate(scene);
+        if (window.rallyHelicopter) window.rallyHelicopter.deactivate(scene);
+        if (window.rallyPlane) window.rallyPlane.deactivate(scene);
+        if (window.rallyBike) window.rallyBike.deactivate(scene);
+
+        let rh = document.getElementById('rally-hud');
+        if (rh) rh.style.display = 'none';
+
+        controls.enabled = false;
+
+        if (engineKey === 'motocross' && window.rallyBike) {
+            window.rallyBike.activate(scene, camera, {
+                x: spawnPos.x, z: spawnPos.z, heading: heading
+            });
+            console.log('🏍️ Spawned Motocross at:', spawnPos.x, spawnPos.z, 'heading:', heading);
+        } else if (engineKey === 'propeller' && window.rallyPlane) {
+            let gy = _getTerrainY(spawnPos.x, spawnPos.z);
+            let spawnY = Math.max(spawnPos.y, gy + 30);
+            window.rallyPlane.activate(scene, camera, {
+                x: spawnPos.x,
+                y: spawnY,
+                z: spawnPos.z,
+                heading: heading
+            });
+            console.log('✈️ Spawned Plane at:', spawnPos.x, spawnY, spawnPos.z, 'heading:', heading);
+        } else if (engineKey === 'helicopter' && window.rallyHelicopter) {
+            window.rallyHelicopter.activate(scene, camera);
+            let heliObj = window.rallyHelicopter.getHeli();
+            if (heliObj && heliObj.position) {
+                let gy = _getTerrainY(spawnPos.x, spawnPos.z);
+                let spawnY = gy + 1.3;
+                heliObj.position.set(spawnPos.x, spawnY, spawnPos.z);
+                heliObj.yaw = heading;
+            }
+            console.log('🚁 Spawned Helicopter at:', spawnPos.x, spawnPos.z, 'heading:', heading);
+        } else {
+            if (rh) rh.style.display = '';
+            window.rallyVehicle.activate(scene, camera, controls);
+            let car = window.rallyVehicle.getCar();
+            if (car) {
+                let gy = _getTerrainY(spawnPos.x, spawnPos.z);
+                let spawnY = gy + 0.35 + 1.5;
+                car.position.set(spawnPos.x, spawnY, spawnPos.z);
+                car._spawnPosition = car.position.clone();
+                car._spawnGroundY = spawnY - 1.5;
+                if (car.mesh) {
+                    car.mesh.position.copy(car.position);
+                    car.mesh.rotation.y = heading;
+                }
+                car.heading = heading;
+                if (window.rallyCamera) window.rallyCamera.init(car);
+                if (window.rallyRespawn) window.rallyRespawn.init(car);
+            }
+            console.log('🏎️ Spawned Rally Car at:', spawnPos.x, spawnPos.z, 'heading:', heading);
+        }
+    }
+    window.spawnActiveVehicle = spawnActiveVehicle;
+
+    function cycleVehicle() {
+        if (window.rallyVehicle && window.rallyVehicle.isActive()) {
+            // ── Car → Helicopter ──
+            let carPos = window.rallyVehicle.getCar().position.clone();
+            window.rallyVehicle.deactivate(scene);
+            let rh = document.getElementById('rally-hud'); if (rh) rh.style.display = 'none';
+            window.rallyHelicopter.activate(scene, camera);
+            let heliObj = window.rallyHelicopter.getHeli();
+            if (heliObj && heliObj.position) {
+                let gy = _getTerrainY(carPos.x, carPos.z);
+                heliObj.position.set(carPos.x, gy + 1.3, carPos.z);
+            }
+        } else if (window.rallyHelicopter && window.rallyHelicopter.isActive()) {
+            // ── Helicopter → Plane ──
+            let heliPos = window.rallyHelicopter.getPosition().clone();
+            window.rallyHelicopter.deactivate(scene);
+            if (window.rallyPlane) {
+                let gy = _getTerrainY(heliPos.x, heliPos.z);
+                let spawnY = Math.max(heliPos.y, gy + 30); // minst 30m höjd
+                window.rallyPlane.activate(scene, camera, {
+                    x: heliPos.x, y: spawnY, z: heliPos.z, heading: 0
+                });
+            }
+        } else if (window.rallyPlane && window.rallyPlane.isActive()) {
+            // ── Plane → Bike ──
+            let planePos = window.rallyPlane.getPosition().clone();
+            window.rallyPlane.deactivate(scene);
+            if (window.rallyBike) {
+                let rh = document.getElementById('rally-hud'); if (rh) rh.style.display = 'none';
+                window.rallyBike.activate(scene, camera, {
+                    x: planePos.x, z: planePos.z, heading: 0
+                });
+            }
+        } else if (window.rallyBike && window.rallyBike.isActive()) {
+            // ── Bike → Car ──
+            let bikePos = window.rallyBike.getPosition().clone();
+            window.rallyBike.deactivate(scene);
+            controls.enabled = false;
+            let rh = document.getElementById('rally-hud'); if (rh) rh.style.display = '';
+            window.rallyVehicle.activate(scene, camera, controls);
+            let car = window.rallyVehicle.getCar();
+            if (car) {
+                let gy = _getTerrainY(bikePos.x, bikePos.z);
+                car.position.set(bikePos.x, gy + 0.35 + 1.5, bikePos.z);
+                car._spawnPosition = car.position.clone();
+                if (car.mesh) car.mesh.position.copy(car.position);
+                if (window.rallyRespawn) window.rallyRespawn.init(car);
+            }
+        }
+    }
+    window.cycleVehicle = cycleVehicle;
+
+    // Skapa en flytande knapp för att byta fordon på mobil/peksskärmar
+    if (_isMobile) {
+        let btn = document.createElement('button');
+        btn.id = 'mobile-switch-btn';
+        btn.innerHTML = '🔄 Byt';
+        btn.style.cssText = 'position:fixed;top:16px;right:16px;z-index:100;background:rgba(15,23,42,0.85);color:#94a3b8;border:1px solid #334155;padding:8px 16px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;backdrop-filter:blur(8px);transition:all 0.2s;';
+        btn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            cycleVehicle();
+        });
+        document.body.appendChild(btn);
+    }
+
     window.addEventListener('keydown', (e) => {
-        // Force blur of any active UI elements (selects, inputs, buttons) so game inputs (W/S/A/D, Arrows) don't trigger form events
+        // Force blur of any active UI elements so game inputs don't trigger form events
         if (document.activeElement && (document.activeElement.tagName === 'SELECT' || document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'BUTTON')) {
             document.activeElement.blur();
         }
@@ -1710,43 +1918,7 @@
             window.location.href = 'rally_hub.html';
         }
         if (e.key === 'h' || e.key === 'H') {
-            if (window.rallyVehicle && window.rallyVehicle.isActive()) {
-                // Switch: Car → Helicopter
-                let carPos = window.rallyVehicle.getCar().position.clone();
-                window.rallyVehicle.deactivate(scene);
-                // Hide car HUD
-                let rh = document.getElementById('rally-hud'); if (rh) rh.style.display = 'none';
-                window.rallyHelicopter.activate(scene, camera);
-                // Spawn heli at car position
-                let heliObj = window.rallyHelicopter.getHeli();
-                if (heliObj && heliObj.position) {
-                    let groundY = 0;
-                    if (typeof window.localGetTerrainAt === 'function') {
-                        let terrain = window.localGetTerrainAt(carPos.x, -carPos.z);
-                        groundY = terrain ? terrain.z : 0;
-                    }
-                    heliObj.position.set(carPos.x, groundY + 1.3, carPos.z);
-                }
-            } else if (window.rallyHelicopter && window.rallyHelicopter.isActive()) {
-                // Switch: Helicopter → Car
-                let heliPos = window.rallyHelicopter.getPosition().clone();
-                window.rallyHelicopter.deactivate(scene);
-                controls.enabled = false;
-                window.rallyVehicle.activate(scene, camera, controls);
-                // Spawn car at heli position (on ground)
-                let car = window.rallyVehicle.getCar();
-                if (car) {
-                    let groundY = 0;
-                    if (typeof window.localGetTerrainAt === 'function') {
-                        let terrain = window.localGetTerrainAt(heliPos.x, -heliPos.z);
-                        groundY = terrain ? terrain.z : 0;
-                    }
-                    car.position.set(heliPos.x, groundY + 0.35 + 1.5, heliPos.z);
-                    car._spawnPosition = car.position.clone();
-                    if (car.mesh) car.mesh.position.copy(car.position);
-                    if (window.rallyRespawn) window.rallyRespawn.init(car);
-                }
-            }
+            cycleVehicle();
         }
     });
 
@@ -1817,35 +1989,12 @@
         let hud = document.getElementById('race-hud');
         if (hud) hud.style.display = '';
 
-        // Activate vehicle (same logic as debug-mode direct start)
+        // Spawn active vehicle
         let scene = window.scene;
         let camera = window.camera;
         let controls = window.controls;
-        if (window.rallyVehicle) {
-            controls.enabled = false;
-            window.rallyVehicle.activate(scene, camera, controls);
-
-            // Spawn at saved start
-            let level = ArcadeStorage.loadCustomLevel() || ArcadeStorage.loadCompressedLevel();
-            if (level && level.rally && level.rally.start && window.rallyVehicle.getCar) {
-                let car = window.rallyVehicle.getCar();
-                let s = level.rally.start;
-                let spawnPos = new THREE.Vector3(s.x || 0, (s.y || 2) + 0.5, s.z || 0);
-                if (typeof window.localGetTerrainAt === 'function') {
-                    let t = window.localGetTerrainAt(spawnPos.x, -spawnPos.z);
-                    spawnPos.y = (t ? t.z : 0) + 0.35 + 1.5;
-                }
-                car.position.copy(spawnPos);
-                car._spawnPosition = spawnPos.clone();
-                car._spawnGroundY = spawnPos.y - 1.5;
-                if (car.mesh) car.mesh.position.copy(spawnPos);
-                if (s.rotation !== undefined) {
-                    car.heading = s.rotation;
-                    if (car.mesh) car.mesh.rotation.y = car.heading;
-                }
-                if (window.rallyCamera) window.rallyCamera.init(car);
-                if (window.rallyRespawn) window.rallyRespawn.init(car);
-            }
+        let level = ArcadeStorage.loadCustomLevel() || ArcadeStorage.loadCompressedLevel();
+        window.spawnActiveVehicle(scene, camera, controls, level);
 
             // Apply saved environment (sky, fog, particles) after vehicle is active
             if (level && level.rally && level.rally.environment) {
@@ -1880,7 +2029,6 @@
             if (cond === 'WET' && window.ParticleEngine) {
                 window.ParticleEngine.setWeather('RAIN');
             }
-        }
 
         console.log('🏁 Race started — Condition:', cond, '| Car:', carProfile, '| Tyres:', tyreCompound);
     };

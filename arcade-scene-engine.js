@@ -124,13 +124,13 @@
                 let sunHeight = p.sunY * 32.5;
                 sm.position.set(Math.cos(angle) * sunOrbitR, sunHeight, Math.sin(angle) * sunOrbitR);
                 if (p.sunColor) {
-                    sm.material.color.setRGB(p.sunColor[0]/255, p.sunColor[1]/255, p.sunColor[2]/255);
+                    sm.material.color.setRGB(1, 1, 1); // Pure white-hot sun center
                     let sunBrightness = (p.sunColor[0] + p.sunColor[1] + p.sunColor[2]) / 765;
                     sm.visible = sunBrightness > 0.01;
                     if (window.sunGlow) {
                         window.sunGlow.position.copy(sm.position);
-                        window.sunGlow.material.color.copy(sm.material.color);
-                        window.sunGlow.material.opacity = 0.15 * sunBrightness;
+                        window.sunGlow.material.color.setRGB(p.sunColor[0]/255, p.sunColor[1]/255, p.sunColor[2]/255);
+                        window.sunGlow.material.opacity = 0.38 * sunBrightness; // Boosted opacity for dramatic glow
                         window.sunGlow.visible = sm.visible;
                     }
                 } else {
@@ -160,6 +160,37 @@
             }
             let slider = document.getElementById('set-time');
             if (slider && parseFloat(slider.value) !== hour) slider.value = hour;
+
+            if (typeof window.updateToonCloudsForTime === 'function') {
+                window.updateToonCloudsForTime(hour);
+            }
+        };
+
+        window.updateToonCloudsForTime = function(hour) {
+            if (!window._shinkaiSky || !window._toonClouds) return;
+            
+            let preset = 'goldenAfternoon';
+            if (hour >= 9 && hour < 15) {
+                preset = 'brightNoon';
+            } else if (hour >= 15 && hour < 18) {
+                preset = 'goldenAfternoon';
+            } else if ((hour >= 4 && hour < 9) || (hour >= 18 && hour < 21)) {
+                preset = 'pinkDusk';
+            } else {
+                preset = 'stormyNight';
+            }
+            
+            window._shinkaiSky.applyPreset(preset);
+            window._toonClouds.applyPreset(preset);
+            
+            // Sync sun direction and fog color from sky to clouds
+            window._toonClouds.setSun(window._shinkaiSky.sunDir);
+            window._toonClouds.setFogColor(window._shinkaiSky.horizonColor);
+            
+            // Also sync the density if weather is active (but preserve user's custom density)
+            if (window.ParticleEngine) {
+                window._toonClouds.setWeatherPreset(window.ParticleEngine.getWeather(), true);
+            }
         };
 
         // --- ENVIRONMENT PREVIEW ---

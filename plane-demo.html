@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Stuntplan Fysik Demo</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#000; overflow:hidden; touch-action:none; }
+canvas { display:block; }
+
+#kb-hint {
+  position:fixed; bottom:14px; left:50%; transform:translateX(-50%);
+  color:rgba(255,255,255,0.3); font-size:12px; font-family:monospace;
+  pointer-events:none; text-align:center;
+}
+
+#title-bar {
+  position:fixed; top:16px; left:50%; transform:translateX(-50%);
+  color:#60a5fa; font-family:'Inter','Segoe UI',monospace; font-size:16px;
+  font-weight:900; letter-spacing:2px; pointer-events:none;
+  text-shadow:0 0 12px rgba(96,165,250,0.5);
+  background:rgba(15,23,42,0.8); padding:8px 20px; border-radius:10px;
+  border:1px solid rgba(96,165,250,0.2); backdrop-filter:blur(8px);
+}
+</style>
+</head>
+<body>
+
+<div id="title-bar">✈️ STUNTPLAN FYSIK — RED BULL AIR RACE</div>
+<div id="kb-hint">WS/↑↓ = pitch · AD/←→ = roll · SPACE/SHIFT = gas · Q/E = yaw · R = omstart · Sväng = rolla!</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="plane-vehicle.js"></script>
+<script>
+'use strict';
+
+// ─────────────────────────────────────────────
+//  THREE.JS SETUP
+// ─────────────────────────────────────────────
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0x6ab4d8);
+scene.fog = new THREE.FogExp2(0x6ab4d8, 0.0012);
+
+var camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 1200);
+camera.position.set(0, 30, 40);
+
+var renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+
+// ─────────────────────────────────────────────
+//  LJUS
+// ─────────────────────────────────────────────
+var sun = new THREE.DirectionalLight(0xfffbe8, 1.3);
+sun.position.set(80, 150, 50);
+sun.castShadow = true;
+sun.shadow.mapSize.width = 2048;
+sun.shadow.mapSize.height = 2048;
+var sc = sun.shadow.camera;
+sc.near = 1; sc.far = 600;
+sc.left = -200; sc.right = 200; sc.top = 200; sc.bottom = -200;
+scene.add(sun);
+scene.add(new THREE.HemisphereLight(0x87ceeb, 0x3a6e1f, 0.7));
+
+// ─────────────────────────────────────────────
+//  MARK & BANA
+// ─────────────────────────────────────────────
+// Gräs
+var ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(800, 800, 40, 40),
+    new THREE.MeshLambertMaterial({ color: 0x4a8a3c })
+);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+scene.add(new THREE.GridHelper(800, 80, 0x2d5820, 0x2d5820));
+
+// Landningsbana
+var runway = new THREE.Mesh(
+    new THREE.BoxGeometry(12, 0.05, 220),
+    new THREE.MeshLambertMaterial({ color: 0x555555 })
+);
+runway.position.set(0, 0.025, 0);
+runway.receiveShadow = true;
+scene.add(runway);
+
+// Banmarkeringar (vita ränder)
+for (var rz = -100; rz <= 100; rz += 20) {
+    var stripe = new THREE.Mesh(
+        new THREE.BoxGeometry(0.5, 0.06, 3),
+        new THREE.MeshLambertMaterial({ color: 0xffffff })
+    );
+    stripe.position.set(-5.5, 0.06, rz);
+    scene.add(stripe);
+    var stripe2 = stripe.clone();
+    stripe2.position.x = 5.5;
+    scene.add(stripe2);
+}
+
+// ── Pyloner (Red Bull Air Race-stil) ──
+function pylon(x, z, h, color) {
+    var pGeo = new THREE.CylinderGeometry(0.3, 0.35, h, 8);
+    var pMat = new THREE.MeshLambertMaterial({ color: color });
+    var p = new THREE.Mesh(pGeo, pMat);
+    p.position.set(x, h / 2, z);
+    p.castShadow = true;
+    scene.add(p);
+    // Kontopp
+    var cone = new THREE.Mesh(
+        new THREE.ConeGeometry(0.5, 1.2, 8),
+        pMat
+    );
+    cone.position.set(x, h + 0.6, z);
+    cone.castShadow = true;
+    scene.add(cone);
+}
+
+// S-kurva av pyloner
+pylon(-25, -80, 15, 0xef4444);
+pylon(25, -50, 15, 0x3b82f6);
+pylon(-30, -15, 18, 0xef4444);
+pylon(30, 20, 18, 0x3b82f6);
+pylon(-25, 55, 15, 0xef4444);
+pylon(25, 85, 15, 0x3b82f6);
+
+// Höga pyloner (utmaningsportar)
+pylon(-15, -120, 25, 0xfbbf24);
+pylon(15, -120, 25, 0xfbbf24);
+pylon(-15, 120, 25, 0xfbbf24);
+pylon(15, 120, 25, 0xfbbf24);
+
+// ── Grindar (torus-bågar att flyga genom) ──
+function gate(x, z, r, color) {
+    var t = new THREE.Mesh(
+        new THREE.TorusGeometry(r, 0.4, 8, 24, Math.PI),
+        new THREE.MeshLambertMaterial({ color: color, transparent: true, opacity: 0.7 })
+    );
+    t.position.set(x, r, z);
+    t.castShadow = true;
+    scene.add(t);
+}
+
+gate(0, -50, 12, 0xfacc15);
+gate(0, 40, 14, 0x4ade80);
+gate(0, 130, 10, 0xf97316);
+
+// ── Byggnader ──
+function box(x, y, z, w, h, d, color) {
+    var m = new THREE.Mesh(
+        new THREE.BoxGeometry(w, h, d),
+        new THREE.MeshLambertMaterial({ color: color })
+    );
+    m.position.set(x, y + h / 2, z);
+    m.castShadow = m.receiveShadow = true;
+    scene.add(m);
+}
+
+box(-80, 0, -60, 20, 12, 15, 0xdd9955);   // Hangar
+box(80, 0, -40, 12, 18, 12, 0x8899bb);    // Torn
+box(-70, 0, 50, 25, 8, 18, 0xccbbaa);     // Fabrik
+box(90, 0, 60, 10, 7, 10, 0x998877);      // Stuga
+box(60, 0, -100, 15, 25, 15, 0xbbddff);   // Höghus
+
+// ── Träd ──
+function tree(x, z) {
+    box(x, 0, z, 0.7, 5, 0.7, 0x5c3317);
+    var c = new THREE.Mesh(
+        new THREE.ConeGeometry(3, 6, 7),
+        new THREE.MeshLambertMaterial({ color: 0x2a6624 })
+    );
+    c.position.set(x, 8, z);
+    c.castShadow = true;
+    scene.add(c);
+}
+
+[[-40, -90], [45, -70], [-60, 20], [50, 30], [-20, 80], [35, 100],
+ [-90, -20], [95, 10], [-50, -50], [70, 70], [-85, 80], [80, -80]
+].forEach(function(p) { tree(p[0], p[1]); });
+
+// ── Vindstrut (windsock) ──
+var sockPole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.08, 0.08, 8, 6),
+    new THREE.MeshLambertMaterial({ color: 0x999999 })
+);
+sockPole.position.set(15, 4, -10);
+scene.add(sockPole);
+var sock = new THREE.Mesh(
+    new THREE.ConeGeometry(0.6, 3, 6),
+    new THREE.MeshLambertMaterial({ color: 0xff6600 })
+);
+sock.rotation.z = -Math.PI / 2;
+sock.position.set(16.5, 7.5, -10);
+scene.add(sock);
+
+
+// ─────────────────────────────────────────────
+//  AKTIVERA PLANET
+// ─────────────────────────────────────────────
+window.rallyPlane.activate(scene, camera, {
+    x: 0,
+    y: 50,
+    z: 150,
+    heading: 0   // pekar mot -Z (nedåt banan)
+});
+
+// ─────────────────────────────────────────────
+//  RESIZE
+// ─────────────────────────────────────────────
+window.addEventListener('resize', function() {
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+});
+
+// ─────────────────────────────────────────────
+//  GAME LOOP
+// ─────────────────────────────────────────────
+function animate() {
+    requestAnimationFrame(animate);
+    window.rallyPlane.update(camera);
+    renderer.render(scene, camera);
+}
+animate();
+
+// ─────────────────────────────────────────────
+//  KONSOL-HJÄLP
+// ─────────────────────────────────────────────
+console.log('%c✈️ Stuntplan Fysik Demo', 'color:#60a5fa;font-size:14px;font-weight:bold');
+console.log('Ändra fysiken i realtid:');
+console.log('  var cfg = window.rallyPlane.getConfig();');
+console.log('  cfg.maxThrust = 12000;   // mer motorkraft');
+console.log('  cfg.rollRate = 8;        // snabbare roll');
+console.log('  cfg.stallSpeed = 12;     // stalla lättare');
+console.log('  cfg.responsiveness = 12; // snabbare styrning');
+console.log('  cfg.leafVerticalDrag = 8;// dala långsammare som löv');
+console.log('');
+console.log('Telemetri: window.rallyPlane.getPlane().model');
+</script>
+</body>
+</html>

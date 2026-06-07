@@ -388,6 +388,11 @@
             console.log('[ParticleEngine] Weather:', weatherKey, '(no particles)');
         }
 
+        // --- CLOUD WEATHER INTEGRATION ---
+        if (window._toonClouds && typeof window._toonClouds.setWeatherPreset === 'function') {
+            window._toonClouds.setWeatherPreset(weatherKey);
+        }
+
         // Sync UI
         let sel = document.getElementById('set-weather');
         if (sel) sel.value = weatherKey;

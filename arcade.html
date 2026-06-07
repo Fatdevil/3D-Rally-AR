@@ -18,6 +18,8 @@
 <script src="arcade-perlin.js"></script>
 <script src="arcade-terrain-overlays.js"></script>
 <script src="arcade-scene-engine.js"></script>
+<script src="shinkaiSky.js"></script>
+<script src="toonClouds.js"></script>
 <script src="golf-stubs.js"></script> <!-- Stubs for disabled golf modules -->
 <script src="arcade-particle-engine.js"></script>
 <script src="arcade-wind-sway.js"></script>
@@ -31,6 +33,7 @@
 <script src="terrain-auto-paint.js"></script>
 <script src="terrain-chunks.js?v=1"></script>
 <script src="terrain-shells.js?v=1"></script>
+
 <script src="template-mask.js"></script>
 <script src="engine-registry.js"></script>
 <script src="theme-registry.js"></script>
@@ -1313,6 +1316,15 @@
                         <span id="fog-val" style="color:#38bdf8; font-size:10px;">1.0</span>
                     </div>
                     <input type="range" id="set-fog-env" min="0.1" max="4.0" step="0.1" value="1.0" oninput="window.updateFogDensity(this.value); document.getElementById('fog-val').textContent=parseFloat(this.value).toFixed(1)" style="width:100%; accent-color:#38bdf8; cursor:pointer;">
+                </div>
+                
+                <!-- CLOUD DENSITY (inside ENV panel) -->
+                <div style="margin-top:10px; padding-top:10px; border-top:1px solid #334155;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                        <label style="color:#94a3b8; font-size:10px; font-weight:bold;">☁️ CLOUD DENSITY</label>
+                        <span id="cloud-val" style="color:#38bdf8; font-size:10px;">100%</span>
+                    </div>
+                    <input type="range" id="set-cloud-density" min="0.0" max="1.0" step="0.05" value="1.0" oninput="if(window._toonClouds) { window._toonClouds.setDensity(parseFloat(this.value)); } document.getElementById('cloud-val').textContent=Math.round(this.value*100)+'%';" style="width:100%; accent-color:#38bdf8; cursor:pointer;">
                 </div>
                 
                 <!-- SURROUND BLEND SHARPNESS -->
@@ -3257,7 +3269,9 @@
             let activePal = document.querySelector('.palette-btn.active');
             if (activePal && activePal.id && activePal.id.startsWith('pal-')) {
                 let type = activePal.id.split('-')[1];
-                setPaletteColor(type, activePal);
+                if (typeof window.setPaletteColor === 'function') {
+                    window.setPaletteColor(type, activePal);
+                }
             }
             
             // Uppdatera surrounding horizon färger (matchar nya biom-paletten)
@@ -4283,26 +4297,38 @@
     
     // Create cinematic sun (large sphere at 13000m orbit, behind mountains)
     const sunGeo = new THREE.SphereGeometry(500, 32, 32);
-    const sunMat = new THREE.MeshBasicMaterial({ color: 0xffe600, fog: false });
+    const sunMat = new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false });
     const sunMesh = new THREE.Mesh(sunGeo, sunMat);
     sunMesh.position.set(200, 4875, -13000); 
     scene.add(sunMesh);
     // Expose lights on Game Context for scene engine
     Object.assign(window.G, { ambientLight, dirLight, sunMesh });
     
-    // Atmospheric glow halo around the sun
-    const glowGeo = new THREE.SphereGeometry(1800, 32, 32);
+    // Atmospheric glow halo around the sun (Enorm halo, anime-stil)
+    const glowGeo = new THREE.SphereGeometry(5000, 32, 32);
     const glowMat = new THREE.MeshBasicMaterial({
-        color: 0xffe600,
+        color: 0xffffff,
         fog: false,
         transparent: true,
-        opacity: 0.12,
+        opacity: 0.25,
         blending: THREE.AdditiveBlending,
         depthWrite: false
     });
     window.sunGlow = new THREE.Mesh(glowGeo, glowMat);
     window.sunGlow.position.copy(sunMesh.position);
     scene.add(window.sunGlow);
+
+    // Initialize Makoto Shinkai stylized sky & clouds
+    if (window.ShinkaiSky) {
+        window._shinkaiSky = new window.ShinkaiSky(scene, { preset: 'goldenAfternoon' });
+    }
+    if (window.CloudField) {
+        window._toonClouds = new window.CloudField(scene, {
+            preset: 'goldenAfternoon',
+            sunDir: window._shinkaiSky ? window._shinkaiSky.sunDir : null,
+            fogColor: window._shinkaiSky ? window._shinkaiSky.horizonColor : null
+        });
+    }
 
     // Initialize TimeOfDay engine to default (midday)
     setTimeout(() => { if(window.setTimeOfDay) window.setTimeOfDay(12); }, 100);
@@ -4372,6 +4398,21 @@
     let TERRAIN_SEGS = _isMobile ? 400 : 600; 
     let planeGeo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, TERRAIN_SEGS, TERRAIN_SEGS);
     planeGeo.attributes.position.setUsage(THREE.DynamicDrawUsage);
+    
+    window.clampTerrainBorders = function(geo) {
+        if (!geo) return;
+        let pos = geo.attributes.position.array;
+        let segs = window.TERRAIN_SEGS || 600;
+        let stride = segs + 1;
+        for (let gz = 0; gz <= segs; gz++) {
+            for (let gx = 0; gx <= segs; gx++) {
+                if (gx === 0 || gx === segs || gz === 0 || gz === segs) {
+                    let idx = gz * stride + gx;
+                    pos[idx * 3 + 2] = 0.0;
+                }
+            }
+        }
+    };
     
     const planeMat = new THREE.MeshLambertMaterial({ map: mapTex, vertexColors: false });
     
@@ -4560,6 +4601,7 @@
                 s.mat.uniforms.uRoughMask.value = window.roughMaskTex;
             }
         }
+
         console.log('🌿 RoughMask rebuilt for Rally terrain');
     };
 
@@ -4567,6 +4609,8 @@
     if (window.TerrainShellManager) {
         window._terrainShells = new TerrainShellManager(planeGeo, plane, scene, mapTex, window.roughMaskTex);
     }
+
+
 
     // === TERRAIN CHUNKING: Split into 8x8 frustum-culled chunks with distance LOD ===
     window._chunksEnabled = true;  // ON by default (LOD locked during play, throttled, hysteresis)
@@ -5212,6 +5256,7 @@
     const gridPlane = new THREE.Mesh(planeGeo, gridMat);
     gridPlane.rotation.x = -Math.PI / 2;
     scene.add(gridPlane);
+    window._gridPlane = gridPlane;
 
     window.resetAimTarget = function() {
         let hole = courseHoles[playingHoleIndex];
@@ -6604,6 +6649,7 @@
         try {
             if (window.EDITOR_MODE === 'rally') {
                 let rallyData = {
+                    engineKey: window.ACTIVE_ENGINE_KEY || 'rally',
                     start: raceConfig.start ? {x: raceConfig.start.x, y: raceConfig.start.y, z: raceConfig.start.z, rotation: raceConfig.start.rotation} : null,
                     finish: raceConfig.finish ? {x: raceConfig.finish.x, y: raceConfig.finish.y, z: raceConfig.finish.z, rotation: raceConfig.finish.rotation} : null,
                     checkpoints: (raceConfig.checkpoints || []).map(cp => ({x: cp.x, y: cp.y, z: cp.z, radius: cp.radius || 15})),
@@ -7651,6 +7697,7 @@
                                 for (let hi = 0; hi < vertCount; hi++) {
                                     posArr[hi * 3 + 2] = heightArr[hi] / 100;
                                 }
+                                if (window.clampTerrainBorders) window.clampTerrainBorders(geo);
                                 geo.attributes.position.needsUpdate = true;
                                 geo.computeVertexNormals();
                                 console.log('  ✅ Heightmap applied (' + vertCount + ' vertices)');
@@ -9966,7 +10013,7 @@
         window._lastFlightPhase = 'flight'; // Reset for bounce detection audio
     }
 
-    let appMode = 'PLAY'; 
+    var appMode = 'PLAY'; 
     const controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
@@ -11606,6 +11653,19 @@
     function onMouseMove(event) {
         if(appMode !== 'BUILD') return;
         event.preventDefault();
+        
+        // Dölj 3D-borstmarkören och spöken när muspekaren är över UI-paneler (sliders, sidomenyer, knappar etc.)
+        if (event.target !== renderer.domElement) {
+            if (sculptBrushCursor) sculptBrushCursor.visible = false;
+            ghostBlock.visible = false;
+            ghostTree.visible = false;
+            if (window._ghostRallyStart) window._ghostRallyStart.visible = false;
+            if (window._ghostRallyFinish) window._ghostRallyFinish.visible = false;
+            if (window._ghostRallyStartFinish) window._ghostRallyStartFinish.visible = false;
+            if (window._ghostRallyCheckpoint) window._ghostRallyCheckpoint.visible = false;
+            return;
+        }
+        
         mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
         mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
         
@@ -12327,6 +12387,7 @@
                 }
             }
             if (updatePos) {
+                if (window.clampTerrainBorders) window.clampTerrainBorders(planeGeo);
                 planeGeo.attributes.position.needsUpdate = true;
                 planeGeo.computeVertexNormals();
             }
@@ -12576,7 +12637,10 @@
                 }
             }
         }
-        if (updatePos) planeGeo.attributes.position.needsUpdate = true;
+        if (updatePos) {
+            if (window.clampTerrainBorders) window.clampTerrainBorders(planeGeo);
+            planeGeo.attributes.position.needsUpdate = true;
+        }
         
         // Real-time water mask rebuild (visual only — don't reset vertices during sculpting)
         // This ensures water ONLY appears where the terrain has been dug below the water table
@@ -13686,6 +13750,12 @@ window.triggerExplosion = function(x, y, z) {
 
         // Shell texturing: lighting sync + distance visibility
         if (window._terrainShells) window._terrainShells.update(performance.now() / 1000, camera);
+
+        // Update Makoto Shinkai sky & clouds
+        if (window._shinkaiSky) window._shinkaiSky.update(camera);
+        if (window._toonClouds) window._toonClouds.update(dt, camera);
+
+
 
         renderer.render(scene, camera);
         

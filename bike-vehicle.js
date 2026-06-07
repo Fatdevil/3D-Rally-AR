@@ -28,14 +28,27 @@ const CFG = {
     wheelBase:      2.2,
     rideHeight:     0.55,
     suspK:          180,
-    suspC:          19,
+    suspC:          20,
     contactGrace:   0.35,
 
-    enginePower:    50,
+    enginePower:    95,
     brakePower:     30,
     drag:           0.02,
-    lateralFriction:     0.92,
-    driftLateralFriction: 0.985,
+
+    // Slip-baserat grepp (Pacejka-light)
+    peakSlip:        0.35,
+    gripPeak:        9.0,
+    gripTail:        2.5,
+
+    // Viktöverföring (visuell pitch)
+    brakeDiveAngle:  0.15,
+    squatAngle:      0.10,
+    weightResp:      6,
+
+    // Fjädring: bottoming + separat rebound
+    suspMaxTravel:   0.6,
+    suspCRebound:    10,
+    bottomK:         400,
 
     steerRate:      3.0,
     steerMinSpeed:  3,
@@ -50,9 +63,9 @@ const CFG = {
     wheelieDecayRate: 1.8,
     wheelieMaxAngle:  1.3,
 
-    airPitchRate:   4.0,
-    airRollRate:    4.0,
-    airYawRate:     1.5,
+    airPitchRate:   5.5,
+    airRollRate:    6.0,
+    airYawRate:     3.0,
     airResp:        4.0,
 
     crashRollMax:   1.0,
@@ -77,7 +90,7 @@ let _scene = null;
 let _camera = null;
 let _bikeGroup = null;
 let _hudEl = null;
-let _input = { throttle: 0, brake: 0, steer: 0, pitch: 0 };
+let _input = { throttle: 0, frontBrake: 0, rearBrake: 0, brake: 0, steer: 0, pitch: 0, trick: 0 };
 let _lastTime = 0;
 
 // Physics state
@@ -94,6 +107,19 @@ let _wasGround = true;
 let _crashTimer = 0;
 let _surfaceName = 'DIRT';
 let _wheeliePitch = 0;
+let _weightPitch  = 0;
+
+// Trick state
+let _trickName = '';
+let _trickTimer = 0;
+let _totalPitchRot = 0;
+let _totalRollRot = 0;
+let _trickEl = null;
+
+// Wheelie timer
+let _wheelieTime = 0;
+let _bestWheelieTime = 0;
+let _wheelieActive = false;
 
 // Camera state
 let _camPos = new THREE.Vector3();
@@ -141,6 +167,8 @@ function getSurface(type) {
 
 // ── Math Helpers ──
 function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
+function lerp(a, b, t) { return a + (b - a) * t; }
+function dlerp(a, b, rate, dt) { return lerp(a, b, 1 - Math.exp(-rate * dt)); }
 
 function quatFromForwardUp(f, u) {
     let fwd = f.clone().normalize();
@@ -226,12 +254,11 @@ function buildBikeModel() {
     // ── Front fork ──
     let forkGeo = new THREE.BoxGeometry(0.06, 1.0, 0.06);
     let forkL = new THREE.Mesh(forkGeo, metalMat);
-    forkL.position.set(-0.12, 0.1, -0.95);
+    // Relative to handlebar group at (0, 0.8, -0.65)
+    forkL.position.set(-0.12, 0.1 - 0.8, -0.95 + 0.65);
     forkL.rotation.x = -0.25;
-    group.add(forkL);
     let forkR = forkL.clone();
     forkR.position.x = 0.12;
-    group.add(forkR);
 
     // ── Rear swingarm ──
     let swingGeo = new THREE.BoxGeometry(0.08, 0.08, 0.9);
@@ -250,18 +277,17 @@ function buildBikeModel() {
     shock.rotation.x = 0.3;
     group.add(shock);
 
-    // ── Front Wheel ──
+    // ── Front Wheel (in handlebar group so it turns with steering) ──
     let wheelGeo = new THREE.CylinderGeometry(_wheelRadius, _wheelRadius, 0.18, 12);
     _frontWheelMesh = new THREE.Mesh(wheelGeo, tyreMat);
     _frontWheelMesh.rotation.z = Math.PI / 2;
-    _frontWheelMesh.position.set(0, 0, -1.1);
+    // Relative to handlebar group at (0, 0.8, -0.65)
+    _frontWheelMesh.position.set(0, 0 - 0.8, -1.1 + 0.65);
     // Hub
     let hubGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.2, 8);
     let hubF = new THREE.Mesh(hubGeo, metalMat);
     hubF.rotation.z = Math.PI / 2;
     hubF.position.copy(_frontWheelMesh.position);
-    group.add(hubF);
-    group.add(_frontWheelMesh);
 
     // ── Rear Wheel ──
     _rearWheelMesh = new THREE.Mesh(wheelGeo.clone(), tyreMat);
@@ -308,6 +334,10 @@ function buildBikeModel() {
     let gripR = gripL.clone();
     gripR.position.x = 0.35;
     _handlebarGroup.add(gripR);
+    _handlebarGroup.add(forkL);
+    _handlebarGroup.add(forkR);
+    _handlebarGroup.add(hubF);
+    _handlebarGroup.add(_frontWheelMesh);
     group.add(_handlebarGroup);
 
     // ── Rider ──
@@ -405,6 +435,12 @@ function createHUD() {
         '</div>' +
         '<div id="bike-air-badge" style="display:none; background:rgba(56,189,248,0.9); border-radius:20px; padding:6px 14px; text-align:center;">' +
         '  <div style="color:#fff; font-size:11px; font-weight:900;">🪂 AIR <span id="bike-air-time">0.0</span>s</div>' +
+        '</div>' +
+        '<div id="bike-wheelie-badge" style="display:none;position:fixed;bottom:80px;left:50%;transform:translateX(-50%);' +
+        'background:rgba(251,146,60,0.9);border:1px solid #f97316;border-radius:10px;padding:4px 14px;' +
+        'backdrop-filter:blur(8px);text-align:center">' +
+        '  <div style="color:#fff; font-size:11px; font-weight:900;">🔥 WHEELIE <span id="bike-wheelie-time">0.0</span>s</div>' +
+        '  <div id="bike-wheelie-best" style="font-size:9px;color:#fef3c7;font-weight:bold"></div>' +
         '</div>';
 
     document.body.appendChild(_hudEl);
@@ -433,6 +469,54 @@ function updateHUD() {
         } else {
             airBadge.style.display = 'none';
         }
+    }
+
+    // Wheelie timer
+    let isWheelie = _grounded && _wheeliePitch > 0.15 && _speed > 2;
+    if (isWheelie) {
+        if (!_wheelieActive) _wheelieActive = true;
+        _wheelieTime += 1 / 60;
+    } else if (_wheelieActive) {
+        if (_wheelieTime > _bestWheelieTime) _bestWheelieTime = _wheelieTime;
+        _wheelieActive = false;
+        _wheelieTime = 0;
+    }
+
+    let wheelieBadge = document.getElementById('bike-wheelie-badge');
+    if (wheelieBadge) {
+        if (_wheelieActive && _wheelieTime > 0.3) {
+            wheelieBadge.style.display = 'block';
+            let wt = document.getElementById('bike-wheelie-time');
+            if (wt) wt.textContent = _wheelieTime.toFixed(1);
+            let wb = document.getElementById('bike-wheelie-best');
+            if (wb && _bestWheelieTime > 0.5) wb.textContent = 'BEST: ' + _bestWheelieTime.toFixed(1) + 's';
+        } else {
+            wheelieBadge.style.display = 'none';
+        }
+    }
+
+    // Trick display
+    if (_trickTimer > 0) {
+        _trickTimer -= 1 / 60;
+        if (!_trickEl) {
+            _trickEl = document.createElement('div');
+            _trickEl.id = 'bike-trick-display';
+            _trickEl.style.cssText =
+                'position:fixed; top:18%; left:50%; transform:translate(-50%,-50%);' +
+                'font-family:"Inter",sans-serif; font-weight:900; font-size:42px;' +
+                'color:#fbbf24; text-shadow:0 0 20px rgba(251,191,36,0.6), 0 2px 8px rgba(0,0,0,0.5);' +
+                'z-index:9998; pointer-events:none;';
+            document.body.appendChild(_trickEl);
+        }
+        if (_trickEl._lastText !== _trickName) {
+            _trickEl.textContent = _trickName;
+            _trickEl._lastText = _trickName;
+        }
+        _trickEl.style.opacity = _trickTimer > 0.3 ? '1' : String(_trickTimer / 0.3);
+    } else if (_trickEl) {
+        if (_trickEl.parentNode) _trickEl.parentNode.removeChild(_trickEl);
+        _trickEl = null;
+        _trickName = '';
     }
 }
 
@@ -491,14 +575,17 @@ function onKeyUp(e) {
 }
 
 function readInput() {
-    _input.throttle = (_keysDown['w'] || _keysDown['arrowup']) ? 1 : 0;
-    _input.brake    = (_keysDown['s'] || _keysDown['arrowdown']) ? 1 : 0;
+    _input.throttle   = (_keysDown['w'] || _keysDown['arrowup']) ? 1 : 0;
+    _input.rearBrake  = (_keysDown['s'] || _keysDown['arrowdown']) ? 1 : 0;
+    _input.frontBrake = (_keysDown[' '] || _keysDown['Space']) ? 1 : 0;
+    _input.brake      = Math.min(1, _input.frontBrake + _input.rearBrake); // combined for compatibility
     _input.steer    = 0;
     if (_keysDown['a'] || _keysDown['arrowleft'])  _input.steer = -1;
     if (_keysDown['d'] || _keysDown['arrowright']) _input.steer =  1;
     _input.pitch = 0;
-    if (_keysDown['q'] || _keysDown['KeyQ']) _input.pitch =  1; // nos upp (wheelie)
-    if (_keysDown['e'] || _keysDown['KeyE']) _input.pitch = -1; // nos ner
+    if (_keysDown['q'] || _keysDown['KeyQ']) _input.pitch =  1; // nos upp (wheelie / backflip)
+    if (_keysDown['e'] || _keysDown['KeyE']) _input.pitch = -1; // nos ner (frontflip)
+    _input.trick = (_keysDown['shift'] || _keysDown['ShiftLeft'] || _keysDown['ShiftRight']) ? 1 : 0;
 }
 
 // ── Physics Update ──
@@ -565,28 +652,35 @@ function updatePhysics(dt) {
         // ── Drive force (along heading, not body tilt) ──
         let surfAccel = surface.accel !== undefined ? surface.accel : 1;
         let surfBrake = surface.brake !== undefined ? surface.brake : 1;
-        let drive = throttle * CFG.enginePower * surfAccel - brake * CFG.brakePower * surfBrake;
+        // Front brake = strong stopping, rear brake = moderate
+        let brakeForce = _input.frontBrake * CFG.brakePower * 1.5 + _input.rearBrake * CFG.brakePower * 0.7;
+        let drive = throttle * CFG.enginePower * surfAccel - brakeForce * surfBrake;
         forwardSpeed += drive * dt;
 
-        // Extra braking
+        // Extra braking friction
         if (brake > 0 && Math.abs(forwardSpeed) > 0.5) {
             forwardSpeed *= (1 - brake * 1.5 * surfBrake * dt);
         }
 
-        // ── Lateral friction (THIS controls drift feel) ──
+        // No reverse — brakes only stop, never push backwards
+        if (forwardSpeed < 0 && throttle === 0) forwardSpeed = 0;
+
+        // ── Slip-baserat sidogrepp (Pacejka-light) ──
         let surfGrip = surface.grip !== undefined ? surface.grip : 0.55;
-        let baseLateralFriction = CFG.lateralFriction;
-
-        // Drift: gas+steer or brake+steer → less lateral friction → more slide
-        let inputForce = Math.max(throttle, brake * 0.8);
-        let slideIntensity = inputForce * Math.abs(steer) * clamp(_speed / 8, 0, 1);
-        let driftFriction = baseLateralFriction + slideIntensity * (CFG.driftLateralFriction - baseLateralFriction);
-
-        // Surface reduces friction further
-        driftFriction = 1 - (1 - driftFriction) * surfGrip;
-
-        // Apply: multiply lateral speed by friction (0.92 = tight, 0.98 = wide slide)
-        lateralSpeed *= Math.pow(driftFriction, dt * 60);
+        let slip  = Math.atan2(lateralSpeed, Math.abs(forwardSpeed) + 1.0);
+        let aSlip = Math.abs(slip);
+        let grip;
+        if (aSlip <= CFG.peakSlip) {
+            grip = CFG.gripPeak;                                    // däcket biter
+        } else {
+            let over = (aSlip - CFG.peakSlip) / CFG.peakSlip;       // bortom toppen → tappar
+            grip = Math.max(CFG.gripTail, CFG.gripPeak - over * (CFG.gripPeak - CFG.gripTail));
+        }
+        grip *= (0.4 + surfGrip);                                   // ytan skalar greppet
+        grip *= (1 - 0.5 * throttle * clamp(_speed / 8, 0, 1));     // gas bryter grepp (powerslide)
+        grip *= (1 - 0.6 * _input.rearBrake);                       // bakbroms bryter grepp hårt (sladd!)
+        grip *= (1 - 0.15 * _input.frontBrake);                     // frambroms mild greppförlust
+        lateralSpeed *= Math.exp(-grip * dt);                       // frame-rate-oberoende
 
         // ── Reconstruct velocity from components ──
         let yVel = _vel.y; // preserve vertical
@@ -598,7 +692,7 @@ function updatePhysics(dt) {
 
         // Max speed limiter
         let surfMaxSpeed = surface.maxSpeed !== undefined ? surface.maxSpeed : 1;
-        let maxKmh = 170 * surfMaxSpeed;
+        let maxKmh = 260 * surfMaxSpeed;
         let maxMs = maxKmh / 3.6;
         if (_speed > maxMs) {
             let scale = maxMs / _speed;
@@ -647,8 +741,19 @@ function updatePhysics(dt) {
         let tiltUp = groundN.clone().applyAxisAngle(fFlat, lean);
         let qTarget = quatFromForwardUp(fFlat, tiltUp);
 
-        if (_wheeliePitch > 0.01) {
-            qTarget.multiply(new THREE.Quaternion().setFromAxisAngle(RGT, _wheeliePitch));
+        // Viktöverföring: gas lättar nosen, frambroms = stor nosdyk, bakbroms = mild
+        if (_wasGround) {
+            let targetWP = throttle * CFG.squatAngle
+                - _input.frontBrake * CFG.brakeDiveAngle * 1.5
+                - _input.rearBrake * CFG.brakeDiveAngle * 0.3;
+            _weightPitch += (targetWP - _weightPitch) * (1 - Math.exp(-CFG.weightResp * dt));
+        } else {
+            _weightPitch *= 0.8; // quick decay on first ground contact
+        }
+
+        let totalPitch = _wheeliePitch + _weightPitch;
+        if (Math.abs(totalPitch) > 0.005) {
+            qTarget.multiply(new THREE.Quaternion().setFromAxisAngle(RGT, totalPitch));
         }
 
         let desired = angVelToward(_orient, qTarget, CFG.groundAlignGain);
@@ -661,6 +766,41 @@ function updatePhysics(dt) {
         desired.addScaledVector(up, -steer * CFG.airYawRate);
         _angVel.lerp(desired, 1 - Math.exp(-CFG.airResp * dt));
         _wheeliePitch *= Math.pow(0.95, dt * 60);
+        _weightPitch  *= Math.pow(0.9, dt * 60);
+
+        // ── Track rotation for trick detection ──
+        _totalPitchRot += Math.abs(pitchIn * CFG.airPitchRate * dt);
+        _totalRollRot += Math.abs(steer * CFG.airRollRate * dt);
+
+        // Detect trick names
+        let trick = '';
+        let pitchFlips = Math.floor(_totalPitchRot / (Math.PI * 2));
+        let rollFlips = Math.floor(_totalRollRot / (Math.PI * 2));
+
+        if (_input.trick && Math.abs(pitchIn) > 0.1) {
+            trick = pitchIn > 0 ? '🦸 SUPERMAN' : '🦵 NAC-NAC';
+        } else if (_input.trick && Math.abs(steer) > 0.1) {
+            trick = '🤙 NO-HANDER';
+        } else if (_input.trick) {
+            trick = '🦸 SUPERMAN';
+        } else if (pitchFlips >= 2) {
+            trick = '🔥 DOUBLE BACKFLIP';
+        } else if (pitchFlips >= 1 && rollFlips >= 1) {
+            trick = '💀 FLIP-WHIP COMBO';
+        } else if (pitchFlips >= 1) {
+            trick = pitchIn >= 0 ? '🔄 BACKFLIP' : '🔄 FRONTFLIP';
+        } else if (rollFlips >= 1) {
+            trick = '🌀 BARREL ROLL';
+        } else if (Math.abs(steer) > 0.5) {
+            trick = '💨 WHIP';
+        } else if (Math.abs(pitchIn) > 0.5) {
+            trick = pitchIn > 0 ? '⬆️ SCRUB' : '⬇️ NOSE DIVE';
+        }
+
+        if (trick) {
+            _trickName = trick;
+            _trickTimer = 1.5;
+        }
     }
 
     integrateOrientation(dt);
@@ -684,13 +824,22 @@ function updatePhysics(dt) {
             _crashTimer = CFG.crashRespawnTime;
             _vel.set(0, 0, 0);
             _wheeliePitch = 0;
+            _trickName = '';
             showCrashOverlay();
         } else {
+            // Landed trick!
+            if (_trickName && _trickTimer > 0) {
+                _trickTimer = 2.0; // show landed trick longer
+                _trickName = '✅ ' + _trickName;
+            }
             let f = FWD.clone().applyQuaternion(_orient);
             if (Math.hypot(f.x, f.z) > 0.1) _yaw = Math.atan2(f.x, f.z);
             _wheeliePitch = 0;
+            _weightPitch  = 0;
         }
         _airTime = 0;
+        _totalPitchRot = 0;
+        _totalRollRot = 0;
     }
     _wasGround = _grounded;
 }
@@ -843,30 +992,66 @@ function updateSprayParticles(dt) {
 }
 
 // ── Apply Physics to Model ──
-function applyToModel() {
+function applyToModel(dt) {
     if (!_bikeGroup) return;
     _bikeGroup.position.copy(_pos);
     _bikeGroup.quaternion.copy(_orient);
 
-    // Wheel spin
+    // Wheel spin (dt-corrected)
+    let wheelDelta = _speed * CFG.wheelSpinMult * dt * 60;
     if (_frontWheelMesh) {
-        _frontWheelMesh.rotation.x += _speed * CFG.wheelSpinMult;
+        _frontWheelMesh.rotation.x += wheelDelta;
     }
     if (_rearWheelMesh) {
-        _rearWheelMesh.rotation.x += _speed * CFG.wheelSpinMult;
+        _rearWheelMesh.rotation.x += wheelDelta;
     }
 
     // Handlebar turn
     if (_handlebarGroup) {
-        _handlebarGroup.rotation.y = -_input.steer * 0.3;
+        _handlebarGroup.rotation.y = -_input.steer * 0.5;
     }
 
-    // Rider lean (forward when accelerating, back when braking)
+    // Rider pose — different in air vs ground
     if (_riderGroup) {
-        let leanForward = -0.15 + _input.throttle * -0.1 + _input.brake * 0.15;
-        _riderGroup.rotation.x = leanForward;
-        // Side lean
-        _riderGroup.rotation.z = _input.steer * 0.2;
+        if (!_grounded && _airTime > 0.15) {
+            // ── Air trick animations (dt-corrected) ──
+            if (_input.trick && Math.abs(_input.pitch) > 0.1 && _input.pitch > 0) {
+                // SUPERMAN: body stretches back, legs out
+                _riderGroup.rotation.x = dlerp(_riderGroup.rotation.x, -0.9, 10, dt);
+                _riderGroup.rotation.z = 0;
+            } else if (_input.trick && Math.abs(_input.steer) > 0.1) {
+                // NAC-NAC: kick leg out sideways
+                _riderGroup.rotation.x = dlerp(_riderGroup.rotation.x, -0.3, 10, dt);
+                _riderGroup.rotation.z = dlerp(_riderGroup.rotation.z, _input.steer * 0.6, 10, dt);
+            } else if (_input.trick) {
+                // NO-HANDER: lean back, hands off
+                _riderGroup.rotation.x = dlerp(_riderGroup.rotation.x, -0.7, 10, dt);
+                _riderGroup.rotation.z = 0;
+                if (_handlebarGroup) _handlebarGroup.rotation.z = Math.sin(performance.now() * 0.003) * 0.1;
+            } else if (Math.abs(_input.pitch) > 0.3) {
+                // Flip tuck: lean into the flip
+                _riderGroup.rotation.x = dlerp(_riderGroup.rotation.x, _input.pitch * -0.5, 8, dt);
+                _riderGroup.rotation.z = 0;
+            } else if (Math.abs(_input.steer) > 0.3) {
+                // Whip lean
+                _riderGroup.rotation.x = dlerp(_riderGroup.rotation.x, -0.2, 6, dt);
+                _riderGroup.rotation.z = dlerp(_riderGroup.rotation.z, _input.steer * 0.4, 8, dt);
+            } else {
+                // Neutral air pose
+                _riderGroup.rotation.x = dlerp(_riderGroup.rotation.x, -0.2, 5, dt);
+                _riderGroup.rotation.z = dlerp(_riderGroup.rotation.z, 0, 5, dt);
+            }
+        } else {
+            // Ground riding pose
+            let leanForward = -0.15 + _input.throttle * -0.1 + _input.brake * 0.15;
+            _riderGroup.rotation.x = leanForward;
+            _riderGroup.rotation.z = _input.steer * 0.2;
+        }
+    }
+
+    // Handlebar — reset after no-hander
+    if (_handlebarGroup && (_grounded || !_input.trick)) {
+        _handlebarGroup.rotation.z = 0;
     }
 }
 
@@ -918,6 +1103,7 @@ function respawn(x, z, yaw) {
     _crashTimer = 0;
     _speed = 0;
     _wheeliePitch = 0;
+    _weightPitch  = 0;
 
     // Init camera
     let forward = fFlat;
@@ -1011,7 +1197,7 @@ window.rallyBike = {
 
         readInput();
         updatePhysics(dt);
-        applyToModel();
+        applyToModel(dt);
         updateSprayParticles(dt);
         updateCamera(dt);
         updateHUD();

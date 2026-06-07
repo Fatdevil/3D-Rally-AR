@@ -416,92 +416,21 @@ function createPlaneMesh() {
     var g = new THREE.Group();
     g.name = 'StuntPlane';
 
-    var blue     = new THREE.MeshLambertMaterial({ color: 0x2563eb });
-    var darkBlue = new THREE.MeshLambertMaterial({ color: 0x1d4ed8 });
-    var red      = new THREE.MeshLambertMaterial({ color: 0xdc2626 });
-    var silver   = new THREE.MeshLambertMaterial({ color: 0x9ca3af });
-    var dark     = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
-    var grey     = new THREE.MeshLambertMaterial({ color: 0x6b7280 });
-    var canopy   = new THREE.MeshLambertMaterial({ color: 0x60a5fa, transparent: true, opacity: 0.55 });
+    // ── Propeller (procedural, separate so it spins) ──
+    var silver = new THREE.MeshLambertMaterial({ color: 0x9ca3af });
+    var dark   = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
 
-    // ── Kropp (fuselage) ──
-    var bodyGeo = new THREE.BoxGeometry(0.95, 0.85, 4.8);
-    var body = new THREE.Mesh(bodyGeo, blue);
-    body.castShadow = true;
-    g.add(body);
-
-    // Noskåpa (engine cowl)
-    var cowlGeo = new THREE.CylinderGeometry(0.42, 0.48, 1.4, 8);
-    var cowl = new THREE.Mesh(cowlGeo, silver);
-    cowl.rotation.x = Math.PI / 2;
-    cowl.position.set(0, 0, -3.0);
-    cowl.castShadow = true;
-    g.add(cowl);
-
-    // Stjärtkon (tail cone)
-    var tailConeGeo = new THREE.CylinderGeometry(0.15, 0.42, 1.6, 8);
-    var tailCone = new THREE.Mesh(tailConeGeo, darkBlue);
-    tailCone.rotation.x = Math.PI / 2;
-    tailCone.position.set(0, 0.05, 3.0);
-    tailCone.castShadow = true;
-    g.add(tailCone);
-
-    // ── Vingar ──
-    // Vänster
-    var wingGeo = new THREE.BoxGeometry(3.5, 0.1, 1.15);
-    var wingL = new THREE.Mesh(wingGeo, blue);
-    wingL.position.set(-2.2, -0.15, -0.2);
-    wingL.castShadow = true;
-    g.add(wingL);
-
-    // Höger
-    var wingR = new THREE.Mesh(wingGeo, blue);
-    wingR.position.set(2.2, -0.15, -0.2);
-    wingR.castShadow = true;
-    g.add(wingR);
-
-    // Vingtippar (röda)
-    var tipGeo = new THREE.BoxGeometry(0.5, 0.09, 0.35);
-    var tipL = new THREE.Mesh(tipGeo, red);
-    tipL.position.set(-3.95, -0.15, -0.15);
-    g.add(tipL);
-    var tipR = new THREE.Mesh(tipGeo, red);
-    tipR.position.set(3.95, -0.15, -0.15);
-    g.add(tipR);
-
-    // ── Stjärt ──
-    // Vertikal stabilisator
-    var vStabGeo = new THREE.BoxGeometry(0.08, 1.5, 1.2);
-    var vStab = new THREE.Mesh(vStabGeo, blue);
-    vStab.position.set(0, 0.8, 3.2);
-    vStab.castShadow = true;
-    g.add(vStab);
-
-    // Roder-accent (röd)
-    var rudderGeo = new THREE.BoxGeometry(0.09, 0.7, 0.4);
-    var rudder = new THREE.Mesh(rudderGeo, red);
-    rudder.position.set(0, 1.1, 3.55);
-    g.add(rudder);
-
-    // Horisontell stabilisator
-    var hStabGeo = new THREE.BoxGeometry(2.4, 0.07, 0.7);
-    var hStab = new THREE.Mesh(hStabGeo, blue);
-    hStab.position.set(0, 0.05, 3.3);
-    hStab.castShadow = true;
-    g.add(hStab);
-
-    // ── Propeller (snurrande grupp) ──
     var propGroup = new THREE.Group();
-    propGroup.position.set(0, 0, -3.6);
+    propGroup.position.set(0, 0, -3.6); // default fallback position
 
-    // Spinner (nos-kon)
+    // Spinner cone
     var spinnerGeo = new THREE.ConeGeometry(0.18, 0.45, 8);
     var spinner = new THREE.Mesh(spinnerGeo, silver);
     spinner.rotation.x = Math.PI / 2;
     spinner.position.z = -0.2;
     propGroup.add(spinner);
 
-    // 3 blad
+    // 3 blades
     for (var i = 0; i < 3; i++) {
         var bladeGeo = new THREE.BoxGeometry(2.4, 0.18, 0.05);
         var blade = new THREE.Mesh(bladeGeo, dark);
@@ -510,35 +439,56 @@ function createPlaneMesh() {
     }
     g.add(propGroup);
 
-    // ── Cockpit (canopy) ──
-    var canopyGeo = new THREE.SphereGeometry(0.42, 8, 6);
-    canopyGeo.scale(1.1, 0.85, 1.6);
-    var cockpit = new THREE.Mesh(canopyGeo, canopy);
-    cockpit.position.set(0, 0.35, -1.1);
-    g.add(cockpit);
+    // ── Load rigged pilot plane GLB async ──
+    var pilotRig = null;
+    if (typeof THREE.GLTFLoader !== 'undefined') {
+        var loader = new THREE.GLTFLoader();
+        loader.load('pilot_rigged.glb', function(gltf) {
+            var model = gltf.scene;
+            // Scale to match physics (~8m wingspan)
+            model.scale.setScalar(8);
+            // Lift model up to match ground clearance
+            model.position.y = 1.2;
+            // Shadows
+            model.traverse(function(child) {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                }
+            });
+            g.add(model);
+            // Move propeller to match scaled GLB nose
+            propGroup.position.set(0, 1.5, -4.0);
 
-    // ── Landningsställ ──
-    // Huvudhjul (under vingarna)
-    [-0.8, 0.8].forEach(function(sx) {
-        // Ben
-        var legGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.7, 6);
-        var leg = new THREE.Mesh(legGeo, grey);
-        leg.position.set(sx, -0.75, -0.6);
-        g.add(leg);
-        // Hjul
-        var wheelGeo = new THREE.CylinderGeometry(0.16, 0.16, 0.08, 8);
-        var wheel = new THREE.Mesh(wheelGeo, dark);
-        wheel.rotation.z = Math.PI / 2;
-        wheel.position.set(sx, -1.1, -0.6);
-        g.add(wheel);
-    });
+            // Setup pilot rig — find bones
+            pilotRig = {
+                torso: model.getObjectByName('torso'),
+                head:  model.getObjectByName('head'),
+                earL:  model.getObjectByName('earL'),
+                earR:  model.getObjectByName('earR'),
+                t: 0,
+            };
+            // Store rig on group for access in update
+            g.userData.pilotRig = pilotRig;
+            state.pilotRig = pilotRig;
 
-    // Stjärthjul (litet)
-    var twGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.05, 6);
-    var tw = new THREE.Mesh(twGeo, dark);
-    tw.rotation.z = Math.PI / 2;
-    tw.position.set(0, -0.5, 3.0);
-    g.add(tw);
+            var found = [pilotRig.torso?'torso':'', pilotRig.head?'head':'', pilotRig.earL?'earL':'', pilotRig.earR?'earR':''].filter(Boolean);
+            console.log('🛩️ Rigged pilot plane loaded! Bones found: ' + found.join(', '));
+        }, undefined, function(err) {
+            console.warn('Rigged GLB load failed, trying fallback:', err);
+            // Fallback: old cartoon plane
+            var loader2 = new THREE.GLTFLoader();
+            loader2.load('chatgpt7.glb', function(gltf2) {
+                var m = gltf2.scene;
+                m.scale.setScalar(8);
+                m.position.y = 1.2;
+                m.traverse(function(c) { if (c.isMesh) { c.castShadow = true; } });
+                g.add(m);
+                propGroup.position.set(0, 1.5, -4.0);
+                console.log('🛩️ Fallback cartoon plane loaded');
+            });
+        });
+    }
 
     return { group: g, propeller: propGroup };
 }
@@ -653,15 +603,22 @@ MobileControls.prototype.getInput = function(dt) {
     // Uppdatera den visuella slidern kontinuerligt i loopen
     this._renderThrottle();
 
-    // Koordinerad yaw ur roll (+ ev. Q/E på desktop)
+    // Koordinerad yaw ur roll (auto-koordination, Q/E nu barrel roll)
     var yaw = -roll * this.cfg.coordination;
-    if (this.cfg.keyboard) yaw += (this._k('q') - this._k('e'));
+
+    // Barrel roll trigger: Q = vänster, E = höger
+    var barrelRollTrigger = 0;
+    if (this.cfg.keyboard) {
+        if (this._k('q') && !this._barrelCooldown) barrelRollTrigger = -1;
+        if (this._k('e') && !this._barrelCooldown) barrelRollTrigger = 1;
+    }
 
     return {
         pitch:    clamp(pitch, -1, 1),
         roll:     clamp(roll,  -1, 1),
         yaw:      clamp(yaw,   -2, 2),
         throttle: clamp(this.throttle, 0, 1),
+        barrelRoll: barrelRollTrigger,
     };
 };
 
@@ -900,6 +857,14 @@ var state = {
     throttle: 0.6,
     displaySpeed: 0,
     altitude: 0,
+    // Barrel roll state
+    barrelRollActive: false,
+    barrelRollDir: 0,         // -1 = left, +1 = right
+    barrelRollProgress: 0,    // 0..2π radians completed
+    barrelRollCooldown: 0,    // seconds remaining
+    // Pilot rig
+    pilotRig: null,
+    lastRollInput: 0,         // for pilot animation
 };
 
 var mobileControls = null;   // MobileControls-instans (skapas vid activate)
@@ -921,11 +886,45 @@ function updatePlane(dt) {
     dt = Math.min(dt, 0.05);
 
     // Läs input via MobileControls (hanterar touch + tangentbord + gamepad)
-    var input = mobileControls ? mobileControls.getInput(dt) : { pitch: 0, roll: 0, yaw: 0, throttle: 0.6 };
+    var input = mobileControls ? mobileControls.getInput(dt) : { pitch: 0, roll: 0, yaw: 0, throttle: 0.6, barrelRoll: 0 };
     state.throttle = input.throttle;
 
-    // Kör FlightModel
+    // ── Barrel Roll System ──
+    if (state.barrelRollCooldown > 0) {
+        state.barrelRollCooldown -= dt;
+        if (mobileControls) mobileControls._barrelCooldown = true;
+    } else {
+        if (mobileControls) mobileControls._barrelCooldown = false;
+    }
+
+    // Trigger new barrel roll
+    if (input.barrelRoll !== 0 && !state.barrelRollActive && state.barrelRollCooldown <= 0) {
+        state.barrelRollActive = true;
+        state.barrelRollDir = input.barrelRoll;
+        state.barrelRollProgress = 0;
+    }
+
+    // Kör FlightModel (normal physics, barrel roll does NOT modify input)
     state.model.update(dt, input);
+
+    // ── Barrel Roll: direct quaternion rotation AFTER physics ──
+    if (state.barrelRollActive) {
+        var BARREL_RATE = 2 * Math.PI / 0.65; // full 360° in 0.65s ≈ 9.67 rad/s
+        var rotAmount = state.barrelRollDir * BARREL_RATE * dt;
+        state.barrelRollProgress += BARREL_RATE * dt;
+
+        // Rotate around the plane's forward axis (nose direction)
+        var fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(state.model.orientation).normalize();
+        var rollQuat = new THREE.Quaternion().setFromAxisAngle(fwd, rotAmount);
+        state.model.orientation.premultiply(rollQuat);
+        state.model.orientation.normalize();
+
+        if (state.barrelRollProgress >= Math.PI * 2) {
+            state.barrelRollActive = false;
+            state.barrelRollProgress = 0;
+            state.barrelRollCooldown = 0.5; // 0.5s cooldown
+        }
+    }
 
     // ── Terrängkollision ──
     var groundY = 0;
@@ -973,6 +972,35 @@ function updatePlane(dt) {
     if (state.propeller) {
         var rSpeed = 3 + state.throttle * 28;
         state.propeller.rotation.z += rSpeed * dt;
+    }
+
+    // ── Pilot Rig Animation ──
+    if (state.pilotRig) {
+        var rig = state.pilotRig;
+        rig.t += dt;
+        var airspeed = state.model.speed || 0;
+        var turn = input ? input.roll : 0;
+        state.lastRollInput = turn;
+        var speed01 = Math.min(Math.max(airspeed, 0) / 60, 1);
+        var k = 1 - Math.exp(-6 * dt);
+
+        // Torso leans into turns
+        if (rig.torso) {
+            var targetLean = turn * 0.30;
+            rig.torso.rotation.z += (targetLean - rig.torso.rotation.z) * k;
+        }
+
+        // Head looks into turns
+        if (rig.head) {
+            var targetYaw = -turn * 0.45;
+            rig.head.rotation.y += (targetYaw - rig.head.rotation.y) * k;
+        }
+
+        // Helmet ears flutter — faster at higher speed
+        var amp  = 0.05 + 0.55 * speed01;
+        var freq = 16 + 24 * speed01;
+        if (rig.earL) rig.earL.rotation.z =  amp * Math.sin(rig.t * freq);
+        if (rig.earR) rig.earR.rotation.z = -amp * Math.sin(rig.t * freq + 1.3);
     }
 
     // Telemetri

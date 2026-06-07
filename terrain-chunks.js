@@ -119,6 +119,7 @@
             this.masterGeo = newGeo;
             if (newMesh) this.masterMesh = newMesh;
             this.greenGrid = window.TERRAIN_SEGS;
+            this.terrainGrid = window.TERRAIN_SEGS; // Sync terrainGrid with new resolution to maintain correct lodRatio
             this._buildChunks();
             if (this.enabled) this.setEnabled(true);
         }
@@ -401,8 +402,11 @@
 
             let cfg = window.CURRENT_BIOME_CONFIG || {};
             let gh = cfg.greenColor || '#98ce68', fh = cfg.foregreenColor || '#8bc45d';
+            let rh = cfg.roughColor || '#4a782b', dh = cfg.fescueColor || '#2d4c1a';
             let gR = parseInt(gh.slice(1,3),16), gG = parseInt(gh.slice(3,5),16), gB = parseInt(gh.slice(5,7),16);
             let fR = parseInt(fh.slice(1,3),16), fG = parseInt(fh.slice(3,5),16), fB = parseInt(fh.slice(5,7),16);
+            let rR = parseInt(rh.slice(1,3),16), rG = parseInt(rh.slice(3,5),16), rB = parseInt(rh.slice(5,7),16);
+            let dR = parseInt(dh.slice(1,3),16), dG = parseInt(dh.slice(3,5),16), dB = parseInt(dh.slice(5,7),16);
 
             let segs = window.TERRAIN_SEGS;
             let pxS = Math.floor((gxS/segs)*4096), pxE = Math.ceil((gxE/segs)*4096);
@@ -415,6 +419,8 @@
                     let r = biome[idx], g = biome[idx+1], b = biome[idx+2];
                     if ((r-gR)*(r-gR)+(g-gG)*(g-gG)+(b-gB)*(b-gB) < 500) return true;
                     if ((r-fR)*(r-fR)+(g-fG)*(g-fG)+(b-fB)*(b-fB) < 500) return true;
+                    if ((r-rR)*(r-rR)+(g-rG)*(g-rG)+(b-rB)*(b-rB) < 500) return true;
+                    if ((r-dR)*(r-dR)+(g-dG)*(g-dG)+(b-dB)*(b-dB) < 500) return true;
                 }
             }
             return false;
